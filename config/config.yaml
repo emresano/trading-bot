@@ -30,7 +30,7 @@ signal:
   ema_fast: 50
   ema_slow: 200
   adx_period: 14
-  adx_min: 20              # altında → HOLD_CASH
+  adx_min: 25              # altında → HOLD_CASH (v2/v3 backtest bulgusuyla sıkılaştırıldı: bkz. BACKTEST_REVIEW_v3.md)
   rsi_period: 14
   rsi_entry_low: 40
   rsi_entry_high: 55

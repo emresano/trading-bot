@@ -128,6 +128,17 @@ def generate_report(
         lines.append(f"Birleşik OOS max DD: {acceptance.get('oos_max_drawdown', 0):.2%}")
         lines.append(f"Ortalama in-sample max DD: {acceptance.get('avg_in_sample_max_drawdown', 0):.2%}")
         lines.append(f"Kabul kriteri sonucu: {'GEÇTİ' if acceptance['passed'] else 'GEÇMEDİ'}")
+        if metrics.max_drawdown != 0:
+            oos_to_full_period_ratio = abs(acceptance.get("oos_max_drawdown", 0)) / abs(metrics.max_drawdown)
+            lines.append(
+                f"Bilgi (kabul kriterine dahil değil): Birleşik OOS max DD / "
+                f"tam-dönem in-sample max DD oranı: {oos_to_full_period_ratio:.2f}×"
+            )
+        else:
+            lines.append(
+                "Bilgi (kabul kriterine dahil değil): tam-dönem in-sample max DD sıfır "
+                "olduğundan oran hesaplanamadı."
+            )
         lines.append("")
         if not acceptance["passed"]:
             red_flags.append("Walk-forward kabul kriteri geçmedi (Bölüm 12.5).")
