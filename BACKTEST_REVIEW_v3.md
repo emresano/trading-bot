@@ -53,11 +53,8 @@ dokunmadı.
 - **Kabul kriteri sonucu: GEÇMEDİ** — `passed = pf_ok AND dd_ok` olduğundan ve
   `pf_ok` (1.13 > 1.1) sağlandığından, başarısızlık mantıksal olarak **dd_ok**
   kriterinden geliyor (OOS max DD, ortalama in-sample max DD'nin 1.5 katından
-  kötü). Tam sayısal `avg_in_sample_max_drawdown` değeri şu an raporda ayrıca
-  basılmıyor (`cli.py`'nin walk-forward bölümü bunu şu an satıra yazmıyor) —
-  bunu görmek için ~30 dakikalık walk-forward'ı tekrar koşturmak yerine, bunu
-  bir sonraki küçük bir rapor-geliştirme olarak öneriyorum (eşik/davranış
-  değişikliği değil, yalnızca zaten hesaplanan bir sayının basılması).
+  kötü). Tam sayısal değer artık ölçüldü ve raporlanıyor — bkz. **Ek: In-Sample
+  DD Detayı** bölümü.
 
 **Yorum:** Bu, v2'deki "GEÇMEDİ" ile aynı ibare olsa da anlamı tamamen farklı.
 v2'de bu ibare bir ölçüm hatasıydı (hiç veri yoktu). v3'te bu, **gerçek bir OOS
@@ -89,6 +86,75 @@ Bu bulgu ve ona bağlı kırmızı bayrak (v2'de belirtildiği gibi) hâlâ geç
 dd_p5=-7.81%, dd_median=-5.18%, dd_p95=-3.47%. Breaker eşiği (%10) altında
 ama yakın.
 
+## Ek: In-Sample DD Detayı
+
+Bu bölüm bir rapor-tamamlama eki — hiçbir eşik/parametre/davranış değişikliği
+içermiyor, yalnızca `cli.py`'nin walk-forward bölümüne zaten hesaplanan
+`avg_in_sample_max_drawdown` ve pencere-bazında `train_max_dd` değerlerinin
+yazdırılması eklendi (`python -m backtest.cli --walk-forward` ile, `--sweep`/
+`--monte-carlo`/`--regime-split` kapalı, yalnızca walk-forward yeniden koşturuldu
+— ana backtest/rejim/Monte Carlo/sweep sonuçları etkilenmedi, zaten değişmemişti).
+
+**Kabul kriterinin DD tarafı — tam sayılar:**
+
+| | Değer |
+|---|---|
+| Ortalama in-sample max DD (48 pencere) | **0.75%** |
+| Kabul eşiği (1.5 × ortalama in-sample max DD) | **1.125%** |
+| Gerçekleşen birleşik OOS max DD | **6.37%** (mutlak değer) |
+| OOS DD, eşiğin kaç katı | **~5.66×** |
+| OOS DD, eşiğin yüzde kaçı fazla | **~%466** |
+
+Yani OOS drawdown, kabul edilebilir üst sınırın (1.125%) **5.66 katı** — bu,
+"biraz kötü" değil, "kategorik olarak farklı" bir sonuç. In-sample pencerelerin
+neredeyse tamamı %0-2.6 aralığında ufak drawdown'larla train edilmiş; OOS'ta
+tek bir birleşik dönemde %6.37 drawdown gerçekleşmiş. Bu, walk-forward'ın
+seçtiği parametrelerin train verisine aşırı uyum sağladığının (overfitting)
+sayısal kanıtı.
+
+**Trade üreten 23 pencerenin in-sample max DD dağılımı:**
+
+| İstatistik | Değer |
+|---|---|
+| Min | 0.00% |
+| Medyan | 1.09% |
+| Ortalama | 1.05% |
+| Maks | 2.60% |
+
+| Train başlangıcı | Test başlangıcı | OOS trade sayısı | In-sample max DD |
+|---|---|---|---|
+| 2001-05-09 | 2003-05-09 | 2 | 0.00% |
+| 2002-11-09 | 2004-11-09 | 1 | -0.44% |
+| 2003-11-09 | 2005-11-09 | 3 | -2.60% |
+| 2004-11-09 | 2006-11-09 | 4 | -1.35% |
+| 2005-05-09 | 2007-05-09 | 3 | -1.49% |
+| 2005-11-09 | 2007-11-09 | 3 | -1.31% |
+| 2008-05-09 | 2010-05-09 | 1 | -0.50% |
+| 2008-11-09 | 2010-11-09 | 7 | -0.67% |
+| 2011-05-09 | 2013-05-09 | 4 | -0.35% |
+| 2011-11-09 | 2013-11-09 | 2 | -0.87% |
+| 2012-05-09 | 2014-05-09 | 4 | -1.01% |
+| 2012-11-09 | 2014-11-09 | 2 | -1.09% |
+| 2014-05-09 | 2016-05-09 | 2 | -0.97% |
+| 2015-05-09 | 2017-05-09 | 2 | -0.80% |
+| 2015-11-09 | 2017-11-09 | 3 | -1.39% |
+| 2018-05-09 | 2020-05-09 | 1 | 0.00% |
+| 2019-05-09 | 2021-05-09 | 1 | -0.13% |
+| 2020-11-09 | 2022-11-09 | 1 | -1.32% |
+| 2021-05-09 | 2023-05-09 | 2 | -1.21% |
+| 2021-11-09 | 2023-11-09 | 2 | -1.26% |
+| 2022-05-09 | 2024-05-09 | 1 | -1.27% |
+| 2023-05-09 | 2025-05-09 | 2 | -1.84% |
+| 2023-11-09 | 2025-11-09 | 1 | -2.18% |
+
+Dikkat çeken nokta: hiçbir tekil pencerenin in-sample DD'si %2.6'yı geçmiyor —
+yani hiçbir pencere kendi train döneminde bile büyük bir drawdown yaşamamış.
+Buna rağmen bu pencerelerin ürettiği parametrelerle koşulan OOS dönemlerinin
+BİRLEŞİMİ %6.37 drawdown üretmiş. Bu, tekil pencerelerin "güvenli" görünmesinin,
+onların ardışık/birleşik OOS performansının da güvenli olacağı anlamına
+gelmediğini gösteriyor — walk-forward'ın tam olarak yakalamak için var olduğu
+türden bir risk.
+
 ## KIRMIZI BAYRAKLAR (güncel)
 
 - [x] **Walk-forward kabul kriteri geçmedi** — ama artık **gerçek bir ölçüme
@@ -118,14 +184,13 @@ Toparlarsak, üç aşamalı bu revizyon sürecinin sonunda elimizdeki tablo:
    ortaya çıkardı**: DD kriterinde başarısız.
 
 Bu noktada Faz 5'e geçmeyi önermiyorum — walk-forward'ın kendisi net bir
-"hayır" diyor (DD kriteri geçmedi), ve bu artık güvenilir bir ölçüme dayanıyor.
+"hayır" diyor (DD kriteri geçmedi, ve şimdi tam sayılarla: OOS DD, kabul
+eşiğinin ~5.66 katı — bkz. Ek), ve bu artık güvenilir bir ölçüme dayanıyor.
 Olası yollar:
-- **(A)** `avg_in_sample_max_drawdown` sayısını rapora ekleyip (küçük, davranış
-  değiştirmeyen bir iyileştirme) tam görüntüyü netleştir, sonra karar ver.
-- **(B)** Sweep'in gösterdiği eğilimi (adx_min sıkılaştırma, v2'de gözlemlendi)
+- **(A)** Sweep'in gösterdiği eğilimi (adx_min sıkılaştırma, v2'de gözlemlendi)
   ayrı bir onaylı revizyon turunda dene — daha az ama daha kaliteli trade,
   potansiyel olarak DD kriterini de iyileştirebilir.
-- **(C)** Mevcut haliyle kabul etmeyip stratejiyi bu şekliyle terk et / yeniden
+- **(B)** Mevcut haliyle kabul etmeyip stratejiyi bu şekliyle terk et / yeniden
   tasarla.
 
 **Karar benim değil, kullanıcının.** Backtest v3 tamamlandı, BACKTEST_REVIEW_v3.md

@@ -120,11 +120,13 @@ def generate_report(
                 f"- {r.train_start.date()}–{r.train_end.date()} (train) / "
                 f"{r.test_start.date()}–{r.test_end.date()} (test): params={r.chosen_params}, "
                 f"robust={r.robust}, test_trade_count={r.test_metrics.trade_count}, "
-                f"test_pf={r.test_metrics.profit_factor:.2f}"
+                f"test_pf={r.test_metrics.profit_factor:.2f}, "
+                f"train_max_dd={r.train_metrics.max_drawdown:.2%}"
             )
         lines.append("")
         lines.append(f"Birleşik OOS profit factor: {acceptance.get('oos_profit_factor', 0):.2f}")
         lines.append(f"Birleşik OOS max DD: {acceptance.get('oos_max_drawdown', 0):.2%}")
+        lines.append(f"Ortalama in-sample max DD: {acceptance.get('avg_in_sample_max_drawdown', 0):.2%}")
         lines.append(f"Kabul kriteri sonucu: {'GEÇTİ' if acceptance['passed'] else 'GEÇMEDİ'}")
         lines.append("")
         if not acceptance["passed"]:
