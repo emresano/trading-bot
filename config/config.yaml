@@ -6,16 +6,55 @@ real_mode_confirmation: "" # real mod için kullanıcının ELLE yazması gereke
 timezone: "Europe/Istanbul"
 
 instruments:
-  - symbol: "THYAO"        # AlgoLab sembol kodu
-    yf_symbol: "THYAO.IS"  # backtest veri kaynağı
+  # 12 sembollük evren (BACKTEST_REVIEW_v5.md'de seçim gerekçesi: likidite +
+  # 2005 öncesi kesintisiz tarihçe + sektör çeşitliliği; geçmiş getiriye göre
+  # SEÇİLMEDİ).
+  - symbol: "THYAO"        # Havayolu/Ulaştırma
+    yf_symbol: "THYAO.IS"
     type: equity
     lot_step: 1
-  - symbol: "GARAN"
+  - symbol: "GARAN"        # Bankacılık
     yf_symbol: "GARAN.IS"
     type: equity
     lot_step: 1
-  - symbol: "ASELS"
+  - symbol: "ASELS"        # Savunma/Teknoloji
     yf_symbol: "ASELS.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "AKBNK"        # Bankacılık
+    yf_symbol: "AKBNK.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "KCHOL"        # Holding
+    yf_symbol: "KCHOL.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "SAHOL"        # Holding
+    yf_symbol: "SAHOL.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "EREGL"        # Demir-Çelik
+    yf_symbol: "EREGL.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "TUPRS"        # Enerji/Rafineri
+    yf_symbol: "TUPRS.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "TCELL"        # Telekom
+    yf_symbol: "TCELL.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "TOASO"        # Otomotiv
+    yf_symbol: "TOASO.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "SISE"         # Cam/Sanayi
+    yf_symbol: "SISE.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "ARCLK"        # Dayanıklı Tüketim
+    yf_symbol: "ARCLK.IS"
     type: equity
     lot_step: 1
   # Altın: Faz 5'te AlgoLab sembol listesinden gerçek kod doğrulanınca eklenecek (Bölüm 16).

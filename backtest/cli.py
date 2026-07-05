@@ -2,7 +2,7 @@
 from __future__ import annotations
 import argparse
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 import matplotlib
 matplotlib.use("Agg")
@@ -10,7 +10,13 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from backtest.engine import run_backtest
-from backtest.metrics import classify_regime, compute_metrics, regime_breakdown
+from backtest.metrics import (
+    cash_only_metrics,
+    classify_regime,
+    compute_buy_hold_metrics,
+    compute_metrics,
+    regime_breakdown,
+)
 from backtest.montecarlo import run_monte_carlo
 from backtest.walkforward import apply_params, evaluate_acceptance, run_walk_forward, sweep_combinations
 from indicators.engine import build_features
@@ -74,6 +80,8 @@ def generate_report(
     do_monte_carlo: bool = False,
     do_regime_split: bool = False,
     do_sweep: bool = False,
+    do_benchmark: bool = False,
+    benchmark_loader: Optional[Callable[[], pd.DataFrame]] = None,
 ) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -160,6 +168,21 @@ def generate_report(
         lines.append(f"## Parametre Taraması: {len(sweep_rows)} kombinasyon tamamlandı, sweep_results.csv'ye yazıldı.")
         lines.append("")
 
+    benchmark_metrics = None
+    if do_benchmark and benchmark_loader is not None and not result.equity_curve.empty:
+        bench_df = benchmark_loader()
+        bench_df = bench_df.loc[result.equity_curve.index[0]: result.equity_curve.index[-1]]
+        benchmark_metrics = compute_buy_hold_metrics(bench_df, cfg.backtest.initial_equity)
+        cash_metrics = cash_only_metrics()
+        lines.append("## Benchmark Kıyası (bilgilendirici, kabul kriterine dahil değil)")
+        lines.append("| | Strateji | Endeks Al-Tut | Sadece Nakit |")
+        lines.append("|---|---|---|---|")
+        lines.append(f"| Toplam getiri | {metrics.total_return:.2%} | {benchmark_metrics.total_return:.2%} | {cash_metrics.total_return:.2%} |")
+        lines.append(f"| CAGR | {metrics.cagr:.2%} | {benchmark_metrics.cagr:.2%} | {cash_metrics.cagr:.2%} |")
+        lines.append(f"| Maks. drawdown | {metrics.max_drawdown:.2%} | {benchmark_metrics.max_drawdown:.2%} | {cash_metrics.max_drawdown:.2%} |")
+        lines.append(f"| Sharpe | {metrics.sharpe:.2f} | {benchmark_metrics.sharpe:.2f} | {cash_metrics.sharpe:.2f} |")
+        lines.append("")
+
     lines.append("## Kırmızı Bayraklar")
     if red_flags:
         lines.extend(f"- [X] {rf}" for rf in red_flags)
@@ -172,7 +195,7 @@ def generate_report(
     return {
         "metrics": metrics, "result": result, "wf_results": wf_results,
         "mc_result": mc_result, "sweep_rows": sweep_rows, "red_flags": red_flags,
-        "report_path": out_dir / "report.md",
+        "benchmark_metrics": benchmark_metrics, "report_path": out_dir / "report.md",
     }
 
 
@@ -188,14 +211,40 @@ def main() -> None:
     parser.add_argument("--regime-split", action="store_true")
     parser.add_argument("--sweep", action="store_true")
     parser.add_argument("--out", default="runtime/backtest_reports/")
+    parser.add_argument("--start-date", default=None,
+                        help="YYYY-MM-DD — verilirse yüklenen veri bu tarihten itibaren kırpılır "
+                             "(örn. eski/güvenilmez tarihçeyi dışlamak için)")
+    parser.add_argument("--benchmark", action="store_true",
+                        help="XU100 al-tut ve sadece-nakit karşılaştırma bölümünü rapora ekler "
+                             "(bilgilendirici, kabul kriterine dahil değil)")
+    parser.add_argument("--benchmark-symbol", default="XU100",
+                        help="Benchmark endeksinin AlgoLab-tarzı kısa adı (cache dosya adı için)")
+    parser.add_argument("--benchmark-yf-symbol", default="XU100.IS",
+                        help="Benchmark endeksinin yfinance sembolü")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     symbols = [s.strip() for s in args.symbols.split(",")]
+
+    def _load_daily(s: str):
+        df = load_cached(s, "1d")
+        return df.loc[args.start_date:] if args.start_date else df
+
+    benchmark_loader = None
+    if args.benchmark:
+        from data.historical import update_cache
+
+        update_cache(args.benchmark_symbol, args.benchmark_yf_symbol, "1d")
+
+        def benchmark_loader():
+            df = load_cached(args.benchmark_symbol, "1d")
+            return df.loc[args.start_date:] if args.start_date else df
+
     generate_report(
-        symbols, cfg, lambda s: load_cached(s, "1d"), args.out,
+        symbols, cfg, _load_daily, args.out,
         do_walk_forward=args.walk_forward, do_monte_carlo=args.monte_carlo,
         do_regime_split=args.regime_split, do_sweep=args.sweep,
+        do_benchmark=args.benchmark, benchmark_loader=benchmark_loader,
     )
     print(f"Rapor yazıldı: {Path(args.out) / 'report.md'}")
 

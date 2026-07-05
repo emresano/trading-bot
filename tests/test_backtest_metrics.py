@@ -4,7 +4,13 @@ import pandas as pd
 import pytest
 
 from backtest.engine import Trade
-from backtest.metrics import classify_regime, compute_metrics, regime_breakdown
+from backtest.metrics import (
+    cash_only_metrics,
+    classify_regime,
+    compute_buy_hold_metrics,
+    compute_metrics,
+    regime_breakdown,
+)
 
 
 def make_trade(symbol="A", entry_date="2024-01-01", exit_date="2024-01-05",
@@ -130,3 +136,42 @@ def test_regime_breakdown_groups_correctly():
 def test_regime_breakdown_empty_trades_returns_empty_frame():
     result = regime_breakdown([], {})
     assert result.empty
+
+
+# --- Benchmark kıyası: al-tut ve sadece-nakit ---
+
+def test_compute_buy_hold_metrics_matches_price_return():
+    idx = pd.date_range("2020-01-01", periods=366, freq="1D", tz="UTC")  # tam 1 yıl
+    close = pd.Series([100.0] * 365 + [120.0], index=idx)
+    df = pd.DataFrame({"close": close})
+    m = compute_buy_hold_metrics(df, initial_equity=100_000.0)
+    assert m.total_return == pytest.approx(0.20)
+    years = (idx[-1] - idx[0]).days / 365.25
+    assert m.cagr == pytest.approx((1.20) ** (1 / years) - 1, rel=1e-6)
+
+
+def test_compute_buy_hold_metrics_drawdown_from_price_series():
+    idx = pd.date_range("2020-01-01", periods=5, freq="1D", tz="UTC")
+    close = pd.Series([100, 110, 90, 95, 105], index=idx, dtype=float)
+    df = pd.DataFrame({"close": close})
+    m = compute_buy_hold_metrics(df, initial_equity=100_000.0)
+    assert m.max_drawdown == pytest.approx(90 / 110 - 1)
+    # trade bazlı alanlar al-tut senaryosunda anlamsız/sıfır
+    assert m.trade_count == 0
+    assert m.win_rate == 0.0
+    assert m.profit_factor == 0.0
+
+
+def test_compute_buy_hold_metrics_empty_dataframe():
+    m = compute_buy_hold_metrics(pd.DataFrame(columns=["close"]), initial_equity=100_000.0)
+    assert m.total_return == 0.0
+    assert m.trade_count == 0
+
+
+def test_cash_only_metrics_all_zero():
+    m = cash_only_metrics()
+    assert m.total_return == 0.0
+    assert m.cagr == 0.0
+    assert m.max_drawdown == 0.0
+    assert m.sharpe == 0.0
+    assert m.time_in_cash_pct == 100.0

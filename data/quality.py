@@ -23,6 +23,8 @@ def check_quality(
     max_staleness: Optional[timedelta] = None,
     now: Optional[datetime] = None,
     jump_threshold_pct: float = 0.20,
+    ohlc_rtol: float = 0.005,
+    ohlc_atol: float = 1e-6,
 ) -> QualityResult:
     """Bölüm 7.2'deki 5 kontrolü sırayla uygular. Geçemeyen sembol o turda işlem görmez."""
     missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
@@ -57,9 +59,16 @@ def check_quality(
             return QualityResult(False, errors=[f"ortada NaN satır(lar) var: {bad_idx[:5]}"])
         working = working.loc[first_valid:]
 
-    # 3. OHLC tutarlılığı
-    bad_high = working["high"] < working[["open", "close"]].max(axis=1)
-    bad_low = working["low"] > working[["open", "close"]].min(axis=1)
+    # 3. OHLC tutarlılığı — küçük bir rtol/atol toleransıyla (auto_adjust'ın
+    # temettü/split düzeltmesinden kaynaklanan kayan nokta gürültüsü, örn.
+    # high'ın close'a "neredeyse eşit ama 1e-16 küçük" çıkması, gerçek bir veri
+    # sorunu değildir — bkz. BACKTEST_REVIEW_v5.md'deki teşhis notu).
+    max_oc = working[["open", "close"]].max(axis=1)
+    min_oc = working[["open", "close"]].min(axis=1)
+    high_slack = ohlc_atol + ohlc_rtol * max_oc.abs()
+    low_slack = ohlc_atol + ohlc_rtol * min_oc.abs()
+    bad_high = working["high"] < max_oc - high_slack
+    bad_low = working["low"] > min_oc + low_slack
     if bad_high.any() or bad_low.any():
         bad_idx = working.index[bad_high | bad_low].tolist()
         return QualityResult(False, errors=[f"OHLC tutarsızlığı (high/low ihlali): {bad_idx[:5]}"])

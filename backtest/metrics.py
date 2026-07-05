@@ -73,6 +73,23 @@ def compute_metrics(equity_curve: pd.Series, trades: list[Trade]) -> Metrics:
     )
 
 
+def compute_buy_hold_metrics(price_df: pd.DataFrame, initial_equity: float) -> Metrics:
+    """Bir fiyat serisi (örn. bir endeks) için al-tut senaryosunun getiri/CAGR/
+    drawdown/Sharpe'ını compute_metrics ile AYNI formüllerle hesaplar (trades=[]
+    olduğundan win_rate/profit_factor/expectancy anlamsız/0 döner — yalnızca
+    return/CAGR/DD/Sharpe alanları bu fonksiyon için geçerlidir). Bilgilendirici
+    bir karşılaştırma aracıdır, kabul kriterlerinin bir parçası değildir."""
+    if price_df.empty:
+        return compute_metrics(pd.Series(dtype=float), [])
+    equity_curve = price_df["close"] / price_df["close"].iloc[0] * initial_equity
+    return compute_metrics(equity_curve, [])
+
+
+def cash_only_metrics() -> Metrics:
+    """Sadece-nakit senaryosu: getiri/CAGR/drawdown/Sharpe hepsi sıfır."""
+    return Metrics(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, 100.0)
+
+
 def classify_regime(daily_df: pd.DataFrame, cfg) -> pd.Series:
     """bull: close > ema_slow VE ema_slow 20 bar öncesinden yüksek.
     bear: close < ema_slow VE ema_slow 20 bar öncesinden düşük. Aksi: sideways."""

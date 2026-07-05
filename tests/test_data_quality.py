@@ -79,3 +79,38 @@ def test_missing_columns_fail():
 def test_empty_dataframe_fails():
     result = check_quality(pd.DataFrame(columns=["open", "high", "low", "close", "volume"]))
     assert not result.passed
+
+
+# --- OHLC toleransı: kayan nokta gürültüsü gerçek veri sorunu sayılmamalı ---
+
+def _synthetic_ohlc_df(high_offset: float) -> pd.DataFrame:
+    idx = pd.date_range("2024-01-01", periods=5, freq="1D", tz="UTC")
+    close = [100.0, 101.0, 102.0, 103.0, 104.0]
+    open_ = [99.5, 100.5, 101.5, 102.5, 103.5]
+    high = [c + high_offset for c in close]  # high = close + offset (negatifse ihlal)
+    low = [o - 0.5 for o in open_]
+    return pd.DataFrame({"open": open_, "high": high, "low": low, "close": close,
+                        "volume": [1000.0] * 5}, index=idx)
+
+
+def test_ohlc_epsilon_level_float_noise_passes():
+    # high, close'dan yalnızca kayan nokta epsilon'u kadar küçük (auto_adjust
+    # kaynaklı yuvarlama gürültüsü) — gerçek bir veri sorunu değil.
+    df = _synthetic_ohlc_df(high_offset=-1e-13)
+    result = check_quality(df)
+    assert result.passed
+
+
+def test_ohlc_small_relative_noise_within_tolerance_passes():
+    # ~%0.3'lük bir sapma (varsayılan rtol=%0.5 içinde) tolere edilmeli.
+    df = _synthetic_ohlc_df(high_offset=-0.3)
+    result = check_quality(df)
+    assert result.passed
+
+
+def test_ohlc_violation_beyond_tolerance_still_fails():
+    # ~%5'lik bir sapma, varsayılan rtol=%0.5'i çok aşıyor — gerçek bir ihlal.
+    df = _synthetic_ohlc_df(high_offset=-5.0)
+    result = check_quality(df)
+    assert not result.passed
+    assert any("tutars" in e.lower() for e in result.errors)

@@ -87,3 +87,31 @@ def test_report_is_deterministic_across_runs(tmp_path):
     assert (out_a / "report.md").read_text() == (out_b / "report.md").read_text()
     assert (out_a / "trades.csv").read_text() == (out_b / "trades.csv").read_text()
     assert (out_a / "sweep_results.csv").read_text() == (out_b / "sweep_results.csv").read_text()
+
+
+# --- Benchmark kıyası (bilgilendirici, kabul kriterine dahil değil) ---
+
+def test_benchmark_section_appears_with_comparison_table(tmp_path):
+    cfg = make_cfg()
+    df = _flat_series()
+    bench_df = _flat_series(n=500)
+    bench_df["close"] = bench_df["close"] * 1.1  # endeks farklı bir getiri göstersin
+
+    out = generate_report(
+        ["TEST"], cfg, lambda s: df, tmp_path,
+        do_benchmark=True, benchmark_loader=lambda: bench_df,
+    )
+    content = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "Benchmark Kıyası" in content
+    assert "Endeks Al-Tut" in content
+    assert "Sadece Nakit" in content
+    assert out["benchmark_metrics"] is not None
+
+
+def test_benchmark_section_absent_when_not_requested(tmp_path):
+    cfg = make_cfg()
+    df = _flat_series()
+    out = generate_report(["TEST"], cfg, lambda s: df, tmp_path)
+    content = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "Benchmark Kıyası" not in content
+    assert out["benchmark_metrics"] is None

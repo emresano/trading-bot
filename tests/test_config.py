@@ -24,7 +24,7 @@ def _write(tmp_path: Path, raw: dict) -> Path:
 def test_default_config_loads_and_validates():
     cfg = load_config(CONFIG_PATH)
     assert cfg.mode == "paper"
-    assert len(cfg.instruments) == 3
+    assert len(cfg.instruments) == 12
     assert cfg.signal.ema_fast < cfg.signal.ema_slow
     assert cfg.risk.max_open_positions == 2
 
