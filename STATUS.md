@@ -1,62 +1,72 @@
 # Proje Durumu
-Son güncelleme: 2026-07-05T15:45:00+03:00 (Europe/Istanbul)
-Şu an: Faz 3 tamamlandı — Faz 4'e (backtest harness) başlanacak
+Son güncelleme: 2026-07-05T15:10:00+03:00 (Europe/Istanbul)
+Şu an: **Faz 4 tamamlandı — DURMA NOKTASI 1'de duruluyor (Bölüm 0.1).
+Faz 5'e geçilmedi, kullanıcı onayı bekleniyor.**
 Tamamlanan fazlar: Faz 1 (İskelet + Veri Katmanı), Faz 2 (İndikatörler + Sinyal
-Motoru), Faz 3 (Risk Motoru)
+Motoru), Faz 3 (Risk Motoru), Faz 4 (Backtest Harness)
 
-Bu oturumda yapılan (Faz 3):
-- `risk/risk_engine.py`: Bölüm 9.2 referans implementasyonu birebir —
-  `size_and_approve(sig, acct, cfg, corr_fn)` kapı sırası: kill_switch →
-  breaker → daily/weekly loss limit → max_positions → min_rr → correlation →
-  boyutlama (risk_amount/per_share_risk, notional tavanı, nakit kırpması,
-  qty<1 → POSITION_TOO_SMALL).
-- `kill_switch_active(cfg)` / `breaker_tripped()`: dosya varlığı kontrolü.
-  `check_and_trip_breaker(acct, cfg)`: equity, peak_equity'den
-  `max_drawdown_breaker_pct` kadar düştüğünde `runtime/BREAKER_TRIPPED`'i
-  yazar; dosya varsa dokunmaz (yalnızca kullanıcı elle siler).
-- `historical_correlation(symbol, positions, price_loader, lookback_days)`:
-  adayın son N günlük getirisiyle her açık pozisyonun getirisi arasındaki
-  Pearson korelasyonun (mutlak değer) maksimumunu döner. `price_loader`
-  dependency-injection ile alınıyor — risk_engine kendi IO yapmıyor (saf
-  çekirdek ilkesi korunuyor).
-- `tests/test_risk_engine.py`: baseline tam-onay + Bölüm 9.3'ün birebir
-  sayısal örneği (equity=100.000, entry=100, stop=94 → qty=125), risk
-  motorunun ürettiği 8 RejectReason'ın her biri için izole test
-  (KILL_SWITCH, DRAWDOWN_BREAKER, DAILY_LOSS_LIMIT, WEEKLY_LOSS_LIMIT,
-  MAX_POSITIONS, MIN_RR_FAILED, CORRELATION_LIMIT, POSITION_TOO_SMALL),
-  notional-tavanı ve nakit kırpma senaryoları, `historical_correlation`
-  için 3 test.
-- Faz 3 Bitti Tanımı doğrulandı: `pytest -q` → 99 passed (81 önceki + 18
-  risk motoru); risk_engine'in kapsamındaki 8 RejectReason'ın hepsi en az
-  bir testte üretiliyor (kalan 4 değer — INSUFFICIENT_CASH,
-  PRETRADE_CHECK_FAILED, MARKET_CLOSED, NEWS_BLACKOUT — Faz 5
-  safety/pretrade modülüne ait, Bölüm 9 kapsamı dışında).
+Bu oturumda yapılan (Faz 4):
+- `backtest/engine.py`: Bölüm 12.2'nin 4 adımlı event-driven döngüsü (pending
+  giriş/çıkışları t+1 açılışında doldur → stop/target intrabar kontrolü,
+  STOP ÖNCELİKLİ → evaluate_exit → evaluate_entry+risk_engine → equity
+  snapshot). Degrade mod (h4_df=None) bilinçli bir kapsam kararıyla
+  kullanıldı — gerçek günlük/4H takvim-günü hizalaması (yfinance'in daily
+  barları Europe/Istanbul tz'de, 4H resample UTC'de) ek karmaşıklık ve
+  look-ahead riski taşıdığından bu fazda ertelendi.
+- **Bug fix (Faz 2'den):** `gate_trend`/`gate_mtf`/`evaluate_exit`,
+  `indicators.engine`'in `cfg.signal.ema_fast/ema_slow`'dan ürettiği kolon
+  adları yerine `"ema_50"/"ema_200"` sabit string'lerini okuyordu — yalnızca
+  config.yaml'daki varsayılan 50/200 ile çalışıyordu, farklı bir
+  ema_fast/slow ile KeyError verirdi. Artık dinamik kolon adı okunuyor
+  (backtest'in gevşetilmiş test config'iyle bu hata ortaya çıktı, düzeltildi).
+- `backtest/metrics.py`: total_return, cagr, max_drawdown, sharpe, win_rate,
+  profit_factor, avg_r_multiple, expectancy, trade_count, time_in_cash_pct
+  + `classify_regime`/`regime_breakdown` (bull/bear/sideways).
+- `backtest/walkforward.py`: 27 kombinasyonluk dar grid (Bölüm 12.7),
+  komşu-sağlamlık kriteriyle parametre seçimi (en yüksek skor değil),
+  OOS birleştirme + kabul kriteri (`evaluate_acceptance`).
+- `backtest/montecarlo.py`: `monte_carlo_dd` Bölüm 12.6'nın referans kodu
+  aynen; `trade_returns_from_trades` (r_multiple × risk_per_trade_pct
+  yaklaşıklaması, gerekçesi kod içinde belgeli).
+- `backtest/cli.py`: `python -m backtest.cli --symbols ... --walk-forward
+  --monte-carlo --regime-split --sweep --out DIR` → report.md, trades.csv,
+  equity.png, sweep_results.csv. Determinizm testte doğrulandı (bayt-bayt
+  aynı çıktı, 2 çalıştırma).
+- 142/142 test yeşil (pytest -q).
+- **Gerçek backtest çalıştırıldı:** THYAO+GARAN+ASELS, 2000-05-09→2026-07-02
+  (~26 yıl), tam CLI (`--walk-forward --monte-carlo --regime-split --sweep`),
+  ~8 dakikada tamamlandı. **Sonuç: varsayılan parametrelerle 0 trade.** 27
+  kombinasyonluk sweep'in HİÇBİRİ 3'ten fazla trade üretmedi; walk-forward'ın
+  48 penceresinin hiçbirinde komşu-sağlamlık kriteri geçmedi (`robust=False`).
+- `BACKTEST_REVIEW.md` yazıldı (repo kökünde) — dürüst değerlendirme: motor
+  doğru çalışıyor (look-ahead yasağı, determinizm, stop-önceliği, komisyon/
+  slippage testlerle kanıtlı) ama sinyal hunisi aşırı seçici; strateji fiilen
+  hiç test edilemedi (0 trade → tüm metrikler anlamsız/sıfır).
 
-Sırada: Faz 4 — `backtest/` (Bölüm 12). İlk somut adım: `backtest/engine.py`'de
-event-driven döngüyü yazmak (Bölüm 12.2'deki 4 adım: stop/target kontrolü
-→ evaluate_exit → evaluate_entry+risk_engine → equity snapshot), look-ahead
-yasağını garanti eden testleri (Bölüm 12.3) önce yazıp sonra motoru buna
-göre doğrulamak. Ardından `backtest/metrics.py`, `backtest/walkforward.py`
-(Bölüm 12.5, komşu-sağlamlık kriteri), `backtest/montecarlo.py` (Bölüm 12.6,
-zaten spesifikasyonda hazır kod var), `backtest/cli.py` (Bölüm 12.8, sabit
-`--seed` ile bit-bit determinizm testi dahil). Parametre taraması yalnızca
-Bölüm 12.7'deki dar grid (27 kombinasyon): atr_stop_mult×adx_min×min_rr.
+**Sırada:** Hiçbir şey — burada duruluyor. Kullanıcı BACKTEST_REVIEW.md'yi
+okuyup üç seçenekten birine karar verecek: (A) huniyi olduğu gibi kabul edip
+Faz 5'e geç, (B) sinyal eşiklerini (RSI bandı, ADX eşiği vb.) gözden geçir
+[risk limiti değil, strateji parametresi — yine de mimari karar, onay
+istiyorum], (C) sembol/enstrüman kapsamını genişlet. Kullanıcı "Faz 5
+onaylandı" veya net bir yön derse ona göre devam edilecek.
 
-**HATIRLATMA — Faz 4 sonunda DURMA NOKTASI 1 var (Bölüm 0.1):** CLI tek
-komutla rapor üretip determinizm/look-ahead testleri geçtiğinde
-`BACKTEST_REVIEW.md` üretilip Faz 5'e GEÇİLMEDEN durulacak, kullanıcı onayı
-beklenecek. Sonuçlar iyi görünse bile bu kural esnetilmez.
+Bilinen sorun/blok: **Kullanıcı onayı bekleniyor (Durma Noktası 1) — bu bir
+blok değil, spec'in kasıtlı, aşılamaz bir kapısı.**
 
-Bilinen sorun/blok: yok.
-
-Varsayımlar/kararlar (Faz 3'te eklenenler):
-- `BREAKER_FILE` yolu (`runtime/BREAKER_TRIPPED`) config'e alınmadı, Bölüm
-  9.1'deki gibi sabit tutuldu — yalnızca `kill_switch_file` config'te
-  (Bölüm 6 şeması zaten yalnızca onu listeliyor).
-- `size_and_approve`'un `sig` argümanının yalnızca ENTER_LONG aksiyonlu ve
-  suggested_stop/target dolu bir Signal olduğu varsayıldı (çağıranın
-  sorumluluğu) — fonksiyon içinde bunun için ekstra None-guard eklenmedi,
-  spec'in referans koduna sadık kalındı (iç sözleşmelere güven ilkesi).
+Varsayımlar/kararlar (Faz 4'te eklenenler):
+- Backtest degrade modda (h4_df=None) çalıştırıldı — gerçek 4H entegrasyonu
+  ertelendi (yukarıda gerekçelendirildi). Bu, backtest sonuçlarının yalnızca
+  günlük-kademe performansını yansıttığı, 4H tetik/MTF katkısının test
+  edilmediği anlamına gelir.
+- Walk-forward'ın skor fonksiyonu olarak Sharpe kullanıldı (spec bunu
+  açıkça belirtmiyor, "en yüksek skor değil komşu-sağlam" ilkesini
+  uygulayacak somut bir metrik gerekiyordu).
+- Monte Carlo'nun `trade_returns` girdisi `r_multiple × risk_per_trade_pct`
+  ile yaklaşıklandı (spec bu dönüşümü açık bırakmıştı).
+- Walk-forward, her pencerede build_features'ı kendi veri dilimi üzerinde
+  sıfırdan hesaplıyor (tam tarihçe üzerinde hesaplayıp dilimlemek yerine) —
+  train_months (24) min_history_bars'ı (260) yeterince aştığından pratik
+  etkisi düşük, ama not edilmiş bir basitleştirme.
 
 Önceki fazlardan taşınan varsayımlar: pandas-ta yerine pandas-ta-classic +
 numpy 2.2 (commit e31e401); BIST seans saatleri yaklaşık (Faz 5'te
@@ -64,4 +74,6 @@ doğrulanacak); `data.historical.download_bars` `period="max"` zorunlu;
 resmi tatil takvimi MVP dışı; MACD "son 2 bar yükseliş" =
 `hist[t]>hist[t-1]`; exit'in "3 bar düşüş" = kesin azalan üçlü sıralama.
 
-Limit nedeniyle durdu mu: hayır.
+Limit nedeniyle durdu mu: hayır — Durma Noktası 1 nedeniyle duruldu (bu,
+Bölüm 2.3'teki "limit nedeniyle durma" ile karıştırılmamalı; bu kalıcı,
+onay gerektiren bir kapı).
