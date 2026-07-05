@@ -3,6 +3,8 @@
 > **Bu dosya nedir:** Bu repo üzerinde çalışan her Claude Code oturumunun okuduğu tek kaynak dokümandır. Ürün spec'i, yazılım mimarisi, modül sözleşmeleri, referans kodlar, test gereksinimleri, faz planı ve çalışma kuralları — hepsi burada. Başka bir dokümana ihtiyaç yok.
 >
 > **İlk oturum talimatı:** Repo boşsa (sadece bu dosya varsa), Bölüm 14'teki Faz 1'den başla. Boş değilse önce `STATUS.md`'yi oku, kaldığın yerden devam et. Kullanıcıya soru sorma — bu doküman cevabı içeriyor. İçermiyorsa Bölüm 16'daki belirsizlik protokolünü uygula.
+>
+> **HARDENING.md:** Bu dosyaya ek bir kalite/güvenilirlik planı — Faz 5 uygulamasında `HARDENING.md` Bölüm B gereksinimleri bağlayıcıdır.
 
 ---
 
