@@ -10,6 +10,7 @@ import pandas as pd
 
 from backtest.engine import Trade, run_backtest
 from backtest.metrics import Metrics, compute_metrics
+from indicators.engine import build_features
 
 # Bölüm 12.7: overfitting'e karşı bilinçli dar grid — yalnızca bu 3 parametre taranır.
 SWEEP_GRID: dict[str, list[float]] = {
@@ -101,28 +102,34 @@ def run_walk_forward(
     """Bölüm 12.5: her pencerede train diliminde 27 kombinasyonluk grid taraması,
     komşu-sağlamlık kriteriyle parametre seçimi, test diliminde o parametreyle koşum.
 
-    Basitleştirme: her pencere kendi veri dilimi üzerinde build_features'ı sıfırdan
-    hesaplar (dilim başında yeniden warm-up NaN'ı oluşur) — tam tarihçe üzerinde
-    hesaplayıp sonradan dilimlemek yerine. train_months (varsayılan 24 ay) min_history_bars'ı
-    (260) rahatça aştığından pencere içi kullanılabilir bar sayısı yeterlidir.
+    Düzeltme (Faz 4 revizyon v3): build_features artık TAM tarihçe üzerinde YALNIZCA
+    BİR KEZ hesaplanır (sweep grid'in üç parametresi — atr_stop_mult, adx_min,
+    min_rr — indikatör hesaplamasını etkilemez, yalnızca eşik karşılaştırmalarını
+    etkiler; bu yüzden tüm kombinasyonlar aynı özellik DataFrame'ini güvenle
+    paylaşabilir). Train/test pencereleri `run_backtest`'e `date_range` ile
+    verilir; `min_history_bars` kontrolü tam tarihçedeki mutlak konuma göre
+    uygulanır, dilimlenmiş pencereye göre değil. Böylece test dilimindeki bir gün
+    kendinden önceki (train dönemi dahil) tam tarihçeyi warm-up olarak kullanabilir
+    — bu look-ahead değildir, yalnızca geçmişe bakar. Önceki basitleştirme (her
+    pencerede sıfırdan build_features) test dilimlerinin (6 ay ≈ 131 gün,
+    min_history_bars=260'ın altında) hiçbir zaman trade üretememesine yol
+    açıyordu; bu artık düzeltildi.
     """
     combos = sweep_combinations()
     daily_raw = {s: load_daily(s) for s in symbols}
-    non_empty = [df.index for df in daily_raw.values() if not df.empty]
-    if not non_empty:
+    non_empty_raw = [df.index for df in daily_raw.values() if not df.empty]
+    if not non_empty_raw:
         return []
-    all_index = sorted(set().union(*non_empty))
+    all_index = sorted(set().union(*non_empty_raw))
     start_date, end_date = all_index[0], all_index[-1]
+
+    # Tüm sweep kombinasyonları aynı fiyat verisini paylaşır — özellikler bir kez
+    # hesaplanır, her kombinasyonda yeniden hesaplanmaz (performans).
+    base_features = {s: build_features(daily_raw[s], cfg) for s in symbols}
 
     train_months = cfg.backtest.walk_forward.train_months
     test_months = cfg.backtest.walk_forward.test_months
     step_months = cfg.backtest.walk_forward.step_months
-
-    def _slice_loader(train_start, train_end):
-        def _loader(s):
-            df = daily_raw[s]
-            return df.loc[(df.index >= train_start) & (df.index < train_end)]
-        return _loader
 
     results: list[WindowResult] = []
     window_start = start_date
@@ -137,7 +144,8 @@ def run_walk_forward(
         train_results: dict[tuple, Metrics] = {}
         for combo in combos:
             combo_cfg = apply_params(cfg, combo)
-            bt = run_backtest(symbols, combo_cfg, _slice_loader(train_start, train_end))
+            bt = run_backtest(symbols, combo_cfg, precomputed_features=base_features,
+                              date_range=(train_start, train_end))
             train_results[tuple(combo[k] for k in SWEEP_KEYS)] = compute_metrics(bt.equity_curve, bt.trades)
 
         chosen = select_robust_params(train_results)
@@ -145,7 +153,8 @@ def run_walk_forward(
         robust = bool(chosen) and is_neighbor_robust(scores, chosen)
 
         chosen_cfg = apply_params(cfg, chosen)
-        test_bt = run_backtest(symbols, chosen_cfg, _slice_loader(test_start, test_end))
+        test_bt = run_backtest(symbols, chosen_cfg, precomputed_features=base_features,
+                               date_range=(test_start, test_end))
         test_metrics = compute_metrics(test_bt.equity_curve, test_bt.trades)
         train_metrics = train_results[tuple(chosen[k] for k in SWEEP_KEYS)]
 

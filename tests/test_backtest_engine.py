@@ -197,3 +197,63 @@ def test_empty_symbol_list_returns_empty_result():
     result = run_backtest([], cfg, lambda s: pd.DataFrame())
     assert result.trades == []
     assert result.equity_curve.empty
+
+
+# --- date_range / precomputed_features: walk-forward test-harness düzeltmesi ---
+# (Faz 4 revizyon v3: walk-forward'ın OOS pencereleri, kendi veri dilimi üzerinde
+# build_features'ı sıfırdan hesapladığı için hiç trade üretemiyordu — test dilimi
+# min_history_bars'tan kısaydı. Düzeltme: build_features tam tarihçede bir kez
+# hesaplanır, min_history_bars kontrolü tam tarihçedeki mutlak konuma göre yapılır,
+# date_range yalnızca hangi barların SİMÜLE edileceğini kısıtlar.)
+
+def test_date_range_restricts_simulation_but_uses_full_history_for_warmup():
+    """Kendi başına min_history_bars'tan (15) çok daha kısa bir pencerede
+    (yalnızca 3 gün) bile, öncesindeki tam tarihçe warm-up olarak kullanıldığından
+    bir trade üretilebildiğini kanıtlar — walk-forward'ın 6 aylık test dilimlerinin
+    artık gerçekten trade üretebilmesinin temeli budur."""
+    cfg = make_cfg()
+    base = _pretrigger_bars()  # 45 bar, son barda (index 44) ENTER_LONG sinyali üretir
+    full_df = _extend(base, [
+        dict(open=120.0, high=120.5, low=119.5, close=120.0, volume=1000.0),  # t+1: giriş dolar
+        dict(open=120.0, high=130.0, low=119.0, close=125.0, volume=1000.0),  # target'a değer
+    ])
+
+    narrow_start = base.index[-1]                          # tam olarak sinyal barının tarihi
+    narrow_end = full_df.index[-1] + pd.Timedelta(days=1)   # son devam barını da kapsa
+
+    narrow_window_len = len(full_df.loc[narrow_start:])
+    assert narrow_window_len < cfg.signal.min_history_bars, "pencere kendi başına yetersiz olmalı"
+
+    result = run_backtest(["TEST"], cfg, lambda s: full_df, date_range=(narrow_start, narrow_end))
+    assert len(result.trades) == 1
+    trade = result.trades[0]
+    assert trade.exit_reason == "TARGET"
+    assert trade.entry_date == full_df.index[-2]  # sinyal barından bir sonraki gün
+
+
+def test_date_range_with_insufficient_full_history_produces_no_trades():
+    """Kontrast testi: tam tarihçe de kısaysa (min_history_bars'ı hiç aşmıyorsa),
+    date_range verilse bile hiç trade üretilmemeli — düzeltme warm-up şartını
+    ortadan kaldırmıyor, yalnızca nereden sayılacağını düzeltiyor."""
+    cfg = make_cfg()
+    short_df = _pretrigger_bars(n=10)  # min_history_bars=15'ten az
+    result = run_backtest(["TEST"], cfg, lambda s: short_df,
+                          date_range=(short_df.index[0], short_df.index[-1] + pd.Timedelta(days=1)))
+    assert result.trades == []
+
+
+def test_precomputed_features_used_instead_of_recomputing():
+    """precomputed_features verildiğinde load_daily hiç çağrılmamalı (walk-forward'ın
+    aynı fiyat verisini 27 kombinasyon × onlarca pencerede tekrar tekrar
+    build_features'tan geçirmemesi için performans kritik)."""
+    from indicators.engine import build_features
+
+    cfg = make_cfg()
+    base = _pretrigger_bars()
+    features = {"TEST": build_features(base, cfg)}
+
+    def _loader(s):
+        raise AssertionError("precomputed_features verilmişken load_daily çağrılmamalı")
+
+    result = run_backtest(["TEST"], cfg, _loader, precomputed_features=features)
+    assert len(result.equity_curve) > 0

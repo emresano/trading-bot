@@ -51,8 +51,10 @@ def _iso_week(ts: pd.Timestamp) -> tuple[int, int]:
 def run_backtest(
     symbols: list[str],
     cfg,
-    load_daily: Callable[[str], pd.DataFrame],
+    load_daily: Optional[Callable[[str], pd.DataFrame]] = None,
     initial_equity: Optional[float] = None,
+    date_range: Optional[tuple[pd.Timestamp, pd.Timestamp]] = None,
+    precomputed_features: Optional[dict[str, pd.DataFrame]] = None,
 ) -> BacktestResult:
     """Event-driven, bar-bazlı backtest motoru (Bölüm 12.2).
 
@@ -65,13 +67,38 @@ def run_backtest(
     yeni giriş/çıkış fill'i en erken t+1 barının açılışındadır. Stop/target
     intrabar fill'leri yalnızca pozisyon zaten mevcutken, o barın high/low'una
     karşı kontrol edilir — gelecek veri kullanılmaz.
+
+    `date_range`: verilirse SİMÜLASYON yalnızca bu (start, end] aralığındaki
+    barlarla ilerler, ama `build_features` (ve dolayısıyla warm-up) her zaman
+    `load_daily`/`precomputed_features`'ın verdiği TAM tarihçe üzerinden
+    hesaplanır — bu yüzden `min_history_bars` kontrolü, dilimlenmiş pencereye
+    değil tam tarihçedeki mutlak konuma göre uygulanır. Bir test dilimindeki
+    gün, kendinden önceki tam tarihçeyi (train dönemi dahil) warm-up olarak
+    kullanabilir — bu look-ahead değildir, yalnızca geçmişe bakar (walk-forward
+    OOS pencerelerinin gerçek warm-up'a sahip olması için gereklidir).
+
+    `precomputed_features`: verilirse `build_features` tekrar çağrılmaz —
+    walk-forward'ın aynı fiyat verisini farklı risk/stop eşikleriyle (indikatör
+    hesaplamasını ETKİLEMEYEN parametreler) defalarca koşturması gerektiğinde
+    performans için kullanılır.
     """
     initial_equity = initial_equity if initial_equity is not None else cfg.backtest.initial_equity
 
-    daily_features = {s: build_features(load_daily(s), cfg) for s in symbols}
+    if precomputed_features is not None:
+        daily_features = precomputed_features
+    else:
+        daily_features = {s: build_features(load_daily(s), cfg) for s in symbols}
     min_history = cfg.signal.min_history_bars
 
-    non_empty = [df.index[min_history:] for df in daily_features.values() if len(df) > min_history]
+    non_empty = []
+    for df in daily_features.values():
+        if len(df) <= min_history:
+            continue
+        eligible = df.index[min_history:]  # tam tarihçedeki mutlak konuma göre
+        if date_range is not None:
+            start, end = date_range
+            eligible = eligible[(eligible >= start) & (eligible < end)]
+        non_empty.append(eligible)
     all_dates = sorted(set().union(*non_empty)) if non_empty else []
 
     cash = initial_equity
