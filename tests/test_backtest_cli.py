@@ -115,3 +115,24 @@ def test_benchmark_section_absent_when_not_requested(tmp_path):
     content = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "Benchmark Kıyası" not in content
     assert out["benchmark_metrics"] is None
+
+
+# --- Rapor damgaları (HARDENING.md A1: tekrarlanabilirlik) ---
+
+def test_stamps_appear_in_report_when_provided(tmp_path):
+    cfg = make_cfg()
+    df = _flat_series()
+    stamps = {"git_commit": "abc123", "config_hash": "deadbeef", "snapshot_manifest_hash": "cafef00d"}
+    generate_report(["TEST"], cfg, lambda s: df, tmp_path, stamps=stamps)
+    content = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "abc123" in content
+    assert "deadbeef" in content
+    assert "cafef00d" in content
+
+
+def test_stamps_absent_by_default(tmp_path):
+    cfg = make_cfg()
+    df = _flat_series()
+    generate_report(["TEST"], cfg, lambda s: df, tmp_path)
+    content = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "Git commit" not in content

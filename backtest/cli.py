@@ -1,6 +1,8 @@
 # backtest/cli.py
 from __future__ import annotations
 import argparse
+import hashlib
+import subprocess
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -82,6 +84,7 @@ def generate_report(
     do_sweep: bool = False,
     do_benchmark: bool = False,
     benchmark_loader: Optional[Callable[[], pd.DataFrame]] = None,
+    stamps: Optional[dict] = None,
 ) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -94,7 +97,13 @@ def generate_report(
         _write_equity_plot(result.equity_curve, out_dir / "equity.png")
 
     lines = ["# Backtest Raporu", "", f"Semboller: {', '.join(symbols)}",
-             f"Başlangıç sermayesi: {cfg.backtest.initial_equity}", "",
+             f"Başlangıç sermayesi: {cfg.backtest.initial_equity}", ""]
+    if stamps:
+        lines.append(f"Git commit: {stamps.get('git_commit', 'N/A')}")
+        lines.append(f"Config hash (sha256): {stamps.get('config_hash', 'N/A')}")
+        lines.append(f"Snapshot manifest hash (sha256): {stamps.get('snapshot_manifest_hash', 'N/A (snapshot kullanılmadı)')}")
+        lines.append("")
+    lines += [
              "## Özet Metrikler (tüm dönem)",
              f"- Toplam getiri: {metrics.total_return:.2%}",
              f"- CAGR: {metrics.cagr:.2%}",
@@ -199,6 +208,38 @@ def generate_report(
     }
 
 
+def _compute_stamps(config_path: str, snapshot_dir: Optional[str]) -> dict:
+    """Rapor başlığı için üç damga: git commit + config dosyası hash'i +
+    snapshot manifest hash'i (HARDENING.md A1). Tekrarlanabilirlik kanıtı içindir,
+    hiçbir davranışı etkilemez."""
+    try:
+        git_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent.parent, text=True,
+        ).strip()
+    except Exception:
+        git_commit = "N/A (git bulunamadı)"
+
+    try:
+        config_hash = hashlib.sha256(Path(config_path).read_bytes()).hexdigest()
+    except Exception:
+        config_hash = "N/A"
+
+    if snapshot_dir:
+        manifest_path = Path(snapshot_dir) / "manifest.json"
+        if manifest_path.exists():
+            snapshot_manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        else:
+            snapshot_manifest_hash = "N/A (manifest.json bulunamadı)"
+    else:
+        snapshot_manifest_hash = "N/A (snapshot kullanılmadı)"
+
+    return {
+        "git_commit": git_commit,
+        "config_hash": config_hash,
+        "snapshot_manifest_hash": snapshot_manifest_hash,
+    }
+
+
 def main() -> None:
     from core.config import load_config
     from data.historical import load_cached
@@ -221,14 +262,25 @@ def main() -> None:
                         help="Benchmark endeksinin AlgoLab-tarzı kısa adı (cache dosya adı için)")
     parser.add_argument("--benchmark-yf-symbol", default="XU100.IS",
                         help="Benchmark endeksinin yfinance sembolü")
+    parser.add_argument("--snapshot", default=None,
+                        help="Dondurulmuş bir snapshot dizini (örn. data/snapshots/2026-07-06) — "
+                             "verilirse ağdan indirme YOK, yalnızca <SEMBOL>.parquet dosyaları okunur. "
+                             "Verilmezse mevcut davranış (data/historical cache) aynen korunur.")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     symbols = [s.strip() for s in args.symbols.split(",")]
 
-    def _load_daily(s: str):
-        df = load_cached(s, "1d")
-        return df.loc[args.start_date:] if args.start_date else df
+    if args.snapshot:
+        snapshot_dir = Path(args.snapshot)
+
+        def _load_daily(s: str):
+            df = pd.read_parquet(snapshot_dir / f"{s}.parquet")
+            return df.loc[args.start_date:] if args.start_date else df
+    else:
+        def _load_daily(s: str):
+            df = load_cached(s, "1d")
+            return df.loc[args.start_date:] if args.start_date else df
 
     benchmark_loader = None
     if args.benchmark:
@@ -240,11 +292,14 @@ def main() -> None:
             df = load_cached(args.benchmark_symbol, "1d")
             return df.loc[args.start_date:] if args.start_date else df
 
+    stamps = _compute_stamps(args.config, args.snapshot)
+
     generate_report(
         symbols, cfg, _load_daily, args.out,
         do_walk_forward=args.walk_forward, do_monte_carlo=args.monte_carlo,
         do_regime_split=args.regime_split, do_sweep=args.sweep,
         do_benchmark=args.benchmark, benchmark_loader=benchmark_loader,
+        stamps=stamps,
     )
     print(f"Rapor yazıldı: {Path(args.out) / 'report.md'}")
 
