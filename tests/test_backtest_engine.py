@@ -257,3 +257,58 @@ def test_precomputed_features_used_instead_of_recomputing():
 
     result = run_backtest(["TEST"], cfg, _loader, precomputed_features=features)
     assert len(result.equity_curve) > 0
+
+
+# --- Breaker entegrasyonu (HARDENING.md harness düzeltme turu) ---
+
+def test_breaker_trips_on_correct_bar_and_blocks_subsequent_entries():
+    """Sentetik equity serisi: ilk pattern (seed=13) ENTER_LONG üretir, hemen
+    ardından büyük bir düşüş bu pozisyonu STOP ile kapatır ve breaker'ı
+    (kasıtlı olarak sıkı bir eşikle) tetikler. İkinci bir pattern (seed=1,
+    fiyat seviyesi kaydırılmış) kendi başına yine geçerli bir ENTER_LONG
+    üretir (decision_log ile kanıtlanır) — ama breaker tetiklendiği için
+    HİÇBİR yeni pozisyon açılmamalı."""
+    cfg = make_cfg()
+    cfg.risk.max_drawdown_breaker_pct = 0.01  # tek stop-loss'un bile aşacağı kadar sıkı (test amaçlı)
+
+    base1 = _pretrigger_bars(seed=13)  # ENTER_LONG üretir (entry~116.88, stop~114.31)
+    # Ertesi gün açılışı sinyal barının kapanışına yakın (gerçekçi devam), ama
+    # gün içi düşük stop seviyesinin (114.31) altına iniyor -> STOP, gerçek/temiz
+    # bir zarar (aşırı gap değil, simülatörün "stop seviyesinden doldur" varsayımı
+    # gerçekçi kalıyor).
+    stop_bar = pd.DataFrame([
+        dict(open=116.5, high=117.0, low=110.0, close=112.0, volume=1000.0),
+    ], index=pd.date_range(base1.index[-1] + pd.Timedelta(days=1), periods=1, freq="1D", tz="UTC"))
+
+    base2 = _pretrigger_bars(seed=1, n=45)
+    shift = 112.0 - base2["close"].iloc[0]
+    base2_shifted = base2.copy()
+    for col in ["open", "high", "low", "close"]:
+        base2_shifted[col] = base2_shifted[col] + shift
+    base2_shifted.index = pd.date_range(
+        stop_bar.index[-1] + pd.Timedelta(days=1), periods=len(base2_shifted), freq="1D", tz="UTC"
+    )
+
+    full_df = pd.concat([base1, stop_bar, base2_shifted])
+    result = run_backtest(["TEST"], cfg, lambda s: full_df)
+
+    # 1. İlk (ve TEK) trade STOP ile kapanmış olmalı
+    assert len(result.trades) == 1
+    first_trade = result.trades[0]
+    assert first_trade.exit_reason == "STOP"
+
+    # 2. Breaker, stop-loss'un gerçekleştiği barda tetiklenmiş olmalı
+    assert len(result.breaker_trips) == 1
+    assert result.breaker_trips[0]["date"] == first_trade.exit_date
+    assert result.breaker_trips[0]["drawdown"] >= cfg.risk.max_drawdown_breaker_pct
+
+    # 3. İkinci desen (seed=1) kendi başına geçerli bir ENTER_LONG sinyali
+    #    ürettiğini decision_log'da kanıtlıyoruz...
+    enter_signals_after_trip = [
+        d for d in result.decision_log
+        if d["action"] == "ENTER_LONG" and d["date"] > first_trade.exit_date
+    ]
+    assert len(enter_signals_after_trip) >= 1, "ikinci desen bir ENTER_LONG sinyali üretmeli (aksi halde test anlamsız)"
+
+    # ...ama breaker tetiklendiği için bu sinyal hiçbir yeni pozisyona dönüşmemiş olmalı
+    assert len(result.trades) == 1  # hâlâ yalnızca ilk (stop'lanan) trade var

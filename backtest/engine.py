@@ -1,13 +1,15 @@
 # backtest/engine.py
 from __future__ import annotations
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Optional
 
 import pandas as pd
 
 from core.models import AccountState, Position, SignalAction, TradeDecision
 from indicators.engine import build_features
-from risk.risk_engine import historical_correlation, size_and_approve
+from risk.risk_engine import check_and_trip_breaker, historical_correlation, size_and_approve
 from strategy.signal_engine import evaluate_entry, evaluate_exit
 
 
@@ -29,6 +31,7 @@ class BacktestResult:
     trades: list[Trade] = field(default_factory=list)
     equity_curve: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
     decision_log: list[dict] = field(default_factory=list)
+    breaker_trips: list[dict] = field(default_factory=list)  # [{"date":..., "equity":..., "peak_equity":..., "drawdown":...}]
 
 
 @dataclass
@@ -106,9 +109,11 @@ def run_backtest(
     trades: list[Trade] = []
     equity_points: list[tuple[pd.Timestamp, float]] = []
     decision_log: list[dict] = []
+    breaker_trips: list[dict] = []
 
     peak_equity = initial_equity
     trade_pnls: list[tuple[pd.Timestamp, float]] = []
+    breaker_was_tripped = False
 
     pending_exits: set[str] = set()
     pending_entries: dict[str, TradeDecision] = {}
@@ -129,99 +134,93 @@ def run_backtest(
 
         return _corr
 
-    for date in all_dates:
-        # --- 0. Önceki barın sinyaliyle planlanmış işlemleri BUGÜNÜN açılışında doldur ---
-        for symbol in list(pending_exits):
-            df = daily_features[symbol]
-            if symbol in positions and date in df.index:
-                bar = df.loc[date]
+    # Breaker durumu her run_backtest çağrısı için İZOLE bir geçici dosyada tutulur —
+    # paper/real modun paylaştığı gerçek runtime/BREAKER_TRIPPED dosyasına DOKUNULMAZ
+    # (aksi halde eşzamanlı backtest koşuları veya bir canlı bot birbirinin breaker
+    # durumunu kirletirdi). Kullanılan fonksiyon (check_and_trip_breaker/
+    # size_and_approve) paper/real ile BİREBİR AYNI — yalnızca dosya yolu farklı.
+    with tempfile.TemporaryDirectory(prefix="backtest_breaker_") as tmp_dir:
+        breaker_file = Path(tmp_dir) / "BREAKER_TRIPPED"
+
+        for date in all_dates:
+            # --- 0. Önceki barın sinyaliyle planlanmış işlemleri BUGÜNÜN açılışında doldur ---
+            for symbol in list(pending_exits):
+                df = daily_features[symbol]
+                if symbol in positions and date in df.index:
+                    bar = df.loc[date]
+                    pos = positions[symbol]
+                    fill_price = float(bar["open"]) * (1 - cfg.costs.slippage_bps / 1e4)
+                    commission = fill_price * pos.quantity * cfg.costs.commission_bps / 1e4
+                    proceeds = fill_price * pos.quantity - commission
+                    pnl = proceeds - pos.cost_basis
+                    cash += proceeds
+                    trades.append(Trade(symbol, pos.entry_date, pos.entry_price, date, fill_price,
+                                        pos.quantity, "SIGNAL_EXIT", pnl,
+                                        pnl / pos.risk_amount if pos.risk_amount else 0.0))
+                    trade_pnls.append((date, pnl))
+                    del positions[symbol]
+            pending_exits.clear()
+
+            for symbol, decision in list(pending_entries.items()):
+                df = daily_features[symbol]
+                if symbol not in positions and date in df.index:
+                    bar = df.loc[date]
+                    fill_price = float(bar["open"]) * (1 + cfg.costs.slippage_bps / 1e4)
+                    commission = fill_price * decision.quantity * cfg.costs.commission_bps / 1e4
+                    cost = fill_price * decision.quantity + commission
+                    if cost <= cash:
+                        cash -= cost
+                        per_share_risk = fill_price - decision.stop_price
+                        positions[symbol] = _OpenPosition(
+                            symbol=symbol, quantity=decision.quantity, entry_price=fill_price,
+                            entry_date=date, stop_price=decision.stop_price, target_price=decision.target_price,
+                            cost_basis=cost, risk_amount=per_share_risk * decision.quantity,
+                        )
+            pending_entries.clear()
+
+            # --- 1. Açık pozisyonlar için stop/target intrabar kontrolü (bugünün high/low'u) ---
+            for symbol in list(positions.keys()):
+                df = daily_features[symbol]
+                if date not in df.index:
+                    continue
                 pos = positions[symbol]
-                fill_price = float(bar["open"]) * (1 - cfg.costs.slippage_bps / 1e4)
-                commission = fill_price * pos.quantity * cfg.costs.commission_bps / 1e4
-                proceeds = fill_price * pos.quantity - commission
-                pnl = proceeds - pos.cost_basis
-                cash += proceeds
-                trades.append(Trade(symbol, pos.entry_date, pos.entry_price, date, fill_price,
-                                    pos.quantity, "SIGNAL_EXIT", pnl,
-                                    pnl / pos.risk_amount if pos.risk_amount else 0.0))
-                trade_pnls.append((date, pnl))
-                del positions[symbol]
-        pending_exits.clear()
-
-        for symbol, decision in list(pending_entries.items()):
-            df = daily_features[symbol]
-            if symbol not in positions and date in df.index:
                 bar = df.loc[date]
-                fill_price = float(bar["open"]) * (1 + cfg.costs.slippage_bps / 1e4)
-                commission = fill_price * decision.quantity * cfg.costs.commission_bps / 1e4
-                cost = fill_price * decision.quantity + commission
-                if cost <= cash:
-                    cash -= cost
-                    per_share_risk = fill_price - decision.stop_price
-                    positions[symbol] = _OpenPosition(
-                        symbol=symbol, quantity=decision.quantity, entry_price=fill_price,
-                        entry_date=date, stop_price=decision.stop_price, target_price=decision.target_price,
-                        cost_basis=cost, risk_amount=per_share_risk * decision.quantity,
-                    )
-        pending_entries.clear()
+                hit_stop = bar["low"] <= pos.stop_price
+                hit_target = bar["high"] >= pos.target_price
+                if hit_stop or hit_target:
+                    if hit_stop:  # STOP ÖNCELİKLİ (Bölüm 12.2)
+                        fill_price = pos.stop_price * (1 - cfg.costs.slippage_bps / 1e4)
+                        reason = "STOP"
+                    else:
+                        fill_price = pos.target_price  # limit emir varsayımı, slippage yok
+                        reason = "TARGET"
+                    commission = fill_price * pos.quantity * cfg.costs.commission_bps / 1e4
+                    proceeds = fill_price * pos.quantity - commission
+                    pnl = proceeds - pos.cost_basis
+                    cash += proceeds
+                    trades.append(Trade(symbol, pos.entry_date, pos.entry_price, date, fill_price,
+                                        pos.quantity, reason, pnl,
+                                        pnl / pos.risk_amount if pos.risk_amount else 0.0))
+                    trade_pnls.append((date, pnl))
+                    del positions[symbol]
 
-        # --- 1. Açık pozisyonlar için stop/target intrabar kontrolü (bugünün high/low'u) ---
-        for symbol in list(positions.keys()):
-            df = daily_features[symbol]
-            if date not in df.index:
-                continue
-            pos = positions[symbol]
-            bar = df.loc[date]
-            hit_stop = bar["low"] <= pos.stop_price
-            hit_target = bar["high"] >= pos.target_price
-            if hit_stop or hit_target:
-                if hit_stop:  # STOP ÖNCELİKLİ (Bölüm 12.2)
-                    fill_price = pos.stop_price * (1 - cfg.costs.slippage_bps / 1e4)
-                    reason = "STOP"
-                else:
-                    fill_price = pos.target_price  # limit emir varsayımı, slippage yok
-                    reason = "TARGET"
-                commission = fill_price * pos.quantity * cfg.costs.commission_bps / 1e4
-                proceeds = fill_price * pos.quantity - commission
-                pnl = proceeds - pos.cost_basis
-                cash += proceeds
-                trades.append(Trade(symbol, pos.entry_date, pos.entry_price, date, fill_price,
-                                    pos.quantity, reason, pnl,
-                                    pnl / pos.risk_amount if pos.risk_amount else 0.0))
-                trade_pnls.append((date, pnl))
-                del positions[symbol]
+            # --- 2. Açık pozisyonlar için çıkış sinyali (t+1 açılışında çıkış planla) ---
+            for symbol, pos in list(positions.items()):
+                df = daily_features[symbol]
+                if date not in df.index:
+                    continue
+                idx_pos = df.index.get_loc(date)
+                window = df.iloc[: idx_pos + 1]
+                sig = evaluate_exit(symbol, window, cfg)
+                if sig.action == SignalAction.EXIT_LONG:
+                    pending_exits.add(symbol)
 
-        # --- 2. Açık pozisyonlar için çıkış sinyali (t+1 açılışında çıkış planla) ---
-        for symbol, pos in list(positions.items()):
-            df = daily_features[symbol]
-            if date not in df.index:
-                continue
-            idx_pos = df.index.get_loc(date)
-            window = df.iloc[: idx_pos + 1]
-            sig = evaluate_exit(symbol, window, cfg)
-            if sig.action == SignalAction.EXIT_LONG:
-                pending_exits.add(symbol)
+            # --- 3. Pozisyonsuz semboller için giriş sinyali (t+1 açılışında giriş planla) ---
+            equity_today = cash + sum(
+                daily_features[s].loc[date]["close"] * p.quantity
+                for s, p in positions.items() if date in daily_features[s].index
+            )
 
-        # --- 3. Pozisyonsuz semboller için giriş sinyali (t+1 açılışında giriş planla) ---
-        equity_today = cash + sum(
-            daily_features[s].loc[date]["close"] * p.quantity
-            for s, p in positions.items() if date in daily_features[s].index
-        )
-        corr_fn = _make_corr_fn(date)
-        for symbol in symbols:
-            if symbol in positions or symbol in pending_entries:
-                continue
-            df = daily_features[symbol]
-            if date not in df.index:
-                continue
-            idx_pos = df.index.get_loc(date)
-            window = df.iloc[: idx_pos + 1]
-            if len(window) < min_history:
-                continue
-            sig = evaluate_entry(symbol, window, None, cfg)
-            decision_log.append({"date": date, "symbol": symbol, "action": sig.action.value, "mode": "degrade"})
-            if sig.action != SignalAction.ENTER_LONG:
-                continue
             acct = AccountState(
                 equity=equity_today, cash=cash,
                 positions=[
@@ -232,13 +231,43 @@ def run_backtest(
                 realized_pnl_today=_closed_pnls_on(date),
                 realized_pnl_week=_closed_pnls_this_week(date),
             )
-            decision = size_and_approve(sig, acct, cfg, corr_fn)
-            if decision.approved:
-                pending_entries[symbol] = decision
+            # Paper/real modun her kararsal döngüde yapacağının AYNISI: equity/peak'i
+            # breaker eşiğine karşı kontrol et. Tetiklenirse dosya yazılır ve
+            # size_and_approve aşağıda bunu okuyup DRAWDOWN_BREAKER ile reddeder —
+            # bu andan itibaren backtest boyunca hiçbir yeni giriş onaylanmaz.
+            is_tripped_now = check_and_trip_breaker(acct, cfg, breaker_file=breaker_file)
+            if is_tripped_now and not breaker_was_tripped:
+                drawdown = 1 - (acct.equity / acct.peak_equity) if acct.peak_equity > 0 else 0.0
+                breaker_trips.append({
+                    "date": date, "equity": acct.equity, "peak_equity": acct.peak_equity,
+                    "drawdown": drawdown,
+                })
+            breaker_was_tripped = is_tripped_now
 
-        # --- 4. Equity snapshot ---
-        peak_equity = max(peak_equity, equity_today)
-        equity_points.append((date, equity_today))
+            corr_fn = _make_corr_fn(date)
+            for symbol in symbols:
+                if symbol in positions or symbol in pending_entries:
+                    continue
+                df = daily_features[symbol]
+                if date not in df.index:
+                    continue
+                idx_pos = df.index.get_loc(date)
+                window = df.iloc[: idx_pos + 1]
+                if len(window) < min_history:
+                    continue
+                sig = evaluate_entry(symbol, window, None, cfg)
+                decision_log.append({"date": date, "symbol": symbol, "action": sig.action.value, "mode": "degrade"})
+                if sig.action != SignalAction.ENTER_LONG:
+                    continue
+                decision = size_and_approve(sig, acct, cfg, corr_fn, breaker_file=breaker_file)
+                if decision.approved:
+                    pending_entries[symbol] = decision
+
+            # --- 4. Equity snapshot ---
+            peak_equity = max(peak_equity, equity_today)
+            equity_points.append((date, equity_today))
 
     equity_curve = pd.Series(dict(equity_points)).sort_index() if equity_points else pd.Series(dtype=float)
-    return BacktestResult(trades=trades, equity_curve=equity_curve, decision_log=decision_log)
+    return BacktestResult(
+        trades=trades, equity_curve=equity_curve, decision_log=decision_log, breaker_trips=breaker_trips,
+    )

@@ -2,7 +2,7 @@
 from __future__ import annotations
 import math
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 import pandas as pd
 
@@ -16,22 +16,36 @@ def kill_switch_active(cfg) -> bool:
     return Path(cfg.safety.kill_switch_file).exists()
 
 
-def breaker_tripped() -> bool:
-    return BREAKER_FILE.exists()
+def breaker_tripped(breaker_file: Optional[Path] = None) -> bool:
+    # None -> modül seviyesindeki BREAKER_FILE'ı ÇAĞRI ANINDA okur (geç bağlama) —
+    # monkeypatch.setattr(risk_engine, "BREAKER_FILE", ...) ile testlerin ve
+    # canlı/paper modun aynı ismi paylaşabilmesi için parametre varsayılanı
+    # olarak DOĞRUDAN BREAKER_FILE kullanılmıyor (o, tanım anında erken bağlanırdı).
+    if breaker_file is None:
+        breaker_file = BREAKER_FILE
+    return breaker_file.exists()
 
 
-def check_and_trip_breaker(acct: AccountState, cfg) -> bool:
-    """equity, peak_equity'den max_drawdown_breaker_pct kadar düştüyse BREAKER_FILE'ı
+def check_and_trip_breaker(acct: AccountState, cfg, breaker_file: Optional[Path] = None) -> bool:
+    """equity, peak_equity'den max_drawdown_breaker_pct kadar düştüyse breaker_file'ı
     yazar ve True döner. Dosya zaten varsa dokunmadan True döner (Bölüm 9.1:
-    breaker'ı yalnızca kullanıcı elle sıfırlayabilir, kod kendiliğinden temizlemez)."""
-    if breaker_tripped():
+    breaker'ı yalnızca kullanıcı elle sıfırlayabilir, kod kendiliğinden temizlemez).
+
+    `breaker_file` parametresi, paper/real modda (BREAKER_FILE varsayılanı,
+    davranış değişmez) ile backtest'te (her koşunun kendi izole, geçici dosyası —
+    böylece paralel/ardışık backtest koşuları veya eşzamanlı bir canlı bot
+    birbirinin breaker durumunu kirletmez) AYNI fonksiyonun güvenle
+    paylaşılabilmesi için eklendi (HARDENING.md harness düzeltme turu)."""
+    if breaker_file is None:
+        breaker_file = BREAKER_FILE
+    if breaker_tripped(breaker_file):
         return True
     if acct.peak_equity <= 0:
         return False
     drawdown = 1 - (acct.equity / acct.peak_equity)
     if drawdown >= cfg.risk.max_drawdown_breaker_pct:
-        BREAKER_FILE.parent.mkdir(parents=True, exist_ok=True)
-        BREAKER_FILE.write_text(
+        breaker_file.parent.mkdir(parents=True, exist_ok=True)
+        breaker_file.write_text(
             f"equity={acct.equity} peak_equity={acct.peak_equity} "
             f"drawdown={drawdown:.4f} esik={cfg.risk.max_drawdown_breaker_pct}\n"
         )
@@ -73,16 +87,22 @@ def size_and_approve(
     acct: AccountState,
     cfg,
     corr_fn: Callable[[str, list[Position]], float],
+    breaker_file: Optional[Path] = None,
 ) -> TradeDecision:
     """Bölüm 9.2 referans implementasyonu. `sig` yalnızca ENTER_LONG aksiyonlu,
     suggested_stop/suggested_target dolu bir Signal olmalıdır (çağıranın
-    sorumluluğu — HOLD_CASH sinyalleri risk motoruna hiç gelmemeli)."""
+    sorumluluğu — HOLD_CASH sinyalleri risk motoruna hiç gelmemeli).
+    `breaker_file`: bkz. check_and_trip_breaker — varsayılanı (None) paper/real
+    modun paylaştığı gerçek BREAKER_FILE'ı çağrı anında okur, backtest kendi
+    izole yolunu geçer."""
+    if breaker_file is None:
+        breaker_file = BREAKER_FILE
     rejects: list[RejectReason] = []
     entry, stop, target = sig.entry_ref_price, sig.suggested_stop, sig.suggested_target
 
     if kill_switch_active(cfg):
         rejects.append(RejectReason.KILL_SWITCH)
-    if breaker_tripped():
+    if breaker_tripped(breaker_file):
         rejects.append(RejectReason.DRAWDOWN_BREAKER)
     if acct.realized_pnl_today <= -cfg.risk.daily_loss_limit_pct * acct.equity:
         rejects.append(RejectReason.DAILY_LOSS_LIMIT)
