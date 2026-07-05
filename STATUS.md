@@ -1,76 +1,67 @@
 # Proje Durumu
-Son güncelleme: 2026-07-05T15:10:00+03:00 (Europe/Istanbul)
-Şu an: Faz 2 tamamlandı — Faz 3'e başlanacak
-Tamamlanan fazlar: Faz 1 (İskelet + Veri Katmanı), Faz 2 (İndikatörler + Sinyal Motoru)
-Bu oturumda yapılan (Faz 2):
-- `indicators/engine.py`: 10 saf fonksiyon (EMA, ADX, RSI, MACD, ATR+atr_ma20,
-  Bollinger, fraktal swing, destek/direnç, hacim teyidi, 3 mum formasyonu —
-  engulfing/pin bar/inside-bar breakout elle implemente edildi). `build_features()`
-  bunları `cfg.signal`'den bağlayarak sırayla uygular, girdiyi mutate etmez.
-  `pandas_ta_classic` çıktı kolonları (`ADX_14`, `MACD_12_26_9`, `BBL_20_2.0` vb.)
-  prefix-eşleşmeli `_col()` helper'ıyla okunuyor (format kırılganlığına karşı).
-- `tests/fixtures/thyao_daily_2022.csv`: gerçek THYAO günlük verisi
-  (2021-10-03 → 2022-12-29, 316 bar), cache'ten üretilip sabitlendi.
-- `tests/test_indicators.py`: son 5 bar için pandas-ta-classic 0.6.52 ile
-  üretilip sabitlenen referans değerlerle 1e-6 toleranslı karşılaştırma,
-  RSI/ATR/BBands sınır testleri, swing'in son-n-barda hep False olduğu testi,
-  mutate-etmeme testi, 6 elle kurgulanmış mum formasyonu senaryosu.
-- `strategy/signal_engine.py`: Bölüm 8.2 Gate mimarisi — 10 gate fonksiyonu
-  (trend, regime, rsi, macd, atr_anomaly, bb_overextension, structure_rr,
-  volume, trigger_4h, mtf), `ENTRY_GATES`, `evaluate_entry`, `evaluate_exit`.
-  Çoklu-bar bağlam gerektiren kontroller (MACD "son 2 bar yükseliş", exit'in
-  "3 bardır düşen histogram") gate imzasını (d, h4, cfg) bozmadan, ilgili
-  önceki bar değerlerini satıra ekleyerek çözüldü. Degrade mod (h4_df=None):
-  gate_trigger_4h günlük pattern kolonlarına düşüyor, gate_mtf SKIP-PASS
-  dönüyor.
-- Debug CLI: `python -m strategy.signal_engine --symbol THYAO --date <tarih>`
-  o günün 10 gate kararını insan-okur formatta basıyor (doğrulandı: 2022-12-29
-  ve spec'in kendi örneği 2024-06-03).
-- THYAO'nun tüm tarihçesi (~6400 kapanmış bar, 2000-2026) üzerinde
-  `evaluate_entry` taraması hatasız/NaN'sız koştu — Faz 2 Bitti Tanımı'nın
-  istediği "2 yıllık veri" eşiğini fazlasıyla aşıyor. 0 ENTER_LONG üretmesi
-  beklenen bir durum (huni kasıtlı olarak çok seçici — Bölüm 0.3 "sermaye
-  koruma > getiri" felsefesi); gerçek sinyal frekansı değerlendirmesi Faz 4
-  backtest'in konusu.
-- `tests/test_signal_engine.py`: her gate için ayrı PASS/FAIL/detail testi,
-  "9 PASS + 1 FAIL → HOLD_CASH + 10 satır reasons" huni testi, erken gate'te
-  durma testi, tam-geçiş ENTER_LONG testi (stop/target doğrulamalı),
-  evaluate_exit'in iki tetikleyicisi + HOLD_POSITION testi.
-- Faz 2 Bitti Tanımı'nın 3 maddesi de çalıştırılarak doğrulandı:
-  1. `pytest -q` → 81 passed (30 Faz1 + 14 indikatör + 37 sinyal motoru).
-  2. Debug CLI insan-okur çıktı üretiyor (yukarıdaki iki tarihle doğrulandı).
-  3. Tüm THYAO tarihçesi üzerinde sinyal taraması NaN/exception vermeden koştu.
+Son güncelleme: 2026-07-05T15:45:00+03:00 (Europe/Istanbul)
+Şu an: Faz 3 tamamlandı — Faz 4'e (backtest harness) başlanacak
+Tamamlanan fazlar: Faz 1 (İskelet + Veri Katmanı), Faz 2 (İndikatörler + Sinyal
+Motoru), Faz 3 (Risk Motoru)
 
-Sırada: Faz 3 — `risk/risk_engine.py` (Bölüm 9). İlk somut adım:
-`size_and_approve(sig, acct, cfg, corr_fn)` fonksiyonunu Bölüm 9.2'deki
-referans implementasyona sadık şekilde yazmak (kapı sırası: kill_switch →
-breaker → daily/weekly loss limit → max_positions → min_rr → correlation →
-boyutlama → notional/nakit kırpma → min qty). Korelasyon hesabı ve
-breaker/kill-switch dosya mekanikleri (`runtime/KILL_SWITCH`,
-`runtime/BREAKER_TRIPPED`) de bu fazda yazılacak. Bölüm 9.3'teki sayısal
-örnek (equity=100.000, risk %0.75, entry=100, stop=94 → qty=125) test
-olarak eklenecek; her RejectReason en az bir testte üretilecek.
+Bu oturumda yapılan (Faz 3):
+- `risk/risk_engine.py`: Bölüm 9.2 referans implementasyonu birebir —
+  `size_and_approve(sig, acct, cfg, corr_fn)` kapı sırası: kill_switch →
+  breaker → daily/weekly loss limit → max_positions → min_rr → correlation →
+  boyutlama (risk_amount/per_share_risk, notional tavanı, nakit kırpması,
+  qty<1 → POSITION_TOO_SMALL).
+- `kill_switch_active(cfg)` / `breaker_tripped()`: dosya varlığı kontrolü.
+  `check_and_trip_breaker(acct, cfg)`: equity, peak_equity'den
+  `max_drawdown_breaker_pct` kadar düştüğünde `runtime/BREAKER_TRIPPED`'i
+  yazar; dosya varsa dokunmaz (yalnızca kullanıcı elle siler).
+- `historical_correlation(symbol, positions, price_loader, lookback_days)`:
+  adayın son N günlük getirisiyle her açık pozisyonun getirisi arasındaki
+  Pearson korelasyonun (mutlak değer) maksimumunu döner. `price_loader`
+  dependency-injection ile alınıyor — risk_engine kendi IO yapmıyor (saf
+  çekirdek ilkesi korunuyor).
+- `tests/test_risk_engine.py`: baseline tam-onay + Bölüm 9.3'ün birebir
+  sayısal örneği (equity=100.000, entry=100, stop=94 → qty=125), risk
+  motorunun ürettiği 8 RejectReason'ın her biri için izole test
+  (KILL_SWITCH, DRAWDOWN_BREAKER, DAILY_LOSS_LIMIT, WEEKLY_LOSS_LIMIT,
+  MAX_POSITIONS, MIN_RR_FAILED, CORRELATION_LIMIT, POSITION_TOO_SMALL),
+  notional-tavanı ve nakit kırpma senaryoları, `historical_correlation`
+  için 3 test.
+- Faz 3 Bitti Tanımı doğrulandı: `pytest -q` → 99 passed (81 önceki + 18
+  risk motoru); risk_engine'in kapsamındaki 8 RejectReason'ın hepsi en az
+  bir testte üretiliyor (kalan 4 değer — INSUFFICIENT_CASH,
+  PRETRADE_CHECK_FAILED, MARKET_CLOSED, NEWS_BLACKOUT — Faz 5
+  safety/pretrade modülüne ait, Bölüm 9 kapsamı dışında).
+
+Sırada: Faz 4 — `backtest/` (Bölüm 12). İlk somut adım: `backtest/engine.py`'de
+event-driven döngüyü yazmak (Bölüm 12.2'deki 4 adım: stop/target kontrolü
+→ evaluate_exit → evaluate_entry+risk_engine → equity snapshot), look-ahead
+yasağını garanti eden testleri (Bölüm 12.3) önce yazıp sonra motoru buna
+göre doğrulamak. Ardından `backtest/metrics.py`, `backtest/walkforward.py`
+(Bölüm 12.5, komşu-sağlamlık kriteri), `backtest/montecarlo.py` (Bölüm 12.6,
+zaten spesifikasyonda hazır kod var), `backtest/cli.py` (Bölüm 12.8, sabit
+`--seed` ile bit-bit determinizm testi dahil). Parametre taraması yalnızca
+Bölüm 12.7'deki dar grid (27 kombinasyon): atr_stop_mult×adx_min×min_rr.
+
+**HATIRLATMA — Faz 4 sonunda DURMA NOKTASI 1 var (Bölüm 0.1):** CLI tek
+komutla rapor üretip determinizm/look-ahead testleri geçtiğinde
+`BACKTEST_REVIEW.md` üretilip Faz 5'e GEÇİLMEDEN durulacak, kullanıcı onayı
+beklenecek. Sonuçlar iyi görünse bile bu kural esnetilmez.
 
 Bilinen sorun/blok: yok.
 
-Varsayımlar/kararlar (Faz 2'de eklenenler):
-- MACD "son 2 bar yükseliş" kontrolü: `macd_hist[t] > macd_hist[t-1]` olarak
-  yorumlandı (iki histogram değeri arası kıyas — spec'in "son 2 bar" ifadesi
-  bunu kastediyor; 3+ bar monotonluk istemiyor).
-- Exit'teki "macd_hist üç bardır düşüyor": `hist[t] < hist[t-1] < hist[t-2]`
-  (üç ardışık değerin kesin azalan sıralaması) olarak uygulandı.
-- `gate_structure_rr` risk motorunun (Faz 3) resmi min_rr reddinden önce,
-  huni içinde bir ön-filtre olarak çalışıyor (Bölüm 8.1 tablosundaki "hedef
-  çok yakınsa giriş yok" rolü); risk_engine kendi min_rr kontrolünü yine de
-  bağımsız olarak yapacak (defence-in-depth, tek doğruluk kaynağını bozmuyor
-  çünkü ikisi de aynı `entry/stop/target` formülünü kullanıyor).
+Varsayımlar/kararlar (Faz 3'te eklenenler):
+- `BREAKER_FILE` yolu (`runtime/BREAKER_TRIPPED`) config'e alınmadı, Bölüm
+  9.1'deki gibi sabit tutuldu — yalnızca `kill_switch_file` config'te
+  (Bölüm 6 şeması zaten yalnızca onu listeliyor).
+- `size_and_approve`'un `sig` argümanının yalnızca ENTER_LONG aksiyonlu ve
+  suggested_stop/target dolu bir Signal olduğu varsayıldı (çağıranın
+  sorumluluğu) — fonksiyon içinde bunun için ekstra None-guard eklenmedi,
+  spec'in referans koduna sadık kalındı (iç sözleşmelere güven ilkesi).
 
-Önceki fazdan taşınan varsayımlar (Faz 1):
-- pandas-ta yerine pandas-ta-classic + numpy 2.2 (commit e31e401).
-- BIST seans/müzayede saatleri yaklaşık değerlerle sabitlendi — Faz 5'te
-  resmi kaynakla doğrulanacak (Bölüm 16 #5).
-- `data.historical.download_bars`: `start=None` olduğunda `period="max"`
-  zorunlu kılındı.
-- Resmi tatil takvimi MVP kapsamı dışı (yalnızca hafta içi kontrolü).
+Önceki fazlardan taşınan varsayımlar: pandas-ta yerine pandas-ta-classic +
+numpy 2.2 (commit e31e401); BIST seans saatleri yaklaşık (Faz 5'te
+doğrulanacak); `data.historical.download_bars` `period="max"` zorunlu;
+resmi tatil takvimi MVP dışı; MACD "son 2 bar yükseliş" =
+`hist[t]>hist[t-1]`; exit'in "3 bar düşüş" = kesin azalan üçlü sıralama.
 
 Limit nedeniyle durdu mu: hayır.
