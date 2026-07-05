@@ -853,7 +853,7 @@ def monte_carlo_dd(trade_returns: np.ndarray, runs: int, seed: int) -> dict:
     return {"dd_p5": p5, "dd_median": p50, "dd_p95": p95}
 ```
 
-Yorum kuralı: `dd_p95` (kötü senaryo) config'teki `max_drawdown_breaker_pct`'e yakın/aşkınsa, breaker canlıda sık tetiklenecek demektir → rapora kırmızı bayrak.
+Yorum kuralı: `dd_p5` (en kötü %5 senaryo — permütasyonların %5'i bundan daha derin bir drawdown gösteriyor) config'teki `max_drawdown_breaker_pct`'e yakın/aşkınsa, breaker canlıda sık tetiklenecek demektir → rapora kırmızı bayrak.
 
 ## 12.7 Parametre taraması — overfitting'e karşı bilinçli dar grid
 

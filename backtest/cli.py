@@ -164,12 +164,15 @@ def generate_report(
     if do_monte_carlo:
         mc_result = run_monte_carlo(result.trades, cfg)
         lines.append("## Monte Carlo Drawdown Analizi")
-        lines.append(f"- dd_p5: {mc_result['dd_p5']:.2%}")
+        lines.append(f"- dd_p5 (en kötü %5 senaryo / worst-5%): {mc_result['dd_p5']:.2%}")
         lines.append(f"- dd_median: {mc_result['dd_median']:.2%}")
-        lines.append(f"- dd_p95: {mc_result['dd_p95']:.2%}")
+        lines.append(f"- dd_p95 (en iyi %5 senaryo): {mc_result['dd_p95']:.2%}")
         lines.append("")
-        if abs(mc_result["dd_p95"]) >= cfg.risk.max_drawdown_breaker_pct:
-            red_flags.append("Monte Carlo dd_p95, breaker eşiğine yakın/aşkın.")
+        # Kontrol dd_p5 (en kötü %5 senaryo / worst-5%) üzerinden yapılır — dd_p95
+        # değil, çünkü dd_p95 permütasyonların en HAFİF ucu, tail-risk sorusuyla
+        # ("en kötü ne olur") ilgisizdir (bkz. BACKTEST_REVIEW_v5.md bulgusu).
+        if abs(mc_result["dd_p5"]) >= cfg.risk.max_drawdown_breaker_pct:
+            red_flags.append("Monte Carlo worst-5% (dd_p5), breaker eşiğine yakın/aşkın.")
 
     sweep_rows = None
     if do_sweep:

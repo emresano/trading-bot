@@ -136,3 +136,40 @@ def test_stamps_absent_by_default(tmp_path):
     generate_report(["TEST"], cfg, lambda s: df, tmp_path)
     content = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "Git commit" not in content
+
+
+# --- Monte Carlo kırmızı bayrağı: worst-5% (dd_p5), dd_p95 DEĞİL (harness düzeltme turu) ---
+
+def test_monte_carlo_red_flag_uses_worst_5_percent_not_best_case(tmp_path, monkeypatch):
+    """dd_p95 (en iyi %5 senaryo) breaker eşiğinin altında kalsa bile, dd_p5
+    (en kötü %5 senaryo) eşiği aşıyorsa kırmızı bayrak tetiklenmeli. Eski
+    davranış (dd_p95 kontrolü) bu senaryoyu KAÇIRIRDI."""
+    import backtest.cli as cli_mod
+
+    cfg = make_cfg()
+    cfg.risk.max_drawdown_breaker_pct = 0.10
+    df = _flat_series()
+
+    def fake_run_monte_carlo(trades, cfg):
+        return {"dd_p5": -0.15, "dd_median": -0.08, "dd_p95": -0.02, "trade_count": 10}
+
+    monkeypatch.setattr(cli_mod, "run_monte_carlo", fake_run_monte_carlo)
+
+    out = generate_report(["TEST"], cfg, lambda s: df, tmp_path, do_monte_carlo=True)
+    assert any("worst-5%" in rf for rf in out["red_flags"])
+
+
+def test_monte_carlo_no_red_flag_when_worst_5_percent_within_threshold(tmp_path, monkeypatch):
+    import backtest.cli as cli_mod
+
+    cfg = make_cfg()
+    cfg.risk.max_drawdown_breaker_pct = 0.10
+    df = _flat_series()
+
+    def fake_run_monte_carlo(trades, cfg):
+        return {"dd_p5": -0.05, "dd_median": -0.03, "dd_p95": -0.01, "trade_count": 10}
+
+    monkeypatch.setattr(cli_mod, "run_monte_carlo", fake_run_monte_carlo)
+
+    out = generate_report(["TEST"], cfg, lambda s: df, tmp_path, do_monte_carlo=True)
+    assert not any("worst-5%" in rf or "Monte Carlo" in rf for rf in out["red_flags"])
