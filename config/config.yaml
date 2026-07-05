@@ -1,0 +1,93 @@
+mode: paper                # paper | real — Bölüm 0.1 Durma Noktası 2'ye tabidir
+real_mode_confirmation: "" # real mod için kullanıcının ELLE yazması gereken cümle:
+                           # "GERCEK PARA RISKINI ANLIYORUM VE KABUL EDIYORUM"
+                           # Kod bu cümleyi birebir doğrular; Claude Code bu alanı ASLA doldurmaz.
+
+timezone: "Europe/Istanbul"
+
+instruments:
+  - symbol: "THYAO"        # AlgoLab sembol kodu
+    yf_symbol: "THYAO.IS"  # backtest veri kaynağı
+    type: equity
+    lot_step: 1
+  - symbol: "GARAN"
+    yf_symbol: "GARAN.IS"
+    type: equity
+    lot_step: 1
+  - symbol: "ASELS"
+    yf_symbol: "ASELS.IS"
+    type: equity
+    lot_step: 1
+  # Altın: Faz 5'te AlgoLab sembol listesinden gerçek kod doğrulanınca eklenecek (Bölüm 16).
+  # Backtest proxy'si: XAUUSD × USDTRY / 31.1035 (gram altın TL) — data/historical.py destekler.
+
+timeframes:
+  trend: "1d"              # kademe 1-4 hesapları
+  entry: "4h"              # kademe 5 (tetik) + MTF uyum
+  source_intraday: "1h"    # 4H bunun resample'ı (seans hizalı, Bölüm 7.5)
+
+signal:
+  ema_fast: 50
+  ema_slow: 200
+  adx_period: 14
+  adx_min: 20              # altında → HOLD_CASH
+  rsi_period: 14
+  rsi_entry_low: 40
+  rsi_entry_high: 55
+  macd: [12, 26, 9]
+  atr_period: 14
+  atr_stop_mult: 1.5
+  atr_anomaly_mult: 2.0    # ATR > 20-gün ATR ort × bu → HOLD_CASH
+  bb_period: 20
+  bb_std: 2.0
+  swing_lookback: 50       # destek/direnç için bar sayısı
+  swing_fractal_n: 2       # swing high/low tanımı: her iki yanda n bar
+  volume_confirm_mult: 1.5 # kırılım hacmi ≥ 20-bar ort × bu
+  min_history_bars: 260    # bundan az veri varsa sembol o gün işlem görmez
+
+risk:
+  risk_per_trade_pct: 0.0075      # sermayenin %0.75'i
+  daily_loss_limit_pct: 0.025
+  weekly_loss_limit_pct: 0.05
+  max_open_positions: 2
+  max_position_notional_pct: 0.25 # tek pozisyon, sermayenin en fazla %25'i
+  max_drawdown_breaker_pct: 0.10  # tepe equity'den %10 → tam durdurma, manuel restart
+  min_rr: 1.8
+  correlation_lookback_days: 90
+  correlation_max: 0.85           # iki açık pozisyonun getirileri arası korelasyon üstü yasak
+  news_blackout: true             # bilanço/KAP günü çevresinde yeni pozisyon yok (Bölüm 13.1)
+
+costs:                     # backtest + paper broker'da uygulanır
+  commission_bps: 10       # tek yön; kullanıcı Deniz Yatırım gerçek oranını girecek
+  slippage_bps: 5
+
+backtest:
+  start: "2018-01-01"
+  end: "auto"              # bugüne kadar
+  initial_equity: 100000
+  walk_forward:
+    train_months: 24
+    test_months: 6
+    step_months: 6
+  monte_carlo_runs: 500
+  random_seed: 42          # deterministik sonuç — tutarlılık şartı
+
+execution:
+  bar_close_grace_sec: 60  # bar kapanışından sonra bekleme (veri otursun)
+  order_timeout_sec: 30
+  algolab_throttle_sec: 5.1   # AlgoLab bilinen limiti: ~5 sn/istek (Bölüm 11.3)
+
+paper:
+  initial_equity: 100000
+  fill_model: "next_tick_with_slippage"
+
+safety:
+  heartbeat_interval_sec: 300
+  heartbeat_stale_sec: 900       # watchdog: bu süre sinyal yoksa CRITICAL alarm
+  reconciliation_interval_min: 15
+  kill_switch_file: "runtime/KILL_SWITCH"   # bu dosya varsa: yeni işlem yok
+  max_price_jump_pct: 0.08       # son fiyat, önceki kapanıştan bu kadar sapmışsa emir gönderme (bozuk veri şüphesi)
+
+telegram:
+  enabled: true
+  # token ve chat_id secrets.env'de: TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
