@@ -38,8 +38,12 @@ def compute_target(d: pd.Series, cfg) -> float:
 
 
 def gate_trend(d: pd.Series, h4: Optional[pd.Series], cfg) -> GateResult:
-    ok = bool(d["close"] > d["ema_200"] and d["ema_50"] > d["ema_200"])
-    return GateResult(ok, "trend", f"close={d['close']:.2f} ema200={d['ema_200']:.2f} ema50={d['ema_50']:.2f}")
+    ema_fast_col = f"ema_{cfg.signal.ema_fast}"
+    ema_slow_col = f"ema_{cfg.signal.ema_slow}"
+    ok = bool(d["close"] > d[ema_slow_col] and d[ema_fast_col] > d[ema_slow_col])
+    return GateResult(ok, "trend",
+                      f"close={d['close']:.2f} ema{cfg.signal.ema_slow}={d[ema_slow_col]:.2f} "
+                      f"ema{cfg.signal.ema_fast}={d[ema_fast_col]:.2f}")
 
 
 def gate_regime(d: pd.Series, h4: Optional[pd.Series], cfg) -> GateResult:
@@ -103,8 +107,9 @@ def gate_trigger_4h(d: pd.Series, h4: Optional[pd.Series], cfg) -> GateResult:
 def gate_mtf(d: pd.Series, h4: Optional[pd.Series], cfg) -> GateResult:
     if h4 is None:
         return GateResult(True, "mtf", "SKIP-PASS: 4h veri yok (degrade mod)")
-    ok = bool(h4["close"] > h4["ema_50"])
-    return GateResult(ok, "mtf", f"4h close={h4['close']:.2f} 4h ema50={h4['ema_50']:.2f}")
+    ema_fast_col = f"ema_{cfg.signal.ema_fast}"
+    ok = bool(h4["close"] > h4[ema_fast_col])
+    return GateResult(ok, "mtf", f"4h close={h4['close']:.2f} 4h ema{cfg.signal.ema_fast}={h4[ema_fast_col]:.2f}")
 
 
 ENTRY_GATES: list[Gate] = [
@@ -114,22 +119,28 @@ ENTRY_GATES: list[Gate] = [
 ]
 
 _SNAPSHOT_FIELDS = (
-    "close", "ema_50", "ema_200", "adx", "rsi", "macd", "macd_signal", "macd_hist",
+    "close", "adx", "rsi", "macd", "macd_signal", "macd_hist",
     "atr", "atr_ma20", "bb_low", "bb_mid", "bb_high", "nearest_support", "nearest_resistance",
 )
 
 
-def snapshot_features(d: pd.Series, h4: Optional[pd.Series]) -> dict[str, float]:
+def snapshot_features(d: pd.Series, h4: Optional[pd.Series], cfg) -> dict[str, float]:
     features: dict[str, float] = {}
     for key in _SNAPSHOT_FIELDS:
         if key in d.index:
             val = d[key]
             features[key] = float(val) if pd.notna(val) else float("nan")
+    ema_fast_col = f"ema_{cfg.signal.ema_fast}"
+    ema_slow_col = f"ema_{cfg.signal.ema_slow}"
+    if ema_fast_col in d.index:
+        features["ema_fast"] = float(d[ema_fast_col]) if pd.notna(d[ema_fast_col]) else float("nan")
+    if ema_slow_col in d.index:
+        features["ema_slow"] = float(d[ema_slow_col]) if pd.notna(d[ema_slow_col]) else float("nan")
     if h4 is not None:
-        for key in ("close", "ema_50"):
-            if key in h4.index:
-                val = h4[key]
-                features[f"h4_{key}"] = float(val) if pd.notna(val) else float("nan")
+        if "close" in h4.index:
+            features["h4_close"] = float(h4["close"]) if pd.notna(h4["close"]) else float("nan")
+        if ema_fast_col in h4.index:
+            features["h4_ema_fast"] = float(h4[ema_fast_col]) if pd.notna(h4[ema_fast_col]) else float("nan")
     return features
 
 
@@ -139,7 +150,7 @@ def evaluate_entry(symbol: str, daily_df: pd.DataFrame, h4_df: Optional[pd.DataF
     h4 = h4_df.iloc[-1] if h4_df is not None and not h4_df.empty else None
 
     results: list[str] = []
-    features = snapshot_features(d, h4)
+    features = snapshot_features(d, h4, cfg)
     for gate in ENTRY_GATES:
         r = gate(d, h4, cfg)
         results.append(f"[{'PASS' if r.passed else 'FAIL'}] {r.name}: {r.detail}")
@@ -156,14 +167,15 @@ def evaluate_entry(symbol: str, daily_df: pd.DataFrame, h4_df: Optional[pd.DataF
 
 def evaluate_exit(symbol: str, daily_df: pd.DataFrame, cfg) -> Signal:
     """Açık pozisyon için her günlük bar kapanışında çağrılır.
-    close < ema_50 VEYA (macd_hist üç bardır düşüyor VE macd < signal) → EXIT_LONG."""
+    close < ema_fast VEYA (macd_hist üç bardır düşüyor VE macd < signal) → EXIT_LONG."""
     d = daily_df.iloc[-1]
     reasons: list[str] = []
 
-    close_below_ema50 = bool(d["close"] < d["ema_50"])
+    ema_fast_col = f"ema_{cfg.signal.ema_fast}"
+    close_below_ema_fast = bool(d["close"] < d[ema_fast_col])
     reasons.append(
-        f"[{'TETIK' if close_below_ema50 else 'pas'}] close<ema50: "
-        f"close={d['close']:.2f} ema50={d['ema_50']:.2f}"
+        f"[{'TETIK' if close_below_ema_fast else 'pas'}] close<ema{cfg.signal.ema_fast}: "
+        f"close={d['close']:.2f} ema{cfg.signal.ema_fast}={d[ema_fast_col]:.2f}"
     )
 
     declining_3 = False
@@ -179,8 +191,8 @@ def evaluate_exit(symbol: str, daily_df: pd.DataFrame, cfg) -> Signal:
         f"hist_3bar_dususte={declining_3} macd<signal={macd_below_signal}"
     )
 
-    action = SignalAction.EXIT_LONG if (close_below_ema50 or momentum_collapse) else SignalAction.HOLD_POSITION
-    features = snapshot_features(d, None)
+    action = SignalAction.EXIT_LONG if (close_below_ema_fast or momentum_collapse) else SignalAction.HOLD_POSITION
+    features = snapshot_features(d, None, cfg)
     return Signal(symbol, d.name, action, reasons, features, entry_ref_price=float(d["close"]))
 
 

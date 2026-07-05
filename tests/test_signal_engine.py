@@ -24,6 +24,7 @@ from strategy.signal_engine import (
 
 def make_cfg():
     signal = SimpleNamespace(
+        ema_fast=50, ema_slow=200,
         adx_min=20, rsi_entry_low=40, rsi_entry_high=55,
         atr_stop_mult=1.5, atr_anomaly_mult=2.0,
     )
