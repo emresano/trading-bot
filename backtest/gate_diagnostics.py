@@ -7,7 +7,7 @@ from typing import Callable
 import pandas as pd
 
 from indicators.engine import build_features
-from strategy.signal_engine import ENTRY_GATES
+from strategy.signal_engine import ENTRY_GATES, prepare_row_context
 
 GATE_NAMES: list[str] = [g.__name__.replace("gate_", "") for g in ENTRY_GATES]
 
@@ -39,10 +39,8 @@ def diagnose_symbol(symbol: str, features_df: pd.DataFrame, cfg) -> GateDiagnost
     cumulative_counts = {k: 0 for k in range(1, len(ENTRY_GATES) + 1)}
     total_days = 0
 
-    macd_hist = features_df["macd_hist"]
     for i in range(min_history, len(features_df)):
-        d = features_df.iloc[i].copy()
-        d["macd_hist_prev1"] = float(macd_hist.iloc[i - 1]) if i >= 1 else float("nan")
+        d = prepare_row_context(features_df, i)
         total_days += 1
 
         all_pass_so_far = True

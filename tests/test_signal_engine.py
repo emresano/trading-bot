@@ -19,6 +19,7 @@ from strategy.signal_engine import (
     gate_trend,
     gate_trigger_4h,
     gate_volume,
+    prepare_row_context,
 )
 
 
@@ -123,9 +124,21 @@ def test_gate_structure_rr_passes_with_good_rr():
     assert "RR=3.33" in r.detail
 
 
-def test_gate_structure_rr_fails_when_resistance_too_close():
-    # entry=100, stop=97, target=101 -> rr=(101-100)/3=0.33 < 1.8
+def test_gate_structure_rr_target_floor_prevents_close_resistance_from_failing():
+    # DÜZELTME: nearest_resistance çok yakın olsa bile (101), max(resistance, fallback)
+    # sayesinde hedef en az entry+2R'ye (106) yükseltilir -> rr=2.0 >= min_rr=1.8 GEÇER.
+    # Gerekçe: pullback girişinde en-yakın-direnç tanım gereği yakındır; onu doğrudan
+    # hedef almak R:R'yi yapısal olarak neredeyse her zaman düşürüyordu.
     r = gate_structure_rr(row(close=100, atr=2.0, nearest_resistance=101), None, CFG)
+    assert r.passed
+    assert "RR=2.00" in r.detail
+
+
+def test_gate_structure_rr_still_fails_when_min_rr_exceeds_fallback_floor():
+    # fallback her zaman tam 2R garantiler; min_rr bunun üstündeyse (örn. sweep grid'in
+    # en sıkı ucu 2.2) yakın resistance hâlâ yetersiz kalabilir.
+    strict_cfg = SimpleNamespace(signal=CFG.signal, risk=SimpleNamespace(min_rr=2.2))
+    r = gate_structure_rr(row(close=100, atr=2.0, nearest_resistance=101), None, strict_cfg)
     assert not r.passed
 
 
@@ -136,7 +149,14 @@ def test_gate_structure_rr_uses_fallback_target_when_no_resistance():
     assert r.passed
 
 
-def test_compute_target_fallback_formula():
+def test_compute_target_uses_max_of_resistance_and_fallback():
+    # resistance (110) fallback'ten (106) büyük -> resistance kazanır
+    assert compute_target(row(close=100, atr=2.0, nearest_resistance=110), CFG) == pytest.approx(110.0)
+    # resistance (101) fallback'ten (106) küçük -> 2R tabanı (fallback) kazanır
+    assert compute_target(row(close=100, atr=2.0, nearest_resistance=101), CFG) == pytest.approx(106.0)
+
+
+def test_compute_target_fallback_formula_when_resistance_nan():
     d = row(close=100, atr=2.0, nearest_resistance=float("nan"))
     target = compute_target(d, CFG)
     assert target == pytest.approx(106.0)
@@ -158,16 +178,73 @@ def test_gate_trigger_4h_uses_h4_row_when_present():
     assert "mode=4h" in r.detail
 
 
-def test_gate_trigger_4h_degrades_to_daily_when_h4_missing():
-    d = row(pat_engulf=False, pat_pin=True, pat_inside_break=False)
+def test_gate_trigger_4h_degrades_via_recent_pattern_within_3_bars():
+    d = row(pattern_recent_3bar=True, close_above_prev_high=False)
     r = gate_trigger_4h(d, None, CFG)
     assert r.passed
     assert "mode=degrade(1d)" in r.detail
+    assert "pattern_last_3bar=True" in r.detail
 
 
-def test_gate_trigger_4h_fails_when_no_pattern():
-    d = row(pat_engulf=False, pat_pin=False, pat_inside_break=False)
+def test_gate_trigger_4h_degrades_via_breakout_above_prev_high():
+    d = row(pattern_recent_3bar=False, close_above_prev_high=True)
+    r = gate_trigger_4h(d, None, CFG)
+    assert r.passed
+    assert "close_above_prev_high=True" in r.detail
+
+
+def test_gate_trigger_4h_fails_when_neither_recent_pattern_nor_breakout():
+    d = row(pattern_recent_3bar=False, close_above_prev_high=False)
     assert not gate_trigger_4h(d, None, CFG).passed
+
+
+def test_gate_trigger_4h_defaults_to_fail_when_context_fields_missing():
+    # prepare_row_context çağrılmadan (alanlar yoksa) sessizce PASS değil, FAIL vermeli
+    assert not gate_trigger_4h(row(), None, CFG).passed
+
+
+# --- prepare_row_context: paylaşılan çoklu-bar bağlam hazırlayıcı ---
+
+def _context_daily_df():
+    idx = pd.date_range("2024-01-01", periods=5, freq="1D", tz="UTC")
+    return pd.DataFrame({
+        "close": [100, 101, 99, 98, 105],
+        "high": [101, 102, 100, 99, 106],
+        "macd_hist": [0.1, 0.2, -0.1, -0.2, 0.3],
+        "pat_engulf": [False, False, False, False, True],
+        "pat_pin": [False, False, False, False, False],
+        "pat_inside_break": [False, False, False, False, False],
+    }, index=idx)
+
+
+def test_prepare_row_context_macd_hist_prev1():
+    df = _context_daily_df()
+    d = prepare_row_context(df, 4)
+    assert d["macd_hist_prev1"] == pytest.approx(-0.2)
+
+
+def test_prepare_row_context_first_bar_has_nan_macd_hist_prev1():
+    df = _context_daily_df()
+    d = prepare_row_context(df, 0)
+    assert pd.isna(d["macd_hist_prev1"])
+
+
+def test_prepare_row_context_pattern_recent_3bar_looks_back_three_bars():
+    df = _context_daily_df()
+    d = prepare_row_context(df, 4)  # son bar: pat_engulf=True -> son 3 barda VAR
+    assert d["pattern_recent_3bar"] is True
+
+    d2 = prepare_row_context(df, 3)  # bar 3: kendisi ve önceki 2 bar hepsi False
+    assert d2["pattern_recent_3bar"] is False
+
+
+def test_prepare_row_context_close_above_prev_high():
+    df = _context_daily_df()
+    d = prepare_row_context(df, 4)  # close=105 > prev high=99
+    assert d["close_above_prev_high"] is True
+
+    d2 = prepare_row_context(df, 1)  # close=101, prev high=101 -> eşit, kesin büyük değil
+    assert d2["close_above_prev_high"] is False
 
 
 def test_gate_mtf_skip_pass_when_no_h4():

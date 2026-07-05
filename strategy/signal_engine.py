@@ -28,13 +28,21 @@ def _compute_stop(d: pd.Series, cfg) -> float:
 
 
 def compute_target(d: pd.Series, cfg) -> float:
-    """nearest_resistance; NaN ise close + 2×(close-stop)."""
-    resistance = d.get("nearest_resistance", float("nan"))
-    if pd.notna(resistance):
-        return float(resistance)
+    """max(nearest_resistance, entry + 2×(entry-stop)); nearest_resistance NaN ise
+    doğrudan entry + 2×(entry-stop) (mevcut fallback).
+
+    Gerekçe: pullback girişinde en-yakın-direnç tanım gereği girişe yakındır (aksi
+    halde zaten kırılmış/aşılmış olurdu) — resistance'ı doğrudan hedef almak yapısal
+    olarak R:R'yi neredeyse her zaman düşürür (gate_diagnostics.py ölçümüyle
+    doğrulandı). max() ile en az 2R'lik bir hedef garantilenir; resistance daha
+    uzaktaysa (daha iyi bir hedef sunuyorsa) o kullanılır."""
     stop = _compute_stop(d, cfg)
     entry = float(d["close"])
-    return entry + 2 * (entry - stop)
+    fallback = entry + 2 * (entry - stop)
+    resistance = d.get("nearest_resistance", float("nan"))
+    if pd.notna(resistance):
+        return max(float(resistance), fallback)
+    return fallback
 
 
 def gate_trend(d: pd.Series, h4: Optional[pd.Series], cfg) -> GateResult:
@@ -96,12 +104,22 @@ def gate_volume(d: pd.Series, h4: Optional[pd.Series], cfg) -> GateResult:
 
 
 def gate_trigger_4h(d: pd.Series, h4: Optional[pd.Series], cfg) -> GateResult:
-    row = h4 if h4 is not None else d
-    mode = "4h" if h4 is not None else "degrade(1d)"
-    ok = bool(row["pat_engulf"] or row["pat_pin"] or row["pat_inside_break"])
+    if h4 is not None:
+        ok = bool(h4["pat_engulf"] or h4["pat_pin"] or h4["pat_inside_break"])
+        return GateResult(ok, "trigger_4h",
+                          f"mode=4h engulf={bool(h4['pat_engulf'])} pin={bool(h4['pat_pin'])} "
+                          f"inside_break={bool(h4['pat_inside_break'])}")
+
+    # Degrade mod genişletmesi: son 3 barda (bugün dahil) mum formasyonu OLUŞTU
+    # VEYA bugünkü kapanış önceki barın high'ının üstünde (basit breakout tetiği).
+    # Gerekçe: tek barlık mum formasyonu şartı + günlük veri, gate_diagnostics.py
+    # ölçümünde kümülatif geçişi sıfıra indiren asıl darboğazdı.
+    pattern_recent = bool(d.get("pattern_recent_3bar", False))
+    breakout = bool(d.get("close_above_prev_high", False))
+    ok = pattern_recent or breakout
     return GateResult(ok, "trigger_4h",
-                      f"mode={mode} engulf={bool(row['pat_engulf'])} pin={bool(row['pat_pin'])} "
-                      f"inside_break={bool(row['pat_inside_break'])}")
+                      f"mode=degrade(1d) pattern_last_3bar={pattern_recent} "
+                      f"close_above_prev_high={breakout}")
 
 
 def gate_mtf(d: pd.Series, h4: Optional[pd.Series], cfg) -> GateResult:
@@ -117,6 +135,22 @@ ENTRY_GATES: list[Gate] = [
     gate_atr_anomaly, gate_bb_overextension,
     gate_structure_rr, gate_volume, gate_trigger_4h, gate_mtf,
 ]
+
+
+def prepare_row_context(daily_df: pd.DataFrame, i: int) -> pd.Series:
+    """i konumundaki barın Series'ini, çoklu-bar bağlam gerektiren gate'ler için
+    gerekli türetilmiş alanlarla zenginleştirir (macd_hist_prev1, pattern_recent_3bar,
+    close_above_prev_high). evaluate_entry ve backtest/gate_diagnostics.py AYNI
+    fonksiyonu kullanır — böylece üretim değerlendirmesi ile teşhis ölçümü arasında
+    davranış sapması olmaz."""
+    d = daily_df.iloc[i].copy()
+    d["macd_hist_prev1"] = float(daily_df["macd_hist"].iloc[i - 1]) if i >= 1 else float("nan")
+
+    pattern_cols = ["pat_engulf", "pat_pin", "pat_inside_break"]
+    recent = daily_df[pattern_cols].iloc[max(0, i - 2): i + 1]
+    d["pattern_recent_3bar"] = bool(recent.to_numpy().any())
+    d["close_above_prev_high"] = bool(i >= 1 and daily_df["close"].iloc[i] > daily_df["high"].iloc[i - 1])
+    return d
 
 _SNAPSHOT_FIELDS = (
     "close", "adx", "rsi", "macd", "macd_signal", "macd_hist",
@@ -145,8 +179,7 @@ def snapshot_features(d: pd.Series, h4: Optional[pd.Series], cfg) -> dict[str, f
 
 
 def evaluate_entry(symbol: str, daily_df: pd.DataFrame, h4_df: Optional[pd.DataFrame], cfg) -> Signal:
-    d = daily_df.iloc[-1].copy()  # SON KAPANMIŞ günlük bar
-    d["macd_hist_prev1"] = float(daily_df["macd_hist"].iloc[-2]) if len(daily_df) >= 2 else float("nan")
+    d = prepare_row_context(daily_df, len(daily_df) - 1)  # SON KAPANMIŞ günlük bar
     h4 = h4_df.iloc[-1] if h4_df is not None and not h4_df.empty else None
 
     results: list[str] = []
