@@ -1,77 +1,75 @@
 # Proje Durumu
-Son güncelleme: 2026-07-05T16:35:00+03:00 (Europe/Istanbul)
-Şu an: **Faz 4 revizyon turu (v2) tamamlandı — DURMA NOKTASI 1'de duruluyor
+Son güncelleme: 2026-07-05T20:10:00+03:00 (Europe/Istanbul)
+Şu an: **Faz 4 revizyon turu (v3) tamamlandı — DURMA NOKTASI 1'de duruluyor
 (Bölüm 0.1). Faz 5'e geçilmedi, kullanıcı onayı bekleniyor.**
 Tamamlanan fazlar: Faz 1 (İskelet + Veri Katmanı), Faz 2 (İndikatörler + Sinyal
-Motoru), Faz 3 (Risk Motoru), Faz 4 (Backtest Harness — v1 0-trade sonucu →
-teşhis → 2 hedefli düzeltme → v2 89-trade sonucu)
+Motoru), Faz 3 (Risk Motoru), Faz 4 (Backtest Harness — v1 0-trade →
+gate-teşhisi → v2 2-hedefli düzeltme (89 trade) → v3 walk-forward test-harness
+düzeltmesi (gerçek OOS ölçümü))
 
-Bu oturumda yapılan (Faz 4 revizyon turu):
-- Kullanıcı isteğiyle `backtest/gate_diagnostics.py` eklendi: her sembol için
-  10 gate'in tek başına ve kümülatif (kademe kademe) geçiş oranını ölçen,
-  hiçbir eşiği değiştirmeyen bir teşhis aracı. Gerçek veride koşturuldu
-  (`runtime/backtest_reports/gate_diagnostics.md`, gitignored). Bulgu: asıl
-  darboğazlar RSI değil — `structure_rr` (kümülatif geçiş %7→%0.2) ve
-  `trigger_4h` (kümülatif geçiş %0.2→%0.0, 3 sembolde de TAM SIFIR).
-- Teşhise dayanarak, kullanıcı onayıyla, **yalnızca iki hedefli düzeltme**
-  yapıldı (RSI bandı/ADX/min_rr dahil hiçbir başka eşik değişmedi):
-  1. `compute_target()`: hedef artık `max(nearest_resistance, entry+2×(entry-stop))`
-     — pullback girişinde en-yakın-direnç yapısal olarak yakın olduğundan onu
-     doğrudan hedef almak R:R'yi düşürüyordu.
-  2. `gate_trigger_4h()` degrade mod genişletmesi: tetik artık "son 3 barda
-     mum formasyonu OLUŞTU VEYA bugünkü kapanış önceki barın high'ının
-     üstünde" ise geçerli. Gerçek 4H modu (h4_df dolu) değişmedi.
-  3. Yeni paylaşılan yardımcı `prepare_row_context(daily_df, i)`: çoklu-bar
-     bağlam gerektiren tüm türetilmiş alanları tek yerden hesaplıyor;
-     `evaluate_entry` VE `gate_diagnostics.py` artık aynı fonksiyonu kullanıyor
-     (üretim/teşhis tutarlılığı garantisi).
-- Ölçülen etki: `structure_rr` kümülatif geçişi %7'ye (kayıpsız), `trigger_4h`
-  kümülatif geçişi %0'dan %0.52'ye çıktı.
-- 156/156 test yeşil (pytest -q) — 8 yeni/güncellenmiş test (`compute_target`
-  max() mantığı, `gate_structure_rr`'nin artık yakın resistance'ta geçtiği +
-  min_rr fallback tabanını (2.0R) aştığında hâlâ reddettiği, `gate_trigger_4h`'nin
-  yeni degrade koşulları, `prepare_row_context` birim testleri).
-- **Gerçek backtest v2 çalıştırıldı** (aynı 3 sembol, aynı 26 yıl, tam CLI):
-  **89 trade** (v1'de 0), toplam getiri +%4.17, CAGR %0.16/yıl, Sharpe 0.14,
-  win rate %38.2, profit factor 1.20, maks. DD -%3.78. Rejim kırılımı: 81/89
-  trade bull rejiminde (toplam R +8.14), bear'da yalnızca 1 trade.
-- **Önemli metodoloji bulgusu (bugünkü düzeltmelerden bağımsız, Faz 4'ten
-  kalma):** walk-forward'ın 48 penceresinin TAMAMINDA OOS (test) trade sayısı
-  sıfır çıktı. Nedeni araştırıldı: `test_months=6` ay ≈ 131 işlem günü,
-  `min_history_bars=260`'ın altında kaldığından her test dilimi huniye hiç
-  girmeden elenıyor. Bu, "Kabul kriteri: GEÇMEDİ" sonucunu anlamsız kılıyor —
-  strateji başarısız değil, OOS ölçümü hiç çalışmadı. Bu turun "tek revizyon,
-  ek eşik değiştirme" kuralı gereği DÜZELTİLMEDİ, yalnızca tespit edilip
-  `BACKTEST_REVIEW_v2.md`'de raporlandı.
-- Monte Carlo: dd_p5=-%7.81 (breaker eşiği %10'un altında ama %78'ine yakın),
-  dd_median=-%5.18, dd_p95=-%3.47.
-- `BACKTEST_REVIEW_v2.md` yazıldı (repo kökünde, v1'in yanında duruyor,
-  üzerine yazılmadı) — dürüst değerlendirme + 3 yol önerisi.
+Bu oturumda yapılan (Faz 4 revizyon turu v3):
+- **Seçenek A onaylandı:** `BACKTEST_REVIEW_v2.md`'de tespit edilen walk-forward
+  test-harness kusuru düzeltildi. Kusur: her pencere kendi veri dilimi üzerinde
+  `build_features`'ı sıfırdan hesaplıyordu; test dilimi (6 ay ≈ 131 gün)
+  `min_history_bars`'ın (260) altında kaldığından 48 pencerenin TAMAMINDA OOS
+  trade sayısı sıfırdı.
+- `backtest/engine.py`: `run_backtest`'e `date_range` ve `precomputed_features`
+  opsiyonel parametreleri eklendi. `build_features` artık TAM tarihçe üzerinde
+  bir kez hesaplanıyor; `min_history_bars` kontrolü tam tarihçedeki mutlak
+  konuma göre uygulanıyor; `date_range` yalnızca hangi barların simüle
+  edileceğini kısıtlıyor (warm-up'ı kısıtlamıyor) — test dilimindeki bir gün
+  kendinden önceki tam tarihçeyi (train dahil) warm-up olarak kullanabiliyor
+  (look-ahead değil, yalnızca geçmişe bakıyor).
+- `backtest/walkforward.py`: `run_walk_forward` artık `build_features`'ı sembol
+  başına bir kez hesaplıyor (`_slice_loader` kaldırıldı), pencereleri
+  `date_range` ile veriyor — hem doğru hem daha hızlı (27 kombinasyon aynı
+  özellik DataFrame'ini paylaşıyor).
+- Kanıt testi eklendi: kendi başına `min_history_bars`'tan (15) çok kısa bir
+  pencerede (3 gün) bile, tam tarihçe warm-up'ı sayesinde trade üretilebildiğini
+  gösteren test + kontrast testi (tam tarihçe de kısaysa hâlâ trade yok) +
+  `precomputed_features`'ın `load_daily`'yi atladığını doğrulayan test.
+  159/159 test yeşil.
+- **Gerçek backtest v3 çalıştırıldı** (aynı 3 sembol, aynı 26 yıl, tam CLI,
+  ~34 dakika): Ana backtest/rejim/Monte Carlo/sweep sonuçları v2 ile **bayt-bayt
+  aynı** (`trades.csv` diff ile doğrulandı — düzeltme yalnızca walk-forward'ı
+  etkiledi). Walk-forward artık **23/48 pencerede** OOS trade üretiyor (v2'de
+  0/48), toplam 54 OOS trade. **Birleşik OOS profit factor: 1.13** (Bölüm
+  12.5'in >1.1 eşiğini GEÇİYOR). **Birleşik OOS max DD: -6.37%.** **Kabul
+  kriteri sonucu: GEÇMEDİ** — ama artık gerçek bir ölçüme dayanıyor: pf_ok
+  sağlandığından (1.13>1.1), başarısızlık mantıksal olarak dd_ok'tan geliyor
+  (OOS max DD, ortalama in-sample max DD'nin 1.5 katından kötü) — klasik bir
+  overfitting işareti.
+- `BACKTEST_REVIEW_v3.md` yazıldı (repo kökünde, v1/v2'nin yanında duruyor).
 
-**Sırada:** Hiçbir şey — burada duruluyor (Durma Noktası 1). Kullanıcının
-kararı bekleniyor. Önerilen öncelik: walk-forward test-harness bug'ının
-düzeltilmesi (`build_features`'ı tam tarihçede bir kez hesaplayıp pencereleri
-sonradan dilimlemek) — bu olmadan gerçek bir OOS doğrulaması elde edilemez.
+**Sırada:** Hiçbir şey — burada duruluyor (Durma Noktası 1). Kullanıcının kararı
+bekleniyor. Not: raporun walk-forward bölümü şu an `avg_in_sample_max_drawdown`
+sayısını ayrıca basmıyor (yalnızca pass/fail) — bunu görmek isterse küçük,
+davranış değiştirmeyen bir rapor iyileştirmesi (yalnızca zaten hesaplanan bir
+sayının yazdırılması) yeterli olur, ~34 dakikalık yeniden koşum gerektirmez.
 
 Bilinen sorun/blok:
 1. **Kullanıcı onayı bekleniyor (Durma Noktası 1)** — kasıtlı, aşılamaz kapı.
-2. **Walk-forward OOS test'i yapısal olarak çalışmıyor** (yukarıda detaylı) —
-   düzeltme için kullanıcı onayı gerekecek (Faz 4 mimarisine dokunmak).
+2. Walk-forward artık DOĞRU ölçüyor ama sonuç OLUMSUZ: DD kriteri geçmedi
+   (overfitting işareti). Bu bir "bug" değil, gerçek bir bulgu — kullanıcının
+   nasıl ilerlemek istediğine karar vermesi gerekiyor.
 3. `indicators.engine.build_features`, çok kısa (< ~10-15 bar) bir DataFrame
    verildiğinde pandas_ta_classic'in None dönmesi nedeniyle AttributeError ile
-   çöküyor (test yazarken tesadüfen keşfedildi, `tests/test_gate_diagnostics.py`
-   bunu atlayarak yazıldı). Küçük bir sağlamlaştırma gerektirir, henüz
-   düzeltilmedi — düşük öncelikli, gerçek kullanımda (min_history_bars=260
-   kontrolünden önce hiçbir yerde bu kadar kısa veri geçilmiyor) tetiklenmiyor.
+   çöküyor (önceki turdan taşınan, düşük öncelikli, gerçek kullanımda
+   tetiklenmiyor).
 
-Varsayımlar/kararlar (bu turda eklenenler): yukarıdaki düzeltmelerin ikisi de
-kullanıcının açık talimatıyla yapıldı, ek yorum gerektirmiyor.
+Varsayımlar/kararlar (bu turda eklenenler): Sweep grid'in 3 parametresinin
+(atr_stop_mult, adx_min, min_rr) indikatör hesaplamasını etkilemediği
+varsayımına dayanarak `precomputed_features` optimizasyonu eklendi — bu
+varsayım `indicators/engine.py`'nin `add_*` fonksiyonlarının bu 3 alanı hiç
+okumadığı doğrulanarak (kod okunarak) teyit edildi.
 
 Önceki fazlardan taşınan varsayımlar: pandas-ta yerine pandas-ta-classic +
 numpy 2.2 (commit e31e401); BIST seans saatleri yaklaşık (Faz 5'te
 doğrulanacak); `data.historical.download_bars` `period="max"` zorunlu;
 resmi tatil takvimi MVP dışı; MACD "son 2 bar yükseliş" = `hist[t]>hist[t-1]`;
 exit'in "3 bar düşüş" = kesin azalan üçlü sıralama; backtest degrade modda
-(h4_df=None) çalışıyor, gerçek 4H entegrasyonu ertelendi.
+(h4_df=None) çalışıyor, gerçek 4H entegrasyonu ertelendi; compute_target artık
+max(resistance, fallback) (commit 67d2dd6); gate_trigger_4h degrade modda
+son-3-bar-pattern VEYA breakout (commit 67d2dd6).
 
 Limit nedeniyle durdu mu: hayır — Durma Noktası 1 nedeniyle duruldu.
