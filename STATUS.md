@@ -1,14 +1,14 @@
 # Proje Durumu
-Son güncelleme: 2026-07-06T22:10:00+03:00 (Europe/Istanbul)
-Şu an: **Portföy-seviyesi gate ablasyon turu (ABLATION_PORTFOLIO.md)
-tamamlandı — Durma Noktası 1'de duruluyor, kullanıcı onayı bekleniyor.
-Hiçbir eşik/gate/parametre `config.yaml`'da değiştirilmedi. Faz 5'e/E2'ye
-geçilmedi (EXPANSION.md Bölüm 0.4 sıralama kilidi hâlâ geçerli: v7 + BIST
-yeniden-tasarım kararı olmadan E2 başlamaz).**
-Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7) + HARDENING.md
-Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) + Teşhis turu v6
-+ Motor+veri düzeltme turu v7 + EXPANSION.md E1 (Veri Temeli) + Portföy
-ablasyon turu.
+Son güncelleme: 2026-07-06T23:05:00+03:00 (Europe/Istanbul)
+Şu an: **Ablasyon turu kapanışı (R1: breaker adli incelemesi + golden
+yeniden mühürleme v7.1-golden) tamamlandı — Durma Noktası 1'de duruluyor.
+Hiçbir eşik/gate/parametre `config.yaml`'da değiştirilmedi, snapshot'lara
+yazılmadı. Faz 5'e/E2'ye geçilmedi. BIST hükmü verildi (KALICI KAYIT 3) —
+E2 ön şartı AÇILDI ama iki durma noktası kullanıcıda kalmaya devam ediyor.**
+Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7, v7.1-golden) +
+HARDENING.md Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) +
+Teşhis turu v6 + Motor+veri düzeltme turu v7 + EXPANSION.md E1 (Veri Temeli)
++ Portföy ablasyon turu (+ kapanış R1).
 
 ## KALICI KAYIT 1 — Başarı Çıtası (kullanıcı kararı, 2026-07-06)
 USD bazında CAGR > 0 taban şart; Sharpe > XU100 al-tut Sharpe VE max DD ≤
@@ -30,7 +30,39 @@ kriterlerinden geçen bir gate/özellik olarak; ilk aday US sleeve (E1: earnings
 tarihçesi 2001'e kadar mevcut, bkz. DATA_AUDIT_US.md). İmplementasyon
 yeniden-tasarım/E-fazlarında, şimdi değil.
 
-Bu oturumda yapılan (onaylı portföy-seviyesi gate ablasyon turu):
+## KALICI KAYIT 3 — BIST Hükmü (2026-07-06, kullanıcı delegasyonuyla baş danışman kararı)
+Mevcut 10-gate ailesi BIST'te başarı çıtası (B) yolu olarak REDDEDİLDİ; huni
+DONDURULDU (eşik değişikliği yok, referans + E4/ABD adil testi için
+saklanıyor); yeni yön: rejim-filtreli çekirdek maruziyet (D1 tasarımı); E2 ön
+şartı AÇILDI. İki durma noktası kullanıcıda.
+
+Bu oturumda yapılan (onaylı ablasyon kapanış turu — R1: breaker adli
+incelemesi + golden yeniden mühürleme):
+- **Madde 1 — Breaker adli incelemesi (read-only, `trace=` ile 4 varyantın
+  ana koşumu yeniden çalıştırıldı — walk-forward/MC/sweep DEĞİL):** 4/4
+  tetiklenme **"GERÇEK DRAWDOWN"** olarak sınıflandırıldı — hiçbiri v7'nin
+  EREGL hayalet-bar deseniyle (tek gün/tek sembol/volume=0/ani sıçrama)
+  eşleşmiyor. no_regime (2018-10-18) ve no_trend_regime_rsi (2008-09-17,
+  Lehman Brothers iflasından 2 gün sonra) bilinen makro-stres dönemleriyle
+  doğrudan örtüşüyor — breaker'ın tasarlandığı gibi çalıştığının kanıtı.
+  no_trend (2020-08-18) ve no_rsi (2015-11-10) kademeli çok-günlü aşınmanın
+  son halkası. Detay + çekinceler: `ABLATION_PORTFOLIO.md`'nin "Breaker Adli
+  İnceleme (R1 eki)" bölümü (mevcut içeriğe dokunulmadı, yalnızca eklendi).
+- **Madde 2 — Golden yeniden mühürleme**: ablasyon baseline'ın kanonik
+  (sıra-deterministik) `trades.csv`'si `runtime/backtest_reports_v7_1/`e
+  kopyalandı (SHA256: `08fa8ea8...` — tam hash `runtime/backtest_reports_v7_1/MANIFEST.json`'da),
+  `.gitignore`'a hedefli istisna eklendi (bu dosya artık commitli — diğer
+  `backtest_reports_v*` dizinleri ephemeral kalmaya devam ediyor), git tag
+  `backtest-v7.1-golden` atıldı. `EXPANSION.md` Bölüm 0.2 güncellendi: E2+
+  regresyon çapası artık v7 değil **v7.1-golden**'a bayt-bayt kıyaslanacak
+  (v7 tarihsel kayıt olarak kalıyor, 2 satırlık sıra farkının nedeni
+  ABLATION_PORTFOLIO.md'de belgeli). `CLAUDE.md` Bölüm 12.8'e tek satır
+  eklendi: "Aynı-gün çoklu giriş VE çıkış sırası alfabetik-deterministiktir."
+  Başka hiçbir yer değiştirilmedi.
+- 276 test yeşil (regresyon yok — bu turda motor koduna dokunulmadı, yalnızca
+  belgeler + golden dosya kopyalandı).
+
+Önceki oturumda yapılan (onaylı portföy-seviyesi gate ablasyon turu, hâlâ geçerli):
 - **Madde 1 — `run_backtest`'e `disabled_gates: Optional[list[str]] = None`
   parametresi eklendi** (geç bağlama — None-varsayılan, call-time'da
   `set()`'e çevriliyor). Verilmediğinde davranış BİREBİR aynı — kanıt: kısa
@@ -281,23 +313,23 @@ Paket 1 bulgularının düzeltmesi, hâlâ geçerli):
   adaylarda kazanan/kaybeden ayrımı göstermiyor (küçük örneklem, ön-bulgu).
 - `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
-**Sırada:** Üç paralel bekleme:
-(a) **BIST hattı**: Durma Noktası 1'de duruluyor. DIAGNOSTICS_v6.md Paket 3'ün
-izole gate bulgusu artık ABLATION_PORTFOLIO.md ile PORTFÖY seviyesinde test
-edildi ve ÇELİŞTİĞİ görüldü (no_trend/no_rsi belirgin daha kötü, no_regime
-karma) — "bu üç gate gereksiz" hükmü artık DESTEKLENMİYOR. Kalan gerçek
-zayıflıklar (walk-forward OOS, MC worst-5%, hiçbir varyantın USD-CAGR>0
-çıtasını geçmemesi) yeniden tasarım konuşmasının girdisi olabilir, ama
-"gate'leri kaldır" yönünde bir sonuç ÇIKMADI.
-(b) **EXPANSION.md**: E1 tamamlandı, kullanıcı onayı bekleniyor. E2 (Motor
-Genelleştirme) ancak "v7 bitti + BIST yeniden-tasarım kararı verildi + E2
-onaylandı" üçlü şartı sağlanınca başlar (Bölüm 0.4 + Bölüm 16). E1'in açık
-maddeleri: E2'ye devredilen FX OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/
-GBP_USD) ve lxml'in requirements.txt'e eklenip eklenmeyeceği.
-(c) **Portföy ablasyon turu**: tamamlandı, kullanıcı onayı bekleniyor. Açık
-madde: 4/5 varyantta breaker'ın 1 kez tetiklenmesinin kök nedeni (veri
-artefaktı mı gerçek drawdown mu) bu turda İNCELENMEDİ — istenirse ayrı bir
-teşhis turu konusu olabilir.
+**Sırada:** BIST hükmü verildi (KALICI KAYIT 3) — bu, önceki "gate ablasyonu
+mu düzeltir mi" belirsizliğini KAPATIYOR: 10-gate ailesi B-yolu olarak
+reddedildi, huni dondu (referans olarak kalıyor), yeni yön rejim-filtreli
+çekirdek maruziyet (D1 tasarımı). **Ama iki durma noktası hâlâ kullanıcıda**
+— "E2 ön şartı açıldı" ifadesi E2'nin OTOMATİK başlayacağı anlamına gelmiyor;
+Durma Noktası 1 (Faz 5'e geçiş) ve genel "E2 onaylandı" kullanıcı talimatı
+(EXPANSION.md Bölüm 16) hâlâ ayrı ayrı gerekiyor. Üç paralel konu:
+(a) **BIST hattı**: D1 tasarımının (rejim-filtreli çekirdek maruziyet)
+kendisi henüz YAZILMADI — bu, hükmün SONUCU, sıradaki iş değil, ayrı bir
+tasarım turu bekliyor.
+(b) **EXPANSION.md**: E1 tamamlandı. E2 ön şartı (v7 + BIST karar) artık
+sağlandı, ama "E2 onaylandı" talimatı hâlâ ayrı gerekiyor. E1'in açık
+maddeleri: FX OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/GBP_USD), lxml
+kararı.
+(c) **Ablasyon turu (R1 dahil)**: TAMAMLANDI. Breaker adli incelemesi
+sonuçlandı (4/4 "gerçek drawdown", bkz. ABLATION_PORTFOLIO.md eki). Golden
+v7.1'e mühürlendi. Açık madde yok.
 
 Bilinen sorun/blok:
 1. **Kullanıcı onayı bekleniyor (Durma Noktası 1, BIST)** — kasıtlı, aşılamaz kapı.
@@ -350,8 +382,13 @@ Bilinen sorun/blok:
 15. **Hiçbir varyant (baseline dahil) USD-CAGR>0 başarı çıtasını geçmiyor**
     (bkz. KALICI KAYIT 1) — TRY'nin USD karşısındaki yapısal değer kaybı
     baskın. max DD/endeks-DD oranı kısmı İYİ (0.106-0.172).
-16. 4/5 varyantta breaker 1 kez tetiklendi — kök nedeni (veri artefaktı mı
-    gerçek drawdown mu) bu turda İNCELENMEDİ.
+16. ~~4/5 varyantta breaker 1 kez tetiklendi — kök nedeni İNCELENMEDİ~~
+    **İNCELENDİ (R1): 4/4 "gerçek drawdown"** — veri artefaktı değil (bkz.
+    ABLATION_PORTFOLIO.md "Breaker Adli İnceleme" eki).
+17. Golden regresyon çapası artık v7 değil `backtest-v7.1-golden` —
+    `runtime/backtest_reports_v7_1/trades.csv` (bu dosya özel olarak
+    commitlenmiş, `.gitignore` istisnası ile). v7 tarihsel kayıt olarak
+    kalıyor.
 
 Önceki fazlardan taşınan varsayımlar: pandas-ta yerine pandas-ta-classic +
 numpy 2.2 (e31e401); BIST seans saatleri yaklaşık; backtest degrade modda;

@@ -180,3 +180,96 @@ determinizm bug'ı bulundu ve düzeltildi (`pending_exits` sıralaması).
 **Karar benim değil, kullanıcının.** Hiçbir eşik/gate/parametre
 değiştirilmedi, Faz 5'e/E2'ye geçilmedi. Durma Noktası 1'de duruluyor,
 kullanıcı onayı bekleniyor.
+
+---
+
+# Breaker Adli İnceleme (R1 eki)
+
+Ablasyon turu kapanışı (R1) — read-only. 4 varyantın (no_trend, no_regime,
+no_rsi, no_trend_regime_rsi) birer breaker tetiklenmesi, `trace=` teşhis
+kancasıyla (yalnızca ana koşum yeniden çalıştırıldı — walk-forward/MC/sweep
+DEĞİL) incelendi: tetiklenme günü ve önceki equity/peak/DD, açık pozisyonlar,
+tetik günündeki en büyük notional düşüşüne sahip sembol, o sembolün ±8
+takvim günü fiyat/hacim penceresi, ve son 20 iş günlük equity/peak/DD
+yörüngesi (ani tek-gün sıçraması mı, kademeli çok-günlü düşüş mü ayırt etmek
+için — v7'nin EREGL hayalet-bar deneyiminin imzası: TEK gün, TEK sembol, ani
+büyük sıçrama).
+
+## no_trend — 2020-08-18 (equity 101,628 / peak 112,975 / DD %10.04)
+
+Peak (112,975), tetik gününden HAFTALAR ÖNCE, pozisyon dahi açık değilken
+oluşmuş — equity 2020-07-20'den 2020-08-17'ye kadar (20 iş günü) tam olarak
+101,810.31'de SABİT kalmış (hiç pozisyon yok, DD zaten %9.88'de duruyordu).
+2020-08-18'de TEK açık pozisyon TUPRS, notional'i yalnızca -166 TL (~%1)
+düşüyor — bu, DD'yi %9.88'den %10.04'e taşıyan, ÇOK KÜÇÜK bir ek düşüş.
+TUPRS'nin ±8 günlük fiyat penceresinde hiçbir anomali yok — aksine, tetik
+gününün HEMEN ERTESİ günlerinde (08-19, 08-20) fiyat keskin biçimde YÜKSELİYOR
+(7.36 → 7.91 → 8.48, gerçek ve hacim-destekli bir hareket, muhtemelen TUPRS'nin
+o dönemki gerçek bir haber/rapor kataliziyle ilgili — DATA_AUDIT_v2.md'de bu
+tarihe yakın bir "açıklanamayan gap" kaydı YOK).
+**Sınıflandırma: GERÇEK DRAWDOWN, ama mekanik olarak "sıradan"** — tek
+büyük bir olay değil, ÇOK ESKİ bir peak ile mevcut equity arasındaki zaten-
+neredeyse-%10 olan farkın, küçük bir günlük dalgalanmayla eşiği geçmesi.
+Veri artefaktı imzası (tek-gün/tek-sembol/ani-sıçrama) YOK.
+
+## no_regime — 2018-10-18 (equity 105,302 / peak 117,086 / DD %10.06)
+
+Kademeli 4 günlük düşüş: 10-15 (%8.41) → 10-16 (%8.88, THYAO) → 10-17
+(%9.70, SISE'ye geçiş) → 10-18 (%10.06). SISE'nin bu haftaki fiyat serisi
+düzenli bir aşınma gösteriyor (4.74→4.57, tek bir sıçrama yok), hacimler
+normal aralıkta (5-10M). Bu dönem, Türkiye'nin Ağustos 2018 kur/ekonomi
+krizinin (TL'nin Ağustos'ta sert değer kaybı) sonrasındaki genel piyasa
+zayıflığıyla örtüşüyor — makro olarak bilinen, açıklanabilir bir dönem.
+DATA_AUDIT_v2.md'de SISE/THYAO için bu tarihe yakın bir "açıklanamayan gap"
+kaydı YOK.
+**Sınıflandırma: GERÇEK DRAWDOWN** (kademeli, çok-günlü, çok-sembollü,
+makro bağlamla tutarlı — veri artefaktı imzası yok).
+
+## no_rsi — 2015-11-10 (equity 99,404 / peak 110,877 / DD %10.35)
+
+Tetik gününde AÇIK POZİSYON YOK — KCHOL pozisyonu 8 iş günü boyunca
+(2015-11-02'den itibaren) düzenli olarak aşınmış (equity: 100,777→100,682→
+100,777→100,586→100,205→99,823) ve 11-10'da KAPANMIŞ (muhtemelen stop veya
+sinyal çıkışı), bu kapanışın gerçekleştirdiği zarar DD'yi %9.97'den %10.35'e
+taşımış. Tek bir çarpıcı gün yok — 8 günlük kademeli bir aşınmanın son halkası.
+**Sınıflandırma: GERÇEK DRAWDOWN** (kademeli, çok-günlü — veri artefaktı
+imzası yok).
+
+## no_trend_regime_rsi — 2008-09-17 (equity 92,724 / peak 104,073 / DD %10.91)
+
+**En anlamlı bağlamsal bulgu**: 2008-09-17, Lehman Brothers'ın iflasından
+(15 Eylül 2008) yalnızca 2 gün sonrası — 2008 küresel finans krizinin en
+şiddetli haftası. Equity yörüngesi 2008-08-21'den (DD %8.12) itibaren
+neredeyse kesintisiz kademeli bozuluyor (THYAO, ARCLK, AKBNK pozisyonları
+sırayla), 09-16'da DD %9.88'e ulaşıyor, 09-17'de (tetik günü, pozisyon
+kapanmış) %10.91'e çıkıyor. DATA_AUDIT_v2.md'de bu haftaya yakın SISE
+(2008-09-15, -%10.83, "açıklanamayan gap") ve THYAO (2008-09-19, +%10.34,
+"açıklanamayan gap") kayıtları VAR — ama bunlar tetik gününün (09-17) TAM
+kendisi veya trigger'a katkı veren pozisyonlar (THYAO/AKBNK, 09-17'de zaten
+kapanmış) değil; genel haftanın aşırı oynaklığının bir parçası, ayrı bir
+sınıflandırma sorunu.
+**Sınıflandırma: GERÇEK DRAWDOWN** — küresel finans krizinin (Lehman
+Brothers çöküşü) doğrudan, iyi belgelenmiş bir yansıması. Bu turun EN GÜÇLÜ
+"gerçek" sınıflandırmasıdır.
+
+## Genel Sonuç
+
+**4 tetiklenmenin TAMAMI "gerçek drawdown" olarak sınıflandırıldı — hiçbiri
+v7'nin EREGL hayalet-bar deseniyle (tek gün, tek sembol, volume=0, ani büyük
+sıçrama) eşleşmiyor.** Hepsi ya kademeli çok-günlü/çok-sembollü aşınma (no_regime,
+no_rsi, no_trend_regime_rsi) ya da uzun süredir zaten sınıra yakın duran bir
+equity'nin küçük bir ek düşüşle eşiği geçmesi (no_trend) deseninde. İki
+tetiklenme (no_regime, no_trend_regime_rsi) bilinen makro-ekonomik stres
+dönemleriyle (2018 TL krizi, 2008 küresel finans krizi) doğrudan örtüşüyor —
+bu, breaker'ın TASARLANDIĞI gibi çalıştığının (gerçek, ciddi piyasa stresinde
+tetiklenmesi) bir kanıtı, veri kalitesi sorunu değil.
+
+**Önemli çekince**: bu inceleme yalnızca "tetik GÜNÜNDEKİ en büyük tekil
+düşüş" ve "son 20 iş günü" penceresine baktı — DAHA ERKEN tarihli, birikimli
+küçük veri sorunlarının (DATA_AUDIT_v2.md'nin 79 açıklanamayan-gap gününün
+herhangi biri, bu 4 sembolün geçmişindeki BAŞKA tarihlerde) peak equity'nin
+KENDİSİNİ (yani referans tepe noktasını) şişirmiş olma ihtimali bu turda
+İNCELENMEDİ — yalnızca tetik anındaki ani/tekil artefakt ihtimali dışlandı.
+
+**Karar benim değil, kullanıcının. Bu ek de dahil, hiçbir eşik/gate/parametre
+değiştirilmedi.**

@@ -6,4 +6,9 @@ data/historical/*.parquet
 *.sqlite
 runtime/*
 !runtime/.gitkeep
+# v7.1 golden regresyon çapası (EXPANSION.md Bölüm 0.2) — istisna olarak commitlenir,
+# diğer runtime/backtest_reports_* dizinleri (v5/v6/v7 vb.) ephemeral kalmaya devam eder.
+!runtime/backtest_reports_v7_1/
+!runtime/backtest_reports_v7_1/trades.csv
+!runtime/backtest_reports_v7_1/MANIFEST.json
 .DS_Store

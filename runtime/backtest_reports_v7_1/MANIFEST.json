@@ -1,0 +1,10 @@
+{
+  "created_at_utc": "2026-07-06T19:43:36.781556+00:00",
+  "description": "BIST v7.1 golden regresyon çapası (EXPANSION.md Bölüm 0.2) — ablasyon baseline çıktısı, v7 ile içerik-özdeş (aynı 121 trade, aynı PnL), sıra-kanonik (pending_exits determinizm düzeltmesi sonrası alfabetik sıralı). v7 (runtime/backtest_reports_v7/, tarihsel kayıt) yerine bu dosya E2+ regresyon kıyasının referansıdır.",
+  "source": "tools/portfolio_ablation.py baseline varyantı (disabled_gates=[])",
+  "snapshot": "data/snapshots/2026-07-06 (A1, 12 sembol, 2005-01-01+)",
+  "trades_csv_sha256": "08fa8ea80034883383662cce37ad51eef5074ec91060410828aa5c732891fd33",
+  "trades_csv_bytes": 18096,
+  "trade_count": 121,
+  "note_on_v7_diff": "v7 (runtime/backtest_reports_v7/trades.csv, gitignored/ephemeral) ile İÇERİK olarak (sort sonrası) TAM AYNI. Yalnızca 2 aynı-gün-çoklu-çıkış çakışmasının SIRASI farklı (ARCLK/TOASO 2010-12-10, ASELS/TCELL 2026-06-04) — v7 rastgele PYTHONHASHSEED sırasıyla, bu dosya sorted(pending_exits) determinizm düzeltmesiyle (alfabetik) üretildi. Detay: ABLATION_PORTFOLIO.md."
+}
