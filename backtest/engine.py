@@ -58,6 +58,7 @@ def run_backtest(
     initial_equity: Optional[float] = None,
     date_range: Optional[tuple[pd.Timestamp, pd.Timestamp]] = None,
     precomputed_features: Optional[dict[str, pd.DataFrame]] = None,
+    trace: Optional[list] = None,
 ) -> BacktestResult:
     """Event-driven, bar-bazlı backtest motoru (Bölüm 12.2).
 
@@ -84,6 +85,12 @@ def run_backtest(
     walk-forward'ın aynı fiyat verisini farklı risk/stop eşikleriyle (indikatör
     hesaplamasını ETKİLEMEYEN parametreler) defalarca koşturması gerektiğinde
     performans için kullanılır.
+
+    `trace`: verilirse (bir liste), her gün için salt-okunur bir teşhis kaydı
+    (tarih, cash, equity, breaker kontrolüne giden peak_equity, breaker
+    tetiklendi mi, açık pozisyonların anlık notional değerleri) bu listeye
+    eklenir. Hiçbir hesaplamayı DEĞİŞTİRMEZ — yalnızca zaten hesaplanan
+    değerleri gözlemler (DIAGNOSTICS_v6.md, Paket 1).
     """
     initial_equity = initial_equity if initial_equity is not None else cfg.backtest.initial_equity
 
@@ -243,6 +250,26 @@ def run_backtest(
                     "drawdown": drawdown,
                 })
             breaker_was_tripped = is_tripped_now
+
+            if trace is not None:
+                trace.append({
+                    "date": date,
+                    "cash": cash,
+                    "equity": equity_today,
+                    "peak_equity_seen_by_breaker": peak_equity,  # bugünün güncellemesinden ÖNCEKİ peak
+                    "drawdown_seen_by_breaker": (1 - equity_today / peak_equity) if peak_equity > 0 else 0.0,
+                    "breaker_tripped_today": is_tripped_now,
+                    "positions": {
+                        s: {
+                            "quantity": p.quantity,
+                            "close": float(daily_features[s].loc[date]["close"]) if date in daily_features[s].index else None,
+                            "notional": float(daily_features[s].loc[date]["close"]) * p.quantity if date in daily_features[s].index else None,
+                            "entry_price": p.entry_price,
+                            "entry_date": p.entry_date,
+                        }
+                        for s, p in positions.items()
+                    },
+                })
 
             corr_fn = _make_corr_fn(date)
             for symbol in symbols:

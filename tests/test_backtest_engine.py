@@ -312,3 +312,27 @@ def test_breaker_trips_on_correct_bar_and_blocks_subsequent_entries():
 
     # ...ama breaker tetiklendiği için bu sinyal hiçbir yeni pozisyona dönüşmemiş olmalı
     assert len(result.trades) == 1  # hâlâ yalnızca ilk (stop'lanan) trade var
+
+
+def test_trace_hook_does_not_change_results_and_captures_expected_fields():
+    """trace parametresi salt-okunur bir gözlem kancasıdır — verilmesi backtest
+    sonucunu (trades/equity_curve) hiçbir şekilde değiştirmemeli (DIAGNOSTICS_v6.md
+    Paket 1 için eklendi)."""
+    cfg = make_cfg()
+    base = _pretrigger_bars()
+    df = _extend(base, [
+        dict(open=120.0, high=130.0, low=119.0, close=125.0, volume=1000.0),
+    ])
+
+    result_without_trace = run_backtest(["TEST"], cfg, lambda s: df)
+
+    trace: list = []
+    result_with_trace = run_backtest(["TEST"], cfg, lambda s: df, trace=trace)
+
+    assert result_without_trace.equity_curve.equals(result_with_trace.equity_curve)
+    assert len(result_without_trace.trades) == len(result_with_trace.trades)
+
+    assert len(trace) == len(result_with_trace.equity_curve)
+    last_entry = trace[-1]
+    assert set(["date", "cash", "equity", "peak_equity_seen_by_breaker",
+               "drawdown_seen_by_breaker", "breaker_tripped_today", "positions"]) <= set(last_entry.keys())
