@@ -1,12 +1,20 @@
 # Proje Durumu
-Son güncelleme: 2026-07-06T11:55:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-06T12:05:00+03:00 (Europe/Istanbul)
 Şu an: **Motor+veri düzeltme turu (v7) tamamlandı — DURMA NOKTASI 1'de
 duruluyor (Bölüm 0.1). Faz 5'e geçilmedi, hiçbir strateji eşiği/gate/parametre
 değiştirilmedi, kullanıcı onayı bekleniyor. HARDENING.md Bölüm B/C'ye
-başlanmadı. v7, v1-v6'nın yerini alan TEK geçerli backtest taban çizgisidir.**
+başlanmadı. v7, v1-v6'nın yerini alan TEK geçerli backtest taban çizgisidir.
+EXPANSION.md repoya eklendi (E1-E5 aşamaları tanımlı, HİÇBİRİNE
+BAŞLANMADI — v7/BIST turu önceliklidir, E1 için ayrı başlatma talimatı
+bekleniyor).**
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7) + HARDENING.md
 Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) + Teşhis turu v6
 + Motor+veri düzeltme turu v7.
+EXPANSION.md (çok piyasalı genişleme: ABD hisseleri + Forex) repoya eklendi,
+CLAUDE.md'ye tek satırlık işaret kondu. E1-E5 aşamaları tanımlı, hiçbirine
+BAŞLANMADI (EXPANSION.md Bölüm 0.4 sıralama kilidi: E2+ ancak v7 turu bitip
+BIST strateji yeniden-tasarım kararı verildikten sonra başlar; E1 dahi ayrı
+bir kullanıcı başlatma talimatı bekliyor).
 
 Bu oturumda yapılan (onaylı motor+veri düzeltme turu — v7, DIAGNOSTICS_v6.md'nin
 Paket 1 bulgularının düzeltmesi):

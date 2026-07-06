@@ -5,6 +5,8 @@
 > **İlk oturum talimatı:** Repo boşsa (sadece bu dosya varsa), Bölüm 14'teki Faz 1'den başla. Boş değilse önce `STATUS.md`'yi oku, kaldığın yerden devam et. Kullanıcıya soru sorma — bu doküman cevabı içeriyor. İçermiyorsa Bölüm 16'daki belirsizlik protokolünü uygula.
 >
 > **HARDENING.md:** Bu dosyaya ek bir kalite/güvenilirlik planı — Faz 5 uygulamasında `HARDENING.md` Bölüm B gereksinimleri bağlayıcıdır.
+>
+> **EXPANSION.md:** Çok piyasalı genişleme (ABD hisseleri + Forex) `EXPANSION.md`'ye tabidir.
 
 ---
 
