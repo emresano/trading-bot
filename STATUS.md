@@ -1,13 +1,76 @@
 # Proje Durumu
-Son güncelleme: 2026-07-06T14:30:00+03:00 (Europe/Istanbul)
-Şu an: **Teşhis turu v6 (read-only, DIAGNOSTICS_v6.md) tamamlandı — DURMA
-NOKTASI 1'de duruluyor (Bölüm 0.1). Faz 5'e geçilmedi, hiçbir eşik/parametre
+Son güncelleme: 2026-07-06T11:55:00+03:00 (Europe/Istanbul)
+Şu an: **Motor+veri düzeltme turu (v7) tamamlandı — DURMA NOKTASI 1'de
+duruluyor (Bölüm 0.1). Faz 5'e geçilmedi, hiçbir strateji eşiği/gate/parametre
 değiştirilmedi, kullanıcı onayı bekleniyor. HARDENING.md Bölüm B/C'ye
-başlanmadı.**
-Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v6) + HARDENING.md
-Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) + Teşhis turu v6.
+başlanmadı. v7, v1-v6'nın yerini alan TEK geçerli backtest taban çizgisidir.**
+Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7) + HARDENING.md
+Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) + Teşhis turu v6
++ Motor+veri düzeltme turu v7.
 
-Bu oturumda yapılan (onaylı read-only teşhis turu — DIAGNOSTICS_v6.md):
+Bu oturumda yapılan (onaylı motor+veri düzeltme turu — v7, DIAGNOSTICS_v6.md'nin
+Paket 1 bulgularının düzeltmesi):
+- **Madde 1 — Equity forward-fill** (`backtest/engine.py`): açık pozisyonun o
+  gün fiyatı yoksa artık son bilinen kapanışla taşınıyor, 0 sayılmıyor. Test:
+  sentetik eksik-gün senaryosunda equity sabit kalıyor.
+- **Madde 2 — Aynı-gün-çoklu-onay düzeltmesi**: gün içi onaylar artık pseudo-
+  Position olarak `positions_snapshot`'a HEMEN eklenip kalan slotu düşürüyor;
+  aday sırası deterministik (alfabetik — Faz 5 canlı döngüsü aynı sırayı
+  kullanmalı, koda not düşüldü). Test: aynı gün 3 aday + limit 2 → yalnızca
+  ilk 2 (alfabetik) onaylanıyor.
+- **Madde 3 — Veri temizleme katmanı** (`data/cleaning.py`, YENİ): (a)
+  hayalet-bar filtresi (tarih yalnızca 1 sembolde + volume=0 + OHLC≈önceki
+  kapanış → elenir, loglanır), (b) UTC→Istanbul tarih normalizasyonu
+  (yfinance'in Istanbul yerel gece yarısını UTC'ye çevirirken tarih etiketini
+  bir gün geriye kaydırdığı bug düzeltildi). Snapshot parquet dosyalarına
+  DOKUNULMADI — yalnızca `backtest/cli.py`'nin YÜKLEME anında bellek-içi
+  düzeltmesi (`--no-clean` ile atlanabilir, varsayılan: temizlenir).
+- **Madde 4 — `DATA_AUDIT_v2.md`** (`tools/data_audit_v2.py`, YENİ, read-only):
+  sıçrama eşiği %25→%10, 12 sembolün tamamı tarandı, ham Dividends/Stock
+  Splits ile çapraz kontrol: 179 gün (%10+), 97 hacim destekli gerçek hareket,
+  79 açıklanamayan gap (muhtemel bedelli), 3 kayıtlı kurumsal işlem. **Ek
+  bulgu**: 2023-02-15 (deprem sonrası piyasa-çapında yeniden açılış) 12
+  sembolün TAMAMINDA görünüyor — sınıflandırıcının yakalayamadığı,
+  piyasa-çapında/açıklanabilir bir olay; "açıklanamayan gap" sayısının üst
+  sınır olduğunu gösteriyor.
+- **Madde 5 — Veri kaynağı keşfi** (read-only, `DATA_AUDIT_v2.md`'ye eklendi):
+  AlgoLab (`execution/algolab/` henüz boş) yalnızca ~300 barlık canlı pencere
+  için tasarlanmış, çok yıllı backtest verisi sağlamıyor — yfinance'in kör
+  noktaları AlgoLab'a geçilerek çözülmez.
+- **Madde 6 — Performans**: breaker artık CLI çağrısı başına TEK paylaşılan
+  geçici dizin kullanıyor (`run_backtest`/`run_walk_forward`/`_write_sweep_csv`
+  artık opsiyonel `breaker_file`/`breaker_dir` parametresi kabul ediyor; breaker
+  durumu çağrılar arasında yine tam izole). Kanıt: kısa 3-sembollü koşuda
+  `trades.csv` bayt-bayt aynı (eski per-call-tempdir davranışına karşı).
+- **Madde 7 — v7 tam süit**: A1 snapshot'ından, 12 sembol, 2005+,
+  `runtime/backtest_reports_v7/`. **~1 saat 49 dakika sürdü** (v6'nın ~6.5
+  saatine göre ~3.6× hızlanma — madde 6 performans düzeltmesi).
+  - **Trade 119→121.** **Maks. drawdown -%20.74 → -%6.71 — DRAMATİK
+    İYİLEŞME.** Bu, DIAGNOSTICS_v6.md Paket 1'in "eski -%20.74 rakamı gerçek
+    değil, veri+engine artefaktı" öngörüsünü DOĞRULUYOR.
+  - **Breaker artık HİÇ tetiklenmiyor** (`breaker_trips=[]`) — v6'daki tek
+    tetiklenme (eski "2024-04-08", normalize edilince gerçek gün
+    **2024-04-09**) tamamen o artefaktın sonucuymuş.
+  - **max_open_positions ihlali sıfırlandı**: tüm tarihçe boyunca gözlenen
+    maks. eşzamanlı pozisyon artık 2 (limit=2), 0 ihlal günü (önceden en az
+    3 bağımsız ihlal dönemi vardı).
+  - Hayalet bar filtresi tam olarak beklenen tek barı eledi: EREGL,
+    2024-04-09.
+  - **Walk-forward kabul kriteri hâlâ GEÇMEDİ, MC kırmızı bayrağı hâlâ
+    tetikleniyor** (dd_p5=-%10.29, v6'nın -%12.08'inden iyileşti ama sınırda) —
+    bunlar motor/veri bug'ı DEĞİL, stratejinin kendi (parametre/gate) zayıflığı
+    olarak duruyor, ayrı bir konu.
+  - Sweep: 27 kombinasyonun TAMAMINDA max DD artık tek-haneli/düşük-çift-haneli
+    (v5/v6'daki bazı kombinasyonların -%25'e varan drawdown'ları kayboldu —
+    veri artefaktı sweep'in TAMAMINI aynı şekilde etkiliyordu).
+  - `BACKTEST_REVIEW_v7.md` yazıldı: v6 yan yana karşılaştırma, kök-neden
+    doğrulaması, iki bug'ın düzeltildiğinin kanıtı, walk-forward/MC'nin hâlâ
+    kırmızı bayrak olmasının ayrı bir bulgu olduğu açıklaması.
+  - **Not**: v1-v6 raporları artık yalnızca tarihsel kayıt — v7 tek geçerli
+    taban çizgisi, v1-v4 yeniden koşulmadı/koşulmayacak.
+- 223 test yeşil (tüm yeni testler dahil, regresyon yok).
+
+Önceki oturumda yapılan (onaylı read-only teşhis turu — DIAGNOSTICS_v6.md, hâlâ geçerli):
 - **Paket 1 (EN ÖNEMLİ) — iki motor bug'ı bulundu, DÜZELTİLMEDİ (raporlandı):**
   1. **Equity hesaplama bug'ı:** `backtest/engine.py`'nin equity formülü, o gün
      fiyat verisi eksik olan açık pozisyonları toplamdan TAMAMEN dışlıyor
@@ -96,34 +159,38 @@ Bu oturumda yapılan (onaylı read-only teşhis turu — DIAGNOSTICS_v6.md):
 - `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
 **Sırada:** Hiçbir şey — burada duruluyor (Durma Noktası 1). Kullanıcının
-kararı bekleniyor. Önerilen (kullanıcı onayı gerekir): (a) Paket 1'deki iki
-motor bug'ını (equity forward-fill + aynı-gün-çoklu-onay) ayrı bir onaylı
-turda düzelt, (b) veri katmanına "tüm-sembollerde-eksik-tek-sembolde-var"
-tatil/anomali kontrolü ekle, (c) düzeltmelerle v1-v6 sweep'ini yeniden koş,
-(d) ancak o zaman gate eşiklerini (Paket 3 bulgusu ışığında) yeniden tasarım
-konuşmasına aç.
+kararı bekleniyor. Önerilen (kullanıcı onayı gerekir): Paket 1'in iki bug'ı
+artık DÜZELTİLDİ ve v7'de doğrulandı; kalan gerçek (bug olmayan) zayıflıklar
+— walk-forward OOS performansı ve MC worst-5% sınırda kalması — ile
+DIAGNOSTICS_v6.md Paket 3'ün gate ablasyon bulgusu (trend/regime/rsi izole
+ölçümde değer katmıyor gibi görünüyor) birlikte, artık bir gate/parametre
+yeniden tasarım konuşmasının girdisi olabilir.
 
 Bilinen sorun/blok:
 1. **Kullanıcı onayı bekleniyor (Durma Noktası 1)** — kasıtlı, aşılamaz kapı.
-2. **v5 VE v6'nın -%20.74 max drawdown rakamı güvenilir değil** (Paket 1) —
-   EREGL'deki tek günlük hayalet-bar veri artefaktı + engine'in eksik fiyatlı
-   pozisyonları sıfırlayan equity formülü. DÜZELTİLMEDİ, ayrı onaylı tur
-   bekliyor. Bu düzeltilene kadar raporlanan max DD/MC sonuçlarına güvenmeyin.
-3. **max_open_positions limiti aşılabiliyor** (gözlenen maks. 3, limit 2) —
-   aynı-gün-çoklu-onay bug'ı (Paket 1). DÜZELTİLMEDİ, ayrı onaylı tur
-   bekliyor.
-4. Breaker entegrasyonu backtest'i ~3× yavaşlattı (tempfile per-call yükü) —
-   performans turu gerekebilir (düşük öncelik, işlevsellik doğru).
+2. ~~v5/v6'nın -%20.74 max drawdown rakamı güvenilir değildi~~ **DÜZELTİLDİ
+   (v7): equity forward-fill + hayalet-bar filtresi sonrası gerçek max DD
+   -%6.71.** Breaker artık hiç tetiklenmiyor.
+3. ~~max_open_positions limiti aşılabiliyordu~~ **DÜZELTİLDİ (v7): tüm
+   tarihçe boyunca 0 ihlal günü, doğrulandı.**
+4. ~~Breaker entegrasyonu backtest'i ~3× yavaşlatıyordu~~ **DÜZELTİLDİ (v7):
+   CLI çağrısı başına tek paylaşılan geçici dizin, v7 koşumu v6'ya göre
+   ~3.6× hızlandı (~1sa49dk vs ~6.5sa).**
 5. Breaker, mevcut sıkı parametrelerle gerçekleşmiş max drawdown'u
    SINIRLAMIYOR (yalnızca sonraki girişleri engelliyor) — bu tasarım gereği
-   (FREEZE≠FLATTEN) ama kullanıcının bilmesi gereken bir sınırlama.
-6. v5'ten taşınan bulgular hâlâ açık: adx_min=25 geniş sweep'te desteklenmiyor
-   (adx_min=15 daha iyi PF gösterebiliyor, ama artık breaker'la daha düşük
-   drawdown'la); walk-forward DD kriteri hâlâ geçmiyor.
-7. Gate ablasyon (Paket 3): trend/regime/rsi izole ölçümde değer katmıyor
-   gibi görünüyor (counterfactual PF > baseline PF); portföy-seviyesi
-   etkiler ölçülmedi — eşik değiştirmeye tek başına yeterli kanıt değil.
-8. `.gitignore`'da genel `.env`/`*.log` deseni eksikliği (A3'ten, düşük öncelik).
+   (FREEZE≠FLATTEN) ama artık pratikte önemsiz: v7'de max DD zaten breaker
+   eşiğinin altında, breaker hiç tetiklenmiyor.
+6. **Walk-forward kabul kriteri hâlâ GEÇMEDİ, MC worst-5% (dd_p5=-%10.29)
+   hâlâ breaker eşiğine yakın/aşkın** (v6'dan iyileşti ama sınırda) — v7'de
+   doğrulandı ki bunlar motor/veri bug'ı DEĞİL, stratejinin kendi zayıflığı.
+7. KCHOL 2007-06-08 hâlâ açıklanamadı (DATA_AUDIT_v2.md'de "açıklanamayan
+   gap" — dış BIST/KAP doğrulaması gerekiyor, bu turda yapılmadı).
+8. Gate ablasyon (DIAGNOSTICS_v6.md Paket 3): trend/regime/rsi izole ölçümde
+   değer katmıyor gibi görünüyor (counterfactual PF > baseline PF); portföy-
+   seviyesi etkiler ölçülmedi — eşik değiştirmeye tek başına yeterli kanıt
+   değil, ama artık (v7'nin temiz taban çizgisiyle) bir tasarım konuşmasının
+   girdisi olabilir.
+9. `.gitignore`'da genel `.env`/`*.log` deseni eksikliği (A3'ten, düşük öncelik).
 
 Önceki fazlardan taşınan varsayımlar: pandas-ta yerine pandas-ta-classic +
 numpy 2.2 (e31e401); BIST seans saatleri yaklaşık; backtest degrade modda;
@@ -131,6 +198,8 @@ compute_target max(resistance, fallback) (67d2dd6); gate_trigger_4h degrade
 modda son-3-bar-pattern VEYA breakout (67d2dd6); walk-forward date_range/
 precomputed_features (60a6d3f); adx_min=25 (d6ea8fc); 12 sembol evreni +
 2005-01-01 + OHLC tolerans fix'i (dc56ed2); HARDENING.md Bölüm A (eb3b21d);
-breaker backtest entegrasyonu + MC dd_p5 düzeltmesi (c906d10, 53ba4b3).
+breaker backtest entegrasyonu + MC dd_p5 düzeltmesi (c906d10, 53ba4b3); v7
+motor+veri düzeltme turu — equity forward-fill + aynı-gün-çoklu-onay +
+data/cleaning.py + DATA_AUDIT_v2.md + performans (5227438).
 
 Limit nedeniyle durdu mu: hayır — Durma Noktası 1 nedeniyle duruldu.
