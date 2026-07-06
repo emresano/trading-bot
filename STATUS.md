@@ -1,23 +1,71 @@
 # Proje Durumu
-Son güncelleme: 2026-07-06T12:05:00+03:00 (Europe/Istanbul)
-Şu an: **Motor+veri düzeltme turu (v7) tamamlandı — DURMA NOKTASI 1'de
-duruluyor (Bölüm 0.1). Faz 5'e geçilmedi, hiçbir strateji eşiği/gate/parametre
-değiştirilmedi, kullanıcı onayı bekleniyor. HARDENING.md Bölüm B/C'ye
-başlanmadı. v7, v1-v6'nın yerini alan TEK geçerli backtest taban çizgisidir.
-EXPANSION.md repoya eklendi (E1-E5 aşamaları tanımlı, HİÇBİRİNE
-BAŞLANMADI — v7/BIST turu önceliklidir, E1 için ayrı başlatma talimatı
-bekleniyor).**
+Son güncelleme: 2026-07-06T13:10:00+03:00 (Europe/Istanbul)
+Şu an: **EXPANSION.md E1 (Veri Temeli) tamamlandı — E1'in kendi durma
+noktasında duruluyor, kullanıcı onayı bekleniyor. BIST hattı (v7, Durma
+Noktası 1) PARALEL olarak hâlâ aynı durumda: Faz 5'e geçilmedi, hiçbir
+strateji eşiği/gate/parametre değiştirilmedi. E2+'a BAŞLANMADI (EXPANSION.md
+Bölüm 0.4 sıralama kilidi: v7 + BIST yeniden-tasarım kararı olmadan
+başlamaz).**
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7) + HARDENING.md
 Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) + Teşhis turu v6
-+ Motor+veri düzeltme turu v7.
-EXPANSION.md (çok piyasalı genişleme: ABD hisseleri + Forex) repoya eklendi,
-CLAUDE.md'ye tek satırlık işaret kondu. E1-E5 aşamaları tanımlı, hiçbirine
-BAŞLANMADI (EXPANSION.md Bölüm 0.4 sıralama kilidi: E2+ ancak v7 turu bitip
-BIST strateji yeniden-tasarım kararı verildikten sonra başlar; E1 dahi ayrı
-bir kullanıcı başlatma talimatı bekliyor).
++ Motor+veri düzeltme turu v7 + EXPANSION.md E1 (Veri Temeli).
 
-Bu oturumda yapılan (onaylı motor+veri düzeltme turu — v7, DIAGNOSTICS_v6.md'nin
-Paket 1 bulgularının düzeltmesi):
+Bu oturumda yapılan (onaylı EXPANSION.md E1 — "E1 onaylandı, başlat" talimatı):
+- **US evren önerisi**: 20 sembol, 8 sektör (Teknoloji, Sağlık, Finans,
+  Enerji, Temel Tüketim, Tüketici Takdiri, İletişim, Sanayi), 2005-01-03'ten
+  itibaren tam tarihçe doğrulandı. Getiriye göre seçim YAPILMADI. Survivorship
+  yanlılığı notu düşüldü (2005'ten bu yana küçülen/iflas eden şirketler
+  evrende YOK — bilinen, kabul edilen sınırlama, gelecekteki backtest
+  sonuçları bunu hesaba katarak yorumlanmalı).
+- **FX seti**: EUR_USD, GBP_USD, USD_JPY (EXPANSION.md Bölüm 1/11.3'ten,
+  spec'in kendi kararı — altın Bölüm 17 #8'e tabi, dahil edilmedi).
+- **`data/adapters/` iskeleti** (YENİ, BIST'e dokunmadan): `base.py`
+  (DataAdapter ABC + AdapterMeta + `relabel_to_local_calendar_day` — v7'nin
+  Istanbul tarih-kayması düzeltmesinin genelleştirilmiş, BAĞIMSIZ hali: NYSE
+  UTC-negatif olduğundan kaymıyor, Londra/FX DST'ye göre bazen kayıyor,
+  fonksiyon her iki rejimi de doğru işliyor); `yf_us.py` (çalışan, testli);
+  `yf_fx.py` (çalışan, testli — **belgelenmiş kaynak sapması**, bkz. aşağı);
+  `oanda.py` (REFERANS implementasyon, CLAUDE.md'nin AlgoLab auth.py
+  emsaliyle tutarlı — practice hesap YOK, canlı test edilmedi, yalnızca
+  fixture'lı JSON-ayrıştırma testi var).
+- **Kaynak kararı (belgelenmiş sapma, Bölüm 17 protokolü)**: OANDA practice
+  hesabı yok, Dukascopy'nin tick endpoint'i bu ortamdan erişilemedi (bağlantı
+  kurulamadı), histdata.com etkileşimli/otomatikleştirilemez. **E1'in FX
+  snapshot'ı `yf_fx.py` (yfinance) ile üretildi** — teknik, konservatif bir
+  karar, dur/sor değil, dokümante edilip ilerlendi (DATA_AUDIT_FX.md'de tam
+  gerekçe).
+- **Snapshot'lar donduruldu**: `data/snapshots/us/2026-07-06/` (20 sembol,
+  5408 satır/sembol) ve `data/snapshots/fx/2026-07-06/` (3 sembol) —
+  `tools/build_snapshot.py` (YENİ, piyasa-parametrik, HARDENING A1'in
+  genelleştirilmiş hali) ile, manifest + sha256 hash'li.
+- **A2 denetimleri**: `tools/data_audit.py` DEĞİŞTİRİLMEDEN (zaten
+  piyasa-parametrik) yeniden kullanıldı. **US: 20/20 PASS/WARN, hiç FAIL yok**
+  — WARN'ların tamamı (BAC 2008-09 kriz dönemi, INTC 2024-08 post-kazanç
+  çöküşü, JPM 2009-01 banka rallisi) gerçek, açıklanabilir piyasa olayları;
+  BIST'teki "bedelli" kör noktasının ABD karşılığı yok (yapısal olarak
+  mevcut değil). **FX: EUR_USD ve GBP_USD FAIL** — İKİSİ DE aynı tarihte
+  (2010-07-01) OHLC iç tutarlılık ihlali (close>high), USD_JPY etkilenmedi.
+  Tesadüf değil, yfinance'in FX veri hattına özgü bir kaynak kusuru — OANDA'nın
+  neden tercih edildiğinin somut kanıtı. DÜZELTİLMEDİ (E1 kapsamı dışı, E2'ye
+  not düşüldü: bu iki sembol backtest'e girmeden önce ele alınmalı).
+- **`data/events.py`** (YENİ, iskelet + örnek çekim): US earnings için
+  `yfinance.get_earnings_dates` test edildi (4 sembol) — **2001-2002'ye kadar
+  tarihçe var, "sığdır" endişesi bu örneklemde DOĞRULANMADI** (Bölüm 17 #4
+  çözüldü). Ekonomik takvim için ForexFactory'nin ücretsiz widget feed'i
+  çalışıyor ama **yalnızca içinde bulunulan hafta, tarihsel arşiv YOK**
+  (Bölüm 17 #5 çözüldü — Bölüm 10.4 fallback protokolü FX ekonomik vetosu
+  için devrede: backtest'te modellenemez, yalnızca canlı/paper'da).
+- **BIST hattında sıfır değişiklik**: `git status`/`git diff` doğrulandı —
+  `data/historical.py`, `data/cleaning.py`, `data/quality.py`, `backtest/`,
+  `strategy/`, `risk/`, `config/config.yaml`, mevcut BIST snapshot'ı ve
+  `requirements.txt`/`.lock` HİÇBİRİ değişmedi (yalnızca yeni dosyalar
+  eklendi). `tools/data_audit.py` da değiştirilmeden yeniden kullanıldı.
+- DATA_AUDIT_US.md + DATA_AUDIT_FX.md yazıldı (evren tablosu, denetim
+  sonuçları, kaynak kararı gerekçesi, events.py bulguları dahil).
+- 256 test yeşil (12 yeni adapter/snapshot/events testi dahil, regresyon yok).
+
+Önceki oturumda yapılan (onaylı motor+veri düzeltme turu — v7, DIAGNOSTICS_v6.md'nin
+Paket 1 bulgularının düzeltmesi, hâlâ geçerli):
 - **Madde 1 — Equity forward-fill** (`backtest/engine.py`): açık pozisyonun o
   gün fiyatı yoksa artık son bilinen kapanışla taşınıyor, 0 sayılmıyor. Test:
   sentetik eksik-gün senaryosunda equity sabit kalıyor.
@@ -166,16 +214,24 @@ Paket 1 bulgularının düzeltmesi):
   adaylarda kazanan/kaybeden ayrımı göstermiyor (küçük örneklem, ön-bulgu).
 - `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
-**Sırada:** Hiçbir şey — burada duruluyor (Durma Noktası 1). Kullanıcının
-kararı bekleniyor. Önerilen (kullanıcı onayı gerekir): Paket 1'in iki bug'ı
-artık DÜZELTİLDİ ve v7'de doğrulandı; kalan gerçek (bug olmayan) zayıflıklar
-— walk-forward OOS performansı ve MC worst-5% sınırda kalması — ile
-DIAGNOSTICS_v6.md Paket 3'ün gate ablasyon bulgusu (trend/regime/rsi izole
-ölçümde değer katmıyor gibi görünüyor) birlikte, artık bir gate/parametre
-yeniden tasarım konuşmasının girdisi olabilir.
+**Sırada:** İki paralel bekleme:
+(a) **BIST hattı**: Durma Noktası 1'de duruluyor. Önerilen (kullanıcı onayı
+gerekir): Paket 1'in iki bug'ı artık DÜZELTİLDİ ve v7'de doğrulandı; kalan
+gerçek (bug olmayan) zayıflıklar — walk-forward OOS performansı ve MC
+worst-5% sınırda kalması — ile DIAGNOSTICS_v6.md Paket 3'ün gate ablasyon
+bulgusu (trend/regime/rsi izole ölçümde değer katmıyor gibi görünüyor)
+birlikte, artık bir gate/parametre yeniden tasarım konuşmasının girdisi
+olabilir.
+(b) **EXPANSION.md**: E1 tamamlandı, kullanıcı onayı bekleniyor. E2 (Motor
+Genelleştirme) ancak "v7 bitti + BIST yeniden-tasarım kararı verildi + E2
+onaylandı" üçlü şartı sağlanınca başlar (Bölüm 0.4 + Bölüm 16) — yani (a)'daki
+karar E2'nin de ön şartı. E1'in kendi açık maddeleri: E2'ye devredilen FX
+OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/GBP_USD) ve lxml'in
+requirements.txt'e eklenip eklenmeyeceği (yalnızca events.py'nin gerçek
+implementasyonu kararlaştırılırsa).
 
 Bilinen sorun/blok:
-1. **Kullanıcı onayı bekleniyor (Durma Noktası 1)** — kasıtlı, aşılamaz kapı.
+1. **Kullanıcı onayı bekleniyor (Durma Noktası 1, BIST)** — kasıtlı, aşılamaz kapı.
 2. ~~v5/v6'nın -%20.74 max drawdown rakamı güvenilir değildi~~ **DÜZELTİLDİ
    (v7): equity forward-fill + hayalet-bar filtresi sonrası gerçek max DD
    -%6.71.** Breaker artık hiç tetiklenmiyor.
@@ -199,6 +255,19 @@ Bilinen sorun/blok:
    değil, ama artık (v7'nin temiz taban çizgisiyle) bir tasarım konuşmasının
    girdisi olabilir.
 9. `.gitignore`'da genel `.env`/`*.log` deseni eksikliği (A3'ten, düşük öncelik).
+10. **FX snapshot'ında EUR_USD/GBP_USD 2010-07-01'de OHLC ihlali** (close>high,
+    yfinance kaynaklı, USD_JPY etkilenmedi) — DÜZELTİLMEDİ (E1 read-only
+    kapsamı dışı), E2'ye not düşüldü: bu iki sembol backtest'e girmeden önce
+    ele alınmalı (aksi halde `data/quality.py::check_quality` bu günü FAIL
+    sayıp o sembolü işlemsiz bırakır — kendi içinde güvenli ama not edilmeli).
+11. **`oanda.py` hiçbir practice hesapla test edilmedi** (referans
+    implementasyon, CLAUDE.md'nin AlgoLab auth.py emsaliyle tutarlı) — E3'te
+    doğrulanacak. E1'in FX snapshot'ı bu modülden değil `yf_fx.py`'den üretildi.
+12. **Ekonomik takvim vetosu (FX) backtest'te modellenemez** — yalnızca
+    içinde bulunulan haftayı veren ücretsiz bir kaynak bulundu, tarihsel
+    arşiv yok (Bölüm 10.4 fallback protokolü devrede, E2+'ta uygulanacak).
+13. US evreni survivorship yanlılığı taşıyor (bilinen, kabul edilen sınırlama
+    — bkz. DATA_AUDIT_US.md).
 
 Önceki fazlardan taşınan varsayımlar: pandas-ta yerine pandas-ta-classic +
 numpy 2.2 (e31e401); BIST seans saatleri yaklaşık; backtest degrade modda;
@@ -208,6 +277,8 @@ precomputed_features (60a6d3f); adx_min=25 (d6ea8fc); 12 sembol evreni +
 2005-01-01 + OHLC tolerans fix'i (dc56ed2); HARDENING.md Bölüm A (eb3b21d);
 breaker backtest entegrasyonu + MC dd_p5 düzeltmesi (c906d10, 53ba4b3); v7
 motor+veri düzeltme turu — equity forward-fill + aynı-gün-çoklu-onay +
-data/cleaning.py + DATA_AUDIT_v2.md + performans (5227438).
+data/cleaning.py + DATA_AUDIT_v2.md + performans (5227438); EXPANSION.md
+eklendi (d0ab81d); E1 veri temeli — US/FX adapter'ları, snapshot'lar,
+DATA_AUDIT_US/FX.md, data/events.py (bu tur).
 
 Limit nedeniyle durdu mu: hayır — Durma Noktası 1 nedeniyle duruldu.
