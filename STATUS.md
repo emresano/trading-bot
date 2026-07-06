@@ -1,14 +1,16 @@
 # Proje Durumu
-Son güncelleme: 2026-07-06T23:05:00+03:00 (Europe/Istanbul)
-Şu an: **Ablasyon turu kapanışı (R1: breaker adli incelemesi + golden
-yeniden mühürleme v7.1-golden) tamamlandı — Durma Noktası 1'de duruluyor.
-Hiçbir eşik/gate/parametre `config.yaml`'da değiştirilmedi, snapshot'lara
-yazılmadı. Faz 5'e/E2'ye geçilmedi. BIST hükmü verildi (KALICI KAYIT 3) —
-E2 ön şartı AÇILDI ama iki durma noktası kullanıcıda kalmaya devam ediyor.**
+Son güncelleme: 2026-07-06T23:55:00+03:00 (Europe/Istanbul)
+Şu an: **S1 — Rejim-Filtreli Çekirdek spike backtest'i (REGIME_CORE_S1.md,
+D1 tasarımının tek-tur değerlendirmesi) tamamlandı — Durma Noktası 1'de
+duruluyor. Hiçbir eşik/gate/parametre değiştirilmedi, `backtest/engine.py`/
+`strategy/`/`risk/`/`config/config.yaml` DOKUNULMADI (git diff boş —
+v7.1-golden çapası otomatik korunuyor). Faz 5'e/E2'ye geçilmedi. Mühürlü
+kabul tablosunda 4 kriterden 2'si GEÇTİ, 2'si dar farkla GEÇMEDİ — karar
+kullanıcının/baş danışmanın.**
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7, v7.1-golden) +
 HARDENING.md Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) +
 Teşhis turu v6 + Motor+veri düzeltme turu v7 + EXPANSION.md E1 (Veri Temeli)
-+ Portföy ablasyon turu (+ kapanış R1).
++ Portföy ablasyon turu (+ kapanış R1) + S1 rejim-filtreli çekirdek spike'ı.
 
 ## KALICI KAYIT 1 — Başarı Çıtası (kullanıcı kararı, 2026-07-06)
 USD bazında CAGR > 0 taban şart; Sharpe > XU100 al-tut Sharpe VE max DD ≤
@@ -36,8 +38,50 @@ DONDURULDU (eşik değişikliği yok, referans + E4/ABD adil testi için
 saklanıyor); yeni yön: rejim-filtreli çekirdek maruziyet (D1 tasarımı); E2 ön
 şartı AÇILDI. İki durma noktası kullanıcıda.
 
-Bu oturumda yapılan (onaylı ablasyon kapanış turu — R1: breaker adli
-incelemesi + golden yeniden mühürleme):
+## KALICI KAYIT 4 — S1 Spike Sonucu (2026-07-06)
+D1 tasarımının (rejim-filtreli çekirdek) tek-tur değerlendirme spike'ı
+tamamlandı — bkz. `REGIME_CORE_S1.md`. **Mühürlü kabul tablosu: 4 kriterden
+2'si GEÇTİ (TRY Sharpe>XU100 Sharpe; uçurum kontrolü temiz), 2'si DAR
+FARKLA GEÇMEDİ** (tam-dönem max DD -%33.50, gerekli ≤-%31.72; OOS
+aylık-Sharpe VE OOS max DD, 12-sembol sepeti al-tut'a karşı her ikisi de
+başarısız). USD CAGR bilgilendirici olarak POZİTİF (+%5.08) ama USD max DD
+çok kötü (-%75.03 — nakit dönemlerinde bile TRY devalüasyonu USD değerini
+eritiyor). Bu bir üretim implementasyonu DEĞİL, bir spike'tı — kabul/red/
+iterasyon kararı kullanıcının/baş danışmanın; bu turda hiçbir parametre
+ayarı yapılmadı.
+
+Bu oturumda yapılan (onaylı S1 spike backtest'i — D1 tasarımının tek-tur testi):
+- **Madde 1 — `backtest/regime_core.py`** (YENİ, tamamen bağımsız
+  simülatör — `backtest/engine.py`/`strategy/`/`risk/`/`config/config.yaml`'a
+  dokunmuyor/bağımlı değil): 12 sembol eşit ağırlık kompozit (t0=2005-01-03,
+  0 forward-fill olayı), asimetrik histerezis rejim sinyali (giriş MA(200)×
+  1.01 üstünde 3 gün teyitli, çıkış MA(200)×0.99 altında tek gün), t+1
+  KAPANIŞ yürütme (ana motorun t+1 AÇILIŞ kuralından kasıtlı farklı — bu
+  spike'ın kendi kuralı), breaker yok (bilinçli). `config/regime_core.yaml`
+  (YENİ) + `tools/run_regime_core.py` (YENİ CLI). 23 yeni birim testi
+  (kompozit, histerezis, t+1 yürütme, komisyon, negatif-cash yokluğu,
+  determinizm — hepsi yeşil).
+- **Madde 2 — 4 koşum + 3 benchmark**: Ana koşum (N=200/b=%1/M=3, tam
+  dönem): CAGR %23.94, Sharpe 1.064, max DD -%33.50, time-in-market %72.4,
+  67 anahtarlama. Benchmark'lar: XU100 al-tut (Sharpe 0.851, maxDD -%63.43),
+  12-sembol sepeti al-tut/filtresiz (Sharpe 1.184, maxDD -%64.22 — filtrenin
+  katma değerinin asıl ölçüsü). Walk-forward: 39 pencere (config'teki AYNI
+  24ay/6ay/6ay takvimi, parametre optimizasyonu YOK), OOS aylık-Sharpe
+  0.9505 (sepete karşı 0.9723), OOS max DD -%30.30 (sepete karşı -%56.23).
+  Monte Carlo (aylık getiri permütasyonu): dd_p5 -%48.57. Uçurum kontrolü
+  grid'i (36 kombinasyon, seçim için değil): komşuluk sürekli, uçurum yok.
+- **Madde 3 — En kötü 5 DD epizodu, 6 bilinen kriz yılının (2008, 2011,
+  2013, 2018, 2020, 2021) TAMAMIYLA örtüştüğü doğrulandı** (2008 ve 2020,
+  daha büyük epizotların İÇİNDE 2006-2009 ve 2018-2020 olarak birleşik
+  görünüyor). En kötü epizot (2024-2025, -%26.90) bilinen kriz takviminde
+  YOK — yeni/güncel, ayrıca not edildi.
+- `REGIME_CORE_S1.md` yazıldı (a-g bölümleri + mühürlü kabul tablosu).
+- 299 test yeşil (23 yeni regime_core/run_regime_core testi dahil,
+  regresyon yok). `git diff backtest/engine.py strategy/ risk/
+  config/config.yaml` BOŞ — bağımsızlık kanıtlandı.
+
+Önceki oturumda yapılan (onaylı ablasyon kapanış turu — R1: breaker adli
+incelemesi + golden yeniden mühürleme, hâlâ geçerli):
 - **Madde 1 — Breaker adli incelemesi (read-only, `trace=` ile 4 varyantın
   ana koşumu yeniden çalıştırıldı — walk-forward/MC/sweep DEĞİL):** 4/4
   tetiklenme **"GERÇEK DRAWDOWN"** olarak sınıflandırıldı — hiçbiri v7'nin
@@ -313,23 +357,21 @@ Paket 1 bulgularının düzeltmesi, hâlâ geçerli):
   adaylarda kazanan/kaybeden ayrımı göstermiyor (küçük örneklem, ön-bulgu).
 - `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
-**Sırada:** BIST hükmü verildi (KALICI KAYIT 3) — bu, önceki "gate ablasyonu
-mu düzeltir mi" belirsizliğini KAPATIYOR: 10-gate ailesi B-yolu olarak
-reddedildi, huni dondu (referans olarak kalıyor), yeni yön rejim-filtreli
-çekirdek maruziyet (D1 tasarımı). **Ama iki durma noktası hâlâ kullanıcıda**
-— "E2 ön şartı açıldı" ifadesi E2'nin OTOMATİK başlayacağı anlamına gelmiyor;
-Durma Noktası 1 (Faz 5'e geçiş) ve genel "E2 onaylandı" kullanıcı talimatı
-(EXPANSION.md Bölüm 16) hâlâ ayrı ayrı gerekiyor. Üç paralel konu:
-(a) **BIST hattı**: D1 tasarımının (rejim-filtreli çekirdek maruziyet)
-kendisi henüz YAZILMADI — bu, hükmün SONUCU, sıradaki iş değil, ayrı bir
-tasarım turu bekliyor.
-(b) **EXPANSION.md**: E1 tamamlandı. E2 ön şartı (v7 + BIST karar) artık
-sağlandı, ama "E2 onaylandı" talimatı hâlâ ayrı gerekiyor. E1'in açık
-maddeleri: FX OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/GBP_USD), lxml
-kararı.
-(c) **Ablasyon turu (R1 dahil)**: TAMAMLANDI. Breaker adli incelemesi
-sonuçlandı (4/4 "gerçek drawdown", bkz. ABLATION_PORTFOLIO.md eki). Golden
-v7.1'e mühürlendi. Açık madde yok.
+**Sırada:** D1 tasarımının S1 spike'ı sonuçlandı (KALICI KAYIT 4) — 2/4
+mühürlü kriter geçti, 2/4 dar farkla geçmedi. **Bu, D1'i otomatik olarak
+kabul VEYA red ETMİYOR** — sonuç kullanıcının/baş danışmanın değerlendirmesini
+bekliyor: (i) mevcut parametrelerle kabul (dar farkla kaçırılan kriterler
+göz ardı edilebilir mi?), (ii) D2 iterasyonu (farklı bir tasarım denemesi —
+bu turun uçurum-kontrolü grid'i SEÇİM için kullanılamaz, yeni bir D-tasarımı
+gerekir), (iii) üretim implementasyonuna geçiş (kabul edilirse, ayrı onaylı
+turda "backtest=canlı" ilkesiyle). Hiçbiri OTOMATİK değil. Üç paralel konu:
+(a) **BIST hattı**: D1'in S1 spike'ı bitti, sonucu değerlendirme bekliyor.
+Kabul edilirse bile üretim implementasyonu (main.py/PaperBroker entegrasyonu)
+ayrı bir onaylı tur.
+(b) **EXPANSION.md**: E1 tamamlandı. E2 ön şartı (v7 + BIST karar) sağlandı,
+ama "E2 onaylandı" talimatı hâlâ ayrı gerekiyor. E1'in açık maddeleri: FX
+OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/GBP_USD), lxml kararı.
+(c) **Ablasyon turu (R1 dahil) + S1 spike**: TAMAMLANDI. Açık madde yok.
 
 Bilinen sorun/blok:
 1. **Kullanıcı onayı bekleniyor (Durma Noktası 1, BIST)** — kasıtlı, aşılamaz kapı.
