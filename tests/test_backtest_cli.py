@@ -138,6 +138,40 @@ def test_stamps_absent_by_default(tmp_path):
     assert "Git commit" not in content
 
 
+# --- Veri temizleme raporlaması (v7 harness düzeltme turu) ---
+
+def test_ghost_bars_removed_reported_and_written_to_csv(tmp_path):
+    cfg = make_cfg()
+    df = _flat_series()
+    ghost_log = [
+        {"symbol": "EREGL", "date": pd.Timestamp("2024-04-08", tz="UTC"),
+         "reason": "tek-sembolde-var + volume=0 + OHLC≈onceki_kapanis (hayalet bar)"},
+    ]
+    generate_report(["TEST"], cfg, lambda s: df, tmp_path, ghost_bars_removed=ghost_log)
+    content = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "1 hayalet bar elendi" in content
+    assert (tmp_path / "ghost_bars_removed.csv").exists()
+    csv_content = (tmp_path / "ghost_bars_removed.csv").read_text(encoding="utf-8")
+    assert "EREGL" in csv_content
+
+
+def test_ghost_bars_removed_zero_reported_without_csv_file(tmp_path):
+    cfg = make_cfg()
+    df = _flat_series()
+    generate_report(["TEST"], cfg, lambda s: df, tmp_path, ghost_bars_removed=[])
+    content = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "0 hayalet bar elendi" in content
+    assert not (tmp_path / "ghost_bars_removed.csv").exists()
+
+
+def test_ghost_bars_removed_absent_by_default(tmp_path):
+    cfg = make_cfg()
+    df = _flat_series()
+    generate_report(["TEST"], cfg, lambda s: df, tmp_path)
+    content = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "hayalet bar" not in content
+
+
 # --- Monte Carlo kırmızı bayrağı: worst-5% (dd_p5), dd_p95 DEĞİL (harness düzeltme turu) ---
 
 def test_monte_carlo_red_flag_uses_worst_5_percent_not_best_case(tmp_path, monkeypatch):

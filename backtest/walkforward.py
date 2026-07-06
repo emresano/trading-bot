@@ -2,9 +2,11 @@
 from __future__ import annotations
 import copy
 import dataclasses
+import itertools
 from dataclasses import dataclass, field
 from itertools import product
-from typing import Callable
+from pathlib import Path
+from typing import Callable, Optional
 
 import pandas as pd
 
@@ -98,6 +100,7 @@ def run_walk_forward(
     symbols: list[str],
     cfg,
     load_daily: Callable[[str], pd.DataFrame],
+    breaker_dir: Optional[Path] = None,
 ) -> list[WindowResult]:
     """Bölüm 12.5: her pencerede train diliminde 27 kombinasyonluk grid taraması,
     komşu-sağlamlık kriteriyle parametre seçimi, test diliminde o parametreyle koşum.
@@ -114,8 +117,21 @@ def run_walk_forward(
     pencerede sıfırdan build_features) test dilimlerinin (6 ay ≈ 131 gün,
     min_history_bars=260'ın altında) hiçbir zaman trade üretememesine yol
     açıyordu; bu artık düzeltildi.
-    """
+
+    `breaker_dir`: verilirse (performans turu, v7), bu fonksiyonun yaptığı
+    ÇOK sayıda `run_backtest` çağrısının (pencere sayısı × 27 kombinasyon + test
+    koşumu) HER BİRİ kendi geçici dizinini açıp silmek yerine, bu paylaşılan
+    dizin İÇİNDE benzersiz bir dosya yolu alır — breaker durumu çağrılar
+    arasında yine tam olarak İZOLE kalır (yalnızca dizin oluşturma/silme yükü
+    tek seferde ödenir, `backtest/cli.py::generate_report` tarafından).
+    Verilmezse (varsayılan) her `run_backtest` çağrısı kendi izole geçici
+    dizinini açar (eski davranış, geriye dönük uyumlu)."""
     combos = sweep_combinations()
+    _breaker_counter = itertools.count()
+
+    def _next_breaker_file() -> Optional[Path]:
+        return (breaker_dir / f"BREAKER_{next(_breaker_counter)}") if breaker_dir is not None else None
+
     daily_raw = {s: load_daily(s) for s in symbols}
     non_empty_raw = [df.index for df in daily_raw.values() if not df.empty]
     if not non_empty_raw:
@@ -145,7 +161,7 @@ def run_walk_forward(
         for combo in combos:
             combo_cfg = apply_params(cfg, combo)
             bt = run_backtest(symbols, combo_cfg, precomputed_features=base_features,
-                              date_range=(train_start, train_end))
+                              date_range=(train_start, train_end), breaker_file=_next_breaker_file())
             train_results[tuple(combo[k] for k in SWEEP_KEYS)] = compute_metrics(bt.equity_curve, bt.trades)
 
         chosen = select_robust_params(train_results)
@@ -154,7 +170,7 @@ def run_walk_forward(
 
         chosen_cfg = apply_params(cfg, chosen)
         test_bt = run_backtest(symbols, chosen_cfg, precomputed_features=base_features,
-                               date_range=(test_start, test_end))
+                               date_range=(test_start, test_end), breaker_file=_next_breaker_file())
         test_metrics = compute_metrics(test_bt.equity_curve, test_bt.trades)
         train_metrics = train_results[tuple(chosen[k] for k in SWEEP_KEYS)]
 

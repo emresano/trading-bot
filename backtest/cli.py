@@ -2,7 +2,10 @@
 from __future__ import annotations
 import argparse
 import hashlib
+import itertools
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -56,12 +59,20 @@ def _regime_breakdown_table(rows: pd.DataFrame) -> list[str]:
     return lines
 
 
-def _write_sweep_csv(symbols: list[str], cfg, load_daily, path: Path) -> list[dict]:
+def _write_sweep_csv(symbols: list[str], cfg, load_daily, path: Path,
+                     breaker_dir: Optional[Path] = None) -> list[dict]:
+    """`breaker_dir`: verilirse (performans turu, v7) 27 kombinasyonun HER BİRİ
+    kendi geçici dizinini açıp silmek yerine bu paylaşılan dizin içinde
+    benzersiz bir dosya yolu alır (breaker durumu yine kombinasyonlar arasında
+    İZOLE kalır). Verilmezse eski davranış (her çağrı kendi izole dizinini
+    açar) korunur."""
     combos = sweep_combinations()
+    breaker_counter = itertools.count()
     rows = []
     for combo in combos:
         combo_cfg = apply_params(cfg, combo)
-        bt = run_backtest(symbols, combo_cfg, load_daily)
+        breaker_file = (breaker_dir / f"BREAKER_sweep_{next(breaker_counter)}") if breaker_dir is not None else None
+        bt = run_backtest(symbols, combo_cfg, load_daily, breaker_file=breaker_file)
         m = compute_metrics(bt.equity_curve, bt.trades)
         rows.append({
             **combo, "total_return": m.total_return, "cagr": m.cagr,
@@ -85,11 +96,21 @@ def generate_report(
     do_benchmark: bool = False,
     benchmark_loader: Optional[Callable[[], pd.DataFrame]] = None,
     stamps: Optional[dict] = None,
+    ghost_bars_removed: Optional[list[dict]] = None,
 ) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    result = run_backtest(symbols, cfg, load_daily)
+    # Performans turu (v7): bu fonksiyonun tetiklediği TÜM run_backtest çağrıları
+    # (ana koşum + walk-forward'ın pencere×27-kombinasyon çağrıları + sweep'in 27
+    # çağrısı — v6'da ~6.5 saatlik koşumun büyük kısmı buradaki tempfile
+    # oluştur/sil yükünden kaynaklanıyordu) TEK bir paylaşılan geçici dizini
+    # paylaşır; her çağrı yine de İÇİNDE kendi benzersiz dosya yolunu alır, yani
+    # breaker durumu çağrılar arasında hâlâ tam İZOLE kalır — yalnızca dizin
+    # oluşturma/silme işlemi tek seferde yapılır.
+    breaker_dir = Path(tempfile.mkdtemp(prefix="backtest_cli_breaker_"))
+
+    result = run_backtest(symbols, cfg, load_daily, breaker_file=breaker_dir / "BREAKER_main")
     metrics = compute_metrics(result.equity_curve, result.trades)
 
     _write_trades_csv(result.trades, out_dir / "trades.csv")
@@ -102,6 +123,14 @@ def generate_report(
         lines.append(f"Git commit: {stamps.get('git_commit', 'N/A')}")
         lines.append(f"Config hash (sha256): {stamps.get('config_hash', 'N/A')}")
         lines.append(f"Snapshot manifest hash (sha256): {stamps.get('snapshot_manifest_hash', 'N/A (snapshot kullanılmadı)')}")
+        lines.append("")
+    if ghost_bars_removed is not None:
+        if ghost_bars_removed:
+            pd.DataFrame(ghost_bars_removed).to_csv(out_dir / "ghost_bars_removed.csv", index=False)
+        lines.append(
+            f"Veri temizleme (data/cleaning.py): {len(ghost_bars_removed)} hayalet bar elendi "
+            f"(detay: ghost_bars_removed.csv). Tarihler Istanbul takvim gününe normalize edildi."
+        )
         lines.append("")
     lines += [
              "## Özet Metrikler (tüm dönem)",
@@ -129,7 +158,7 @@ def generate_report(
 
     wf_results = None
     if do_walk_forward:
-        wf_results = run_walk_forward(symbols, cfg, load_daily)
+        wf_results = run_walk_forward(symbols, cfg, load_daily, breaker_dir=breaker_dir)
         acceptance = evaluate_acceptance(wf_results)
         lines.append("## Walk-Forward")
         for r in wf_results:
@@ -176,7 +205,8 @@ def generate_report(
 
     sweep_rows = None
     if do_sweep:
-        sweep_rows = _write_sweep_csv(symbols, cfg, load_daily, out_dir / "sweep_results.csv")
+        sweep_rows = _write_sweep_csv(symbols, cfg, load_daily, out_dir / "sweep_results.csv",
+                                      breaker_dir=breaker_dir)
         lines.append(f"## Parametre Taraması: {len(sweep_rows)} kombinasyon tamamlandı, sweep_results.csv'ye yazıldı.")
         lines.append("")
 
@@ -203,6 +233,8 @@ def generate_report(
                      "tam kontrol listesini elle gözden geçir).")
 
     (out_dir / "report.md").write_text("\n".join(lines), encoding="utf-8")
+
+    shutil.rmtree(breaker_dir, ignore_errors=True)
 
     return {
         "metrics": metrics, "result": result, "wf_results": wf_results,
@@ -269,6 +301,10 @@ def main() -> None:
                         help="Dondurulmuş bir snapshot dizini (örn. data/snapshots/2026-07-06) — "
                              "verilirse ağdan indirme YOK, yalnızca <SEMBOL>.parquet dosyaları okunur. "
                              "Verilmezse mevcut davranış (data/historical cache) aynen korunur.")
+    parser.add_argument("--no-clean", action="store_true",
+                        help="data/cleaning.py'nin hayalet-bar filtresi + tarih normalizasyonunu "
+                             "ATLA (yalnızca eski v1-v6 davranışıyla karşılaştırma/hata ayıklama "
+                             "amaçlı — v7+ varsayılanı temizlemedir).")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -277,13 +313,29 @@ def main() -> None:
     if args.snapshot:
         snapshot_dir = Path(args.snapshot)
 
-        def _load_daily(s: str):
+        def _load_daily_raw(s: str):
             df = pd.read_parquet(snapshot_dir / f"{s}.parquet")
             return df.loc[args.start_date:] if args.start_date else df
     else:
-        def _load_daily(s: str):
+        def _load_daily_raw(s: str):
             df = load_cached(s, "1d")
             return df.loc[args.start_date:] if args.start_date else df
+
+    ghost_bars_removed: list[dict] = []
+    if args.no_clean:
+        def _load_daily(s: str):
+            return _load_daily_raw(s)
+    else:
+        # Veri temizleme katmanı (v7 harness düzeltme turu, DIAGNOSTICS_v6.md Paket 1):
+        # kaynak parquet dosyalarına DOKUNMAZ, yalnızca bellek-içi kopyayı düzeltir.
+        # Tüm evren AYNI ANDA temizlenir (hayalet-bar tespiti çapraz-sembol bilgisi
+        # gerektirir), sonra her sembol için sabit bir sözlükten okunur.
+        from data.cleaning import load_and_clean_universe
+
+        cleaned, ghost_bars_removed = load_and_clean_universe(symbols, _load_daily_raw)
+
+        def _load_daily(s: str):
+            return cleaned[s]
 
     benchmark_loader = None
     if args.benchmark:
@@ -302,7 +354,7 @@ def main() -> None:
         do_walk_forward=args.walk_forward, do_monte_carlo=args.monte_carlo,
         do_regime_split=args.regime_split, do_sweep=args.sweep,
         do_benchmark=args.benchmark, benchmark_loader=benchmark_loader,
-        stamps=stamps,
+        stamps=stamps, ghost_bars_removed=ghost_bars_removed,
     )
     print(f"Rapor yazıldı: {Path(args.out) / 'report.md'}")
 

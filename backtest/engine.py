@@ -1,9 +1,10 @@
 # backtest/engine.py
 from __future__ import annotations
+import contextlib
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 import pandas as pd
 
@@ -11,6 +12,21 @@ from core.models import AccountState, Position, SignalAction, TradeDecision
 from indicators.engine import build_features
 from risk.risk_engine import check_and_trip_breaker, historical_correlation, size_and_approve
 from strategy.signal_engine import evaluate_entry, evaluate_exit
+
+
+@contextlib.contextmanager
+def _resolve_breaker_file(breaker_file: Optional[Path]) -> Iterator[Path]:
+    """`breaker_file` verilmişse (walk-forward/sweep gibi run_backtest'i YÜZLERCE
+    kez çağıran çağıranların, CLI çağrısı başına TEK bir geçici dizin açıp her
+    çağrıya kendi dosya YOLUNU vermesi için — performans turu, v7) doğrudan onu
+    kullanır, hiçbir dizin oluşturmaz/silmez. Verilmemişse (varsayılan, geriye
+    dönük uyumlu davranış) eskisi gibi İZOLE bir geçici dizin açar ve döndükten
+    sonra siler."""
+    if breaker_file is not None:
+        yield breaker_file
+    else:
+        with tempfile.TemporaryDirectory(prefix="backtest_breaker_") as tmp_dir:
+            yield Path(tmp_dir) / "BREAKER_TRIPPED"
 
 
 @dataclass
@@ -59,6 +75,7 @@ def run_backtest(
     date_range: Optional[tuple[pd.Timestamp, pd.Timestamp]] = None,
     precomputed_features: Optional[dict[str, pd.DataFrame]] = None,
     trace: Optional[list] = None,
+    breaker_file: Optional[Path] = None,
 ) -> BacktestResult:
     """Event-driven, bar-bazlı backtest motoru (Bölüm 12.2).
 
@@ -91,6 +108,14 @@ def run_backtest(
     tetiklendi mi, açık pozisyonların anlık notional değerleri) bu listeye
     eklenir. Hiçbir hesaplamayı DEĞİŞTİRMEZ — yalnızca zaten hesaplanan
     değerleri gözlemler (DIAGNOSTICS_v6.md, Paket 1).
+
+    `breaker_file`: verilmezse (varsayılan) bu çağrı kendi İZOLE geçici dizinini
+    açar/siler (eski davranış — tek çağrılık kullanımlar için doğru ve basit).
+    Walk-forward/sweep gibi run_backtest'i YÜZLERCE kez art arda çağıran
+    çağıranlar performans için KENDİ paylaşılan geçici dizinlerini bir kez açıp
+    her çağrıya İÇİNDE farklı bir dosya YOLU vermelidir (breaker durumu yine
+    çağrılar arasında İZOLE kalır — yalnızca dizin oluşturma/silme yükü tek
+    seferde ödenir). Bkz. `backtest/cli.py::generate_report` (v7 performans turu).
     """
     initial_equity = initial_equity if initial_equity is not None else cfg.backtest.initial_equity
 
@@ -117,6 +142,7 @@ def run_backtest(
     equity_points: list[tuple[pd.Timestamp, float]] = []
     decision_log: list[dict] = []
     breaker_trips: list[dict] = []
+    last_known_close: dict[str, float] = {}
 
     peak_equity = initial_equity
     trade_pnls: list[tuple[pd.Timestamp, float]] = []
@@ -146,10 +172,20 @@ def run_backtest(
     # (aksi halde eşzamanlı backtest koşuları veya bir canlı bot birbirinin breaker
     # durumunu kirletirdi). Kullanılan fonksiyon (check_and_trip_breaker/
     # size_and_approve) paper/real ile BİREBİR AYNI — yalnızca dosya yolu farklı.
-    with tempfile.TemporaryDirectory(prefix="backtest_breaker_") as tmp_dir:
-        breaker_file = Path(tmp_dir) / "BREAKER_TRIPPED"
+    with _resolve_breaker_file(breaker_file) as breaker_file:
 
         for date in all_dates:
+            # Fiyat önbelleğini bugün verisi olan sembollerle güncelle. `all_dates`
+            # sembollerin BİRLEŞİMİ olduğundan (bkz. yukarıdaki yorum), bazı günler
+            # yalnızca BİR sembolde veri bulunabilir (örn. bir veri artefaktı/tatil
+            # uyuşmazlığı) — bu durumda diğer sembollerin equity katkısı, o günkü
+            # (yok) fiyat yerine SON BİLİNEN kapanışla taşınır (0 SAYILMAZ). Bu,
+            # DIAGNOSTICS_v6.md Paket 1'de bulunan equity-sıfırlama bug'ının
+            # düzeltmesidir.
+            for s, df in daily_features.items():
+                if date in df.index:
+                    last_known_close[s] = float(df.loc[date]["close"])
+
             # --- 0. Önceki barın sinyaliyle planlanmış işlemleri BUGÜNÜN açılışında doldur ---
             for symbol in list(pending_exits):
                 df = daily_features[symbol]
@@ -223,9 +259,11 @@ def run_backtest(
                     pending_exits.add(symbol)
 
             # --- 3. Pozisyonsuz semboller için giriş sinyali (t+1 açılışında giriş planla) ---
+            # last_known_close her açık pozisyon için garantilidir: bir pozisyon yalnızca
+            # date in df.index olan bir günde açılabildiğinden (bkz. giriş fill bloğu),
+            # last_known_close en azından giriş günündeki fiyatla önceden doldurulmuştur.
             equity_today = cash + sum(
-                daily_features[s].loc[date]["close"] * p.quantity
-                for s, p in positions.items() if date in daily_features[s].index
+                last_known_close[s] * p.quantity for s, p in positions.items()
             )
 
             acct = AccountState(
@@ -262,8 +300,9 @@ def run_backtest(
                     "positions": {
                         s: {
                             "quantity": p.quantity,
-                            "close": float(daily_features[s].loc[date]["close"]) if date in daily_features[s].index else None,
-                            "notional": float(daily_features[s].loc[date]["close"]) * p.quantity if date in daily_features[s].index else None,
+                            "close": last_known_close[s],
+                            "notional": last_known_close[s] * p.quantity,
+                            "price_is_stale": date not in daily_features[s].index,
                             "entry_price": p.entry_price,
                             "entry_date": p.entry_date,
                         }
@@ -272,7 +311,21 @@ def run_backtest(
                 })
 
             corr_fn = _make_corr_fn(date)
-            for symbol in symbols:
+            # Bugün içinde onaylanan (ama henüz t+1 açılışında dolmamış) adaylar
+            # bu listeye HEMEN eklenir — böylece aynı gün değerlendirilen sonraki
+            # adaylar, o an SANKİ pozisyon zaten açılmış gibi doğru
+            # max_open_positions/korelasyon durumunu görür (DIAGNOSTICS_v6.md
+            # Paket 1, "aynı-gün-çoklu-onay" bug'ı: önceden her aday, günün
+            # BAŞINDAKİ sabit `acct` snapshot'ına karşı bağımsız değerlendirilip
+            # limit dolu olsa bile birden fazla aday onaylanabiliyordu).
+            positions_snapshot: list[Position] = [
+                Position(s, p.quantity, p.entry_price, p.stop_price, p.target_price, p.entry_date)
+                for s, p in positions.items()
+            ]
+            # Aday değerlendirme sırası DETERMİNİSTİK (alfabetik sembol sırası).
+            # Faz 5'in canlı/paper döngüsü de AYNI sırayı kullanmalı — aksi halde
+            # backtest'in "kim önce onaylanır" davranışı canlıda tekrarlanamaz.
+            for symbol in sorted(symbols):
                 if symbol in positions or symbol in pending_entries:
                     continue
                 df = daily_features[symbol]
@@ -286,9 +339,20 @@ def run_backtest(
                 decision_log.append({"date": date, "symbol": symbol, "action": sig.action.value, "mode": "degrade"})
                 if sig.action != SignalAction.ENTER_LONG:
                     continue
-                decision = size_and_approve(sig, acct, cfg, corr_fn, breaker_file=breaker_file)
+                acct_today = AccountState(
+                    equity=equity_today, cash=cash,
+                    positions=positions_snapshot,
+                    peak_equity=peak_equity,
+                    realized_pnl_today=_closed_pnls_on(date),
+                    realized_pnl_week=_closed_pnls_this_week(date),
+                )
+                decision = size_and_approve(sig, acct_today, cfg, corr_fn, breaker_file=breaker_file)
                 if decision.approved:
                     pending_entries[symbol] = decision
+                    positions_snapshot.append(
+                        Position(symbol, decision.quantity, sig.entry_ref_price,
+                                decision.stop_price, decision.target_price, date)
+                    )
 
             # --- 4. Equity snapshot ---
             peak_equity = max(peak_equity, equity_today)

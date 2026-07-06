@@ -314,6 +314,109 @@ def test_breaker_trips_on_correct_bar_and_blocks_subsequent_entries():
     assert len(result.trades) == 1  # hâlâ yalnızca ilk (stop'lanan) trade var
 
 
+def test_equity_forward_fills_missing_price_instead_of_zeroing_position():
+    """DIAGNOSTICS_v6.md Paket 1 bulgusu / v7 düzeltmesi: `all_dates` sembollerin
+    BİRLEŞİMİ olduğundan, bir sembolde (GHOST) veri olup diğerinde (REAL,
+    pozisyon açıkken) olmadığı bir gün, engine'in equity hesabına dahil olur.
+    Bu durumda REAL'in katkısı SIFIRLANMAMALI — son bilinen kapanışla
+    taşınmalı (equity o gün büyük bir sahte düşüş göstermemeli)."""
+    cfg = make_cfg()
+    base = _pretrigger_bars()  # seed=13 varsayılan: ENTER_LONG, entry~116.88, stop~114.31
+    real_full = _extend(base, [
+        dict(open=120.0, high=121.0, low=119.0, close=120.5, volume=1000.0),  # fill günü (t+1 açılış)
+        dict(open=120.5, high=121.5, low=119.5, close=120.8, volume=1000.0),
+        dict(open=120.8, high=121.8, low=119.8, close=121.0, volume=1000.0),  # REAL'den DÜŞÜRÜLECEK
+        dict(open=121.0, high=122.0, low=120.0, close=121.3, volume=1000.0),
+    ])
+    missing_date = real_full.index[-2]
+    prev_date = real_full.index[real_full.index.get_loc(missing_date) - 1]
+    real_with_gap = real_full.drop(index=missing_date)
+
+    # GHOST: düz (trend'siz) bir seri, REAL'in eksik bıraktığı tarih dahil TÜM
+    # tarihleri kapsar; ADX'i düşük tutup hiçbir zaman ENTER_LONG üretmemesi
+    # için tasarlandı (yalnızca all_dates birleşimini genişletmek için var).
+    ghost_dates = pd.date_range(real_full.index[0], periods=len(real_full), freq="1D", tz="UTC")
+    ghost_df = pd.DataFrame(
+        {"open": 50.0, "high": 50.05, "low": 49.95, "close": 50.0, "volume": 500.0},
+        index=ghost_dates,
+    )
+
+    trace: list = []
+    result = run_backtest(
+        ["REAL", "GHOST"], cfg,
+        lambda s: real_with_gap if s == "REAL" else ghost_df,
+        trace=trace,
+    )
+
+    assert len(result.trades) == 0  # pozisyon test boyunca hiç kapanmadı (stop/target'a değmedi)
+
+    trace_by_date = {t["date"]: t for t in trace}
+    assert missing_date in trace_by_date, "GHOST verisi sayesinde missing_date all_dates'te olmalı"
+
+    missing_entry = trace_by_date[missing_date]
+    assert "REAL" in missing_entry["positions"]
+    real_pos = missing_entry["positions"]["REAL"]
+    assert real_pos["price_is_stale"] is True
+    assert real_pos["close"] == pytest.approx(120.8)  # prev_date'in kapanışı, 0 DEĞİL
+
+    expected_equity = missing_entry["cash"] + real_pos["close"] * real_pos["quantity"]
+    assert missing_entry["equity"] == pytest.approx(expected_equity)
+    # Düzeltmeden önceki bug: equity == cash (pozisyon sıfırlanmış) olurdu.
+    assert missing_entry["equity"] != pytest.approx(missing_entry["cash"])
+
+    prev_entry = trace_by_date[prev_date]
+    # Fiyat neredeyse hiç değişmedi (120.8 sabit taşındı) -> equity de neredeyse sabit kalmalı,
+    # düzeltmeden önceki gibi cash'e (büyük bir sahte düşüşle) çökmemeli.
+    assert missing_entry["equity"] == pytest.approx(prev_entry["equity"], rel=1e-6)
+
+
+def test_same_day_multiple_candidates_respects_max_open_positions():
+    """DIAGNOSTICS_v6.md Paket 1'in ikinci bug'ı: aynı gün 2'den fazla aday
+    ENTER_LONG üretirse ve `max_open_positions` limiti daha az slotluysa,
+    yalnızca alfabetik sırada İLK `max_open_positions` kadarı onaylanmalı —
+    hepsi bağımsızca günün BAŞINDAKİ sabit acct snapshot'ına karşı
+    değerlendirilip limiti aşmamalı."""
+    # max_position_notional_pct/risk_per_trade_pct gerçekçi (config.yaml) değerlere
+    # çekildi ki her pozisyon cash'in küçük bir kısmını kullansın — aksi halde
+    # make_cfg()'nin test-varsayılanlarıyla TEK pozisyon bile cash'in neredeyse
+    # tamamını tüketip ikinci onaylanan adayın fiilen dolmasını (ayrı, burada
+    # test edilmeyen bir nakit-yetersizliği durumu) engelleyebiliyor.
+    cfg = make_cfg(max_open_positions=2, max_position_notional_pct=0.25, risk_per_trade_pct=0.0075)
+
+    def make_symbol(seed: int, fill_open: float) -> pd.DataFrame:
+        base = _pretrigger_bars(seed=seed)  # 45 bar, son barda ENTER_LONG (tüm semboller AYNI tarihte)
+        return _extend(base, [
+            dict(open=fill_open, high=fill_open + 0.5, low=fill_open - 0.3, close=fill_open + 0.2, volume=1000.0),
+        ])
+
+    # entry~stop mesafeleri (bkz. yukarıdaki debug): seed=1 ~107.03/104.66,
+    # seed=13 ~116.88/114.31, seed=28 ~107.74/105.11 — fill_open, entry'nin
+    # ~1 üzerinde, stop'tan güvenli mesafede, target'ın (hepsi entry+~5-6) çok altında.
+    data = {
+        "AAA": make_symbol(1, 108.0),
+        "BBB": make_symbol(13, 118.0),
+        "CCC": make_symbol(28, 109.0),
+    }
+    trace: list = []
+    result = run_backtest(list(data.keys()), cfg, lambda s: data[s], trace=trace)
+
+    signal_date = data["AAA"].index[-2]  # 45. (son pretrigger) barın tarihi — sinyal/onay günü
+    fill_date = data["AAA"].index[-1]     # t+1 açılışı, üçünde de aynı tarih
+
+    approvals_on_signal_date = {
+        d["symbol"] for d in result.decision_log
+        if d["date"] == signal_date and d["action"] == "ENTER_LONG"
+    }
+    assert approvals_on_signal_date == {"AAA", "BBB", "CCC"}, \
+        "test anlamsızsa (üçü de sinyal üretmiyorsa) buradan anlaşılır"
+
+    trace_by_date = {t["date"]: t for t in trace}
+    opened_symbols = set(trace_by_date[fill_date]["positions"].keys())
+    assert opened_symbols == {"AAA", "BBB"}, \
+        f"yalnızca alfabetik ilk 2 aday onaylanmalıydı (limit=2), açılan: {opened_symbols}"
+    assert len(opened_symbols) <= cfg.risk.max_open_positions
+
+
 def test_trace_hook_does_not_change_results_and_captures_expected_fields():
     """trace parametresi salt-okunur bir gözlem kancasıdır — verilmesi backtest
     sonucunu (trades/equity_curve) hiçbir şekilde değiştirmemeli (DIAGNOSTICS_v6.md
@@ -336,3 +439,35 @@ def test_trace_hook_does_not_change_results_and_captures_expected_fields():
     last_entry = trace[-1]
     assert set(["date", "cash", "equity", "peak_equity_seen_by_breaker",
                "drawdown_seen_by_breaker", "breaker_tripped_today", "positions"]) <= set(last_entry.keys())
+
+
+def test_explicit_breaker_file_is_used_directly_and_left_for_caller_to_clean(tmp_path):
+    """Performans turu (v7): `breaker_file` verilirse run_backtest KENDİ geçici
+    dizinini AÇMAMALI/SİLMEMELİ — doğrudan verilen yolu kullanmalı (çağıran,
+    CLI çağrısı başına TEK paylaşılan dizini kendi açıp/kapatır)."""
+    cfg = make_cfg()
+    cfg.risk.max_drawdown_breaker_pct = 0.01
+    base1 = _pretrigger_bars(seed=13)
+    stop_bar = pd.DataFrame([
+        dict(open=116.5, high=117.0, low=110.0, close=112.0, volume=1000.0),
+    ], index=pd.date_range(base1.index[-1] + pd.Timedelta(days=1), periods=1, freq="1D", tz="UTC"))
+    df = pd.concat([base1, stop_bar])
+
+    custom_path = tmp_path / "my_breaker_file"
+    assert not custom_path.exists()
+
+    result = run_backtest(["TEST"], cfg, lambda s: df, breaker_file=custom_path)
+
+    assert len(result.breaker_trips) == 1
+    assert custom_path.exists()  # breaker tetiklendiğinde TAM OLARAK verilen yola yazılmış olmalı
+    assert tmp_path.exists()  # run_backtest tmp_path'i (veya üstünü) SİLMEMİŞ olmalı
+
+
+def test_default_breaker_file_still_creates_and_cleans_own_tempdir():
+    """breaker_file verilmezse eski davranış (izole, kendi kendini temizleyen
+    geçici dizin) korunur — geriye dönük uyumluluk."""
+    cfg = make_cfg()
+    base = _pretrigger_bars()
+    df = _extend(base, [dict(open=120.0, high=130.0, low=119.0, close=125.0, volume=1000.0)])
+    result = run_backtest(["TEST"], cfg, lambda s: df)  # breaker_file=None (varsayılan)
+    assert result is not None  # yalnızca hatasız tamamlandığını doğrular
