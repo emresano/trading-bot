@@ -1,73 +1,74 @@
 # Proje Durumu
-Son güncelleme: 2026-07-06T02:30:00+03:00 (Europe/Istanbul)
-Şu an: **HARDENING.md Bölüm A (A1-A4) tamamlandı — DURMA NOKTASI 1'de
-duruluyor (Bölüm 0.1). Faz 5'e geçilmedi, kullanıcı onayı bekleniyor.
-Bölüm B/C'ye başlanmadı.**
-Tamamlanan fazlar: Faz 1 (İskelet + Veri Katmanı), Faz 2 (İndikatörler + Sinyal
-Motoru), Faz 3 (Risk Motoru), Faz 4 (Backtest Harness — v1→v5, bkz. önceki
-girdiler) + **HARDENING.md Bölüm A** (kalite/güvenilirlik sertleştirme —
-CLAUDE.md'ye ek, onu geçersiz kılmaz).
+Son güncelleme: 2026-07-06T08:55:00+03:00 (Europe/Istanbul)
+Şu an: **Harness düzeltme turu (v6) + Gate Katkı Analizi tamamlandı — DURMA
+NOKTASI 1'de duruluyor (Bölüm 0.1). Faz 5'e geçilmedi, kullanıcı onayı
+bekleniyor. HARDENING.md Bölüm B/C'ye başlanmadı.**
+Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v6) + HARDENING.md
+Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek).
 
-Bu oturumda yapılan (HARDENING.md kurulum + Bölüm A):
-- `HARDENING.md` repoya eklendi (kullanıcı sağladı); `CLAUDE.md`'ye tek satır
-  işaret eklendi: Faz 5'te Bölüm B bağlayıcı olacak. Başka hiçbir değişiklik yok.
-- **A1 (Snapshot + damgalama):** `data/snapshots/2026-07-06/` — v5 evreninin
-  (12 sembol) 2005-01-01 sonrası verisi donduruldu (data/historical cache'inden,
-  yeniden indirilmedi — v5'in fiilen kullandığı bytes). `manifest.json`: SHA256
-  + tarih aralığı + yfinance sürümü + indirme parametreleri. `backtest/cli.py`:
-  `--snapshot <dizin>` (ağdan indirme yok, yalnızca parquet okur; verilmezse
-  eski davranış aynen korunur) + rapor başlığına 3 damga (git commit + config
-  hash + snapshot manifest hash). **Kanıtlandı:** aynı snapshot+config ile
-  tek-sembollü koşu 2× çalıştırıldı, trades.csv + report.md bayt-bayt aynı.
-  Git tag'leri (yerel): backtest-v1..v5, ilgili commit'lere iğnelendi.
-- **A2 (Veri bütünlüğü denetimi, read-only):** `tools/data_audit.py` +
-  `DATA_AUDIT.md`. Eksik bar (sembol-çapraz), sıfır/negatif fiyat, yinelenen
-  tarih, OHLC tutarlılığı, şüpheli sıçrama taraması (>%25, sınıflandırma
-  DENEMESİ — kesin hüküm yok). **Sonuç: 12/12 sembol PASS/WARN, 0 FAIL.** 2 WARN
-  (KCHOL 2007-06-07 -%26.8, TCELL 2005-05-16 +%26.0 — hacimle net açıklanamıyor,
-  sınıflandırılamadı). v5 sonuçları karantinada DEĞİL. Ek madde: dc56ed2'deki
-  OHLC rtol/atol toleransı sentetik sınır örnekleriyle kanıtlandı (epsilon ve
-  %0.3 PASS, %5 gerçek ihlal hâlâ FAIL — 10× güvenlik marjı).
-- **A3 (Sır/anahtar güvenlik denetimi):** `SECURITY_AUDIT.md`. Git geçmişi
-  regex ile tarandı — **TEMİZ**, hiç sır bulunamadı (secrets.env hiçbir
-  commit'te hiç var olmamış). `.gitignore` gerçek sır dosyasını kapsıyor;
-  genel `.env`/`*.log` deseni eksikliği tespit edildi (düşük risk, UYGULANMADI,
-  ayrı onay gerektirir). Faz 5 hedef tasarımı belgelendi (.env+600 izin,
-  loglarda otomatik maskeleme).
-- **A4 (Ortam sabitleme):** `requirements.lock` (pip freeze, Python 3.11.6) +
-  `README.md` (yalnızca "temiz kurulumdan yeniden üretim" bölümü — tam kılavuz
-  Faz 5'te). **Kanıtlandı:** tamamen temiz bir venv'de yalnızca lock dosyasından
-  kurulum + tam test süiti — 180/180 yeşil.
-- `HARDENING_STATUS.md` yazıldı (A1-A4 durum tablosu).
+Bu oturumda yapılan (onaylı harness düzeltme turu):
+- **Madde 1 — Breaker entegrasyonu:** `risk_engine.check_and_trip_breaker()`
+  artık `backtest/engine.py`'nin event loop'una bağlı — her gün equity/peak
+  hesaplandıktan hemen sonra, giriş değerlendirmesinden ÖNCE çağrılıyor
+  (paper/real modun yapacağının BİREBİR aynısı, aynı fonksiyon çağrısıyla).
+  Her `run_backtest` çağrısı kendi izole geçici breaker dosyasını kullanıyor
+  (`tempfile.TemporaryDirectory`) — paper/real'in paylaştığı gerçek
+  `runtime/BREAKER_TRIPPED`'e dokunmuyor. `risk_engine.py`'de `breaker_file`
+  parametresi None-varsayılanlı (geç bağlama) eklendi — early-binding
+  bug'ına düşülmedi (fark edildi, düzeltildi). Kanıt testi: sentetik seride
+  breaker doğru barda tetikleniyor VE sonrasında hiçbir yeni pozisyon
+  açılmıyor. Yan bulgu: `runtime/BREAKER_TRIPPED` altında Faz 3'ten kalma
+  bir test artığı bulundu ve temizlendi (gitignored, hiç commit edilmemişti).
+- **Madde 2 — MC kırmızı bayrağı:** kontrol `dd_p95`'ten `dd_p5`'e (en kötü
+  %5 senaryo / worst-5%) çevrildi. Rapor satırları netleştirildi. CLAUDE.md
+  Bölüm 12.6'daki tek ilgili satır (yorum kuralı) düzeltildi, başka hiçbir
+  yere dokunulmadı.
+- **Madde 3 — Tam süit (v6):** A1 snapshot'ından (`--snapshot`, ağdan indirme
+  yok), 12 sembol, 2005+, `runtime/backtest_reports_v6/`. **~6.5 saat sürdü**
+  (v5'in ~2.3 saatine göre belirgin yavaşlama — breaker'ın her `run_backtest`
+  çağrısında geçici dizin oluşturup silmesinin yükü; düzeltilmedi, kapsam
+  dışı, gelecekte performans turu için not edildi).
+  - Trade 125→119 (breaker 6 trade'i engelledi). **Max DD DEĞİŞMEDİ (-%20.74)**
+    — breaker yalnızca YENİ girişleri durduruyor, zaten açık pozisyonun
+    mark-to-market kaybını önlemiyor (HARDENING.md B3'ün FREEZE/FLATTEN
+    ayrımıyla tutarlı). Breaker **1 kez, 2024-04-08'de** tetiklendi (o gün
+    equity zaten %20.74 drawdown'daydı — hasar tetiklenmeden önce olmuştu).
+  - **Sweep verisi çok farklı bir hikaye anlatıyor:** gevşek parametrelerle
+    (adx_min=15, çok daha sık trade) breaker drawdown'u DRAMATİK azaltıyor
+    (bazı kombinasyonlarda -25.86%→-10.07%) — çünkü sık trading, breaker'ın
+    erken tetiklenip sonraki kötü girişleri önleme şansını artırıyor. Mevcut
+    sıkı varsayılan (adx_min=25, az trade) için bu etki yok.
+  - **MC kırmızı bayrağı artık doğru tetikleniyor:** dd_p5=-%12.08, breaker
+    eşiğinin (%10) üzerinde.
+- **Madde 5/EK — Gate Katkı Analizi:** `tools/gate_analysis.py` (read-only)
+  + `GATE_ANALYSIS.md`. 63.013 aday-günden yalnızca 147'si (%0.23) 10 gate'i
+  geçiyor. `atr_anomaly`/`structure_rr`/`bb_overextension`/`mtf` neredeyse
+  hiç eleme yapmıyor (yapısal nedenlerle). **Yeni bulgu:** `rsi` (%76.6 eleme)
+  ve `regime`/ADX (%54.6 eleme) aktif eleme yapıyor ama geçirdikleri
+  adaylarda kazanan/kaybeden ayrımı göstermiyor (küçük örneklem, ön-bulgu).
+- `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
-**Sırada:** Hiçbir şey — burada duruluyor (Durma Noktası 1 + HARDENING.md'nin
-kendi "Bölüm A bitince dur" kuralı). Kullanıcının kararı bekleniyor: Bölüm B
-(Faz 5 bağlayıcı spesifikasyonu) veya C'ye (sonrası) geçiş, veya Faz 4'ün
-v5 bulgusuna (adx_min sıkılaştırmasının geniş örneklemde tutmadığı) dönük bir
-karar.
+**Sırada:** Hiçbir şey — burada duruluyor (Durma Noktası 1). Kullanıcının
+kararı bekleniyor.
 
 Bilinen sorun/blok:
-1. **Kullanıcı onayı bekleniyor (Durma Noktası 1 + HARDENING.md Bölüm A
-   kapanışı)** — kasıtlı, aşılamaz kapı.
-2. v5'in üç kapsam-dışı bulgusu hâlâ açık: backtest motoru drawdown breaker'ı
-   simüle etmiyor; Monte Carlo kırmızı bayrağı muhtemelen yanlış persentili
-   (dd_p95 yerine dd_p5) kontrol ediyor; adx_min=25 geniş örneklemde
-   desteklenmiyor.
-3. A3'te tespit edilen `.gitignore` iyileştirmeleri (genel `.env`/`*.log`
-   deseni) uygulanmadı — düşük öncelik, ayrı onay gerektirir.
-4. `indicators.engine.build_features`, çok kısa DataFrame'de çöküyor (önceki
-   turlardan taşınan, düşük öncelikli).
+1. **Kullanıcı onayı bekleniyor (Durma Noktası 1)** — kasıtlı, aşılamaz kapı.
+2. Breaker entegrasyonu backtest'i ~3× yavaşlattı (tempfile per-call yükü) —
+   performans turu gerekebilir (düşük öncelik, işlevsellik doğru).
+3. Breaker, mevcut sıkı parametrelerle gerçekleşmiş max drawdown'u
+   SINIRLAMIYOR (yalnızca sonraki girişleri engelliyor) — bu tasarım gereği
+   (FREEZE≠FLATTEN) ama kullanıcının bilmesi gereken bir sınırlama.
+4. v5'ten taşınan bulgular hâlâ açık: adx_min=25 geniş sweep'te desteklenmiyor
+   (adx_min=15 daha iyi PF gösterebiliyor, ama artık breaker'la daha düşük
+   drawdown'la); walk-forward DD kriteri hâlâ geçmiyor.
+5. `.gitignore`'da genel `.env`/`*.log` deseni eksikliği (A3'ten, düşük öncelik).
 
 Önceki fazlardan taşınan varsayımlar: pandas-ta yerine pandas-ta-classic +
-numpy 2.2 (e31e401); BIST seans saatleri yaklaşık; `data.historical.
-download_bars` `period="max"` zorunlu; resmi tatil takvimi MVP dışı; MACD
-"son 2 bar yükseliş" = `hist[t]>hist[t-1]`; exit "3 bar düşüş" = kesin azalan
-üçlü sıralama; backtest degrade modda çalışıyor; compute_target
-max(resistance, fallback) (67d2dd6); gate_trigger_4h degrade modda son-3-bar-
-pattern VEYA breakout (67d2dd6); walk-forward date_range/precomputed_features
-ile tam tarihçe warm-up (60a6d3f); adx_min=25 (d6ea8fc); 12 sembol evreni +
-2005-01-01 başlangıç + OHLC tolerans fix'i (dc56ed2); HARDENING.md Bölüm A
-tamamlandı, Bölüm B Faz 5'te bağlayıcı (eb3b21d).
+numpy 2.2 (e31e401); BIST seans saatleri yaklaşık; backtest degrade modda;
+compute_target max(resistance, fallback) (67d2dd6); gate_trigger_4h degrade
+modda son-3-bar-pattern VEYA breakout (67d2dd6); walk-forward date_range/
+precomputed_features (60a6d3f); adx_min=25 (d6ea8fc); 12 sembol evreni +
+2005-01-01 + OHLC tolerans fix'i (dc56ed2); HARDENING.md Bölüm A (eb3b21d);
+breaker backtest entegrasyonu + MC dd_p5 düzeltmesi (c906d10, 53ba4b3).
 
-Limit nedeniyle durdu mu: hayır — Durma Noktası 1 + HARDENING.md Bölüm A
-kapanışı nedeniyle duruldu.
+Limit nedeniyle durdu mu: hayır — Durma Noktası 1 nedeniyle duruldu.
