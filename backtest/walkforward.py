@@ -101,6 +101,7 @@ def run_walk_forward(
     cfg,
     load_daily: Callable[[str], pd.DataFrame],
     breaker_dir: Optional[Path] = None,
+    disabled_gates: Optional[list[str]] = None,
 ) -> list[WindowResult]:
     """Bölüm 12.5: her pencerede train diliminde 27 kombinasyonluk grid taraması,
     komşu-sağlamlık kriteriyle parametre seçimi, test diliminde o parametreyle koşum.
@@ -125,7 +126,12 @@ def run_walk_forward(
     arasında yine tam olarak İZOLE kalır (yalnızca dizin oluşturma/silme yükü
     tek seferde ödenir, `backtest/cli.py::generate_report` tarafından).
     Verilmezse (varsayılan) her `run_backtest` çağrısı kendi izole geçici
-    dizinini açar (eski davranış, geriye dönük uyumlu)."""
+    dizinini açar (eski davranış, geriye dönük uyumlu).
+
+    `disabled_gates`: verilirse (read-only portföy-ablasyon turu), bu
+    fonksiyonun yaptığı TÜM `run_backtest` çağrılarına (train grid taraması +
+    test koşumu) aynen iletilir. Verilmezse (None, varsayılan) davranış
+    BİREBİR aynıdır."""
     combos = sweep_combinations()
     _breaker_counter = itertools.count()
 
@@ -161,7 +167,8 @@ def run_walk_forward(
         for combo in combos:
             combo_cfg = apply_params(cfg, combo)
             bt = run_backtest(symbols, combo_cfg, precomputed_features=base_features,
-                              date_range=(train_start, train_end), breaker_file=_next_breaker_file())
+                              date_range=(train_start, train_end), breaker_file=_next_breaker_file(),
+                              disabled_gates=disabled_gates)
             train_results[tuple(combo[k] for k in SWEEP_KEYS)] = compute_metrics(bt.equity_curve, bt.trades)
 
         chosen = select_robust_params(train_results)
@@ -170,7 +177,8 @@ def run_walk_forward(
 
         chosen_cfg = apply_params(cfg, chosen)
         test_bt = run_backtest(symbols, chosen_cfg, precomputed_features=base_features,
-                               date_range=(test_start, test_end), breaker_file=_next_breaker_file())
+                               date_range=(test_start, test_end), breaker_file=_next_breaker_file(),
+                               disabled_gates=disabled_gates)
         test_metrics = compute_metrics(test_bt.equity_curve, test_bt.trades)
         train_metrics = train_results[tuple(chosen[k] for k in SWEEP_KEYS)]
 

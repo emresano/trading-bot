@@ -136,6 +136,11 @@ ENTRY_GATES: list[Gate] = [
     gate_structure_rr, gate_volume, gate_trigger_4h, gate_mtf,
 ]
 
+# ENTRY_GATES'in isim listesi — `disabled_gates` (ablasyon turu, read-only
+# teşhis amaçlı) ve tools/gate_analysis.py, tools/gate_ablation.py,
+# backtest/gate_diagnostics.py'nin AYNI isimlendirme kuralını kullanması için.
+GATE_NAMES: list[str] = [g.__name__.replace("gate_", "") for g in ENTRY_GATES]
+
 
 def prepare_row_context(daily_df: pd.DataFrame, i: int) -> pd.Series:
     """i konumundaki barın Series'ini, çoklu-bar bağlam gerektiren gate'ler için
@@ -178,13 +183,22 @@ def snapshot_features(d: pd.Series, h4: Optional[pd.Series], cfg) -> dict[str, f
     return features
 
 
-def evaluate_entry(symbol: str, daily_df: pd.DataFrame, h4_df: Optional[pd.DataFrame], cfg) -> Signal:
+def evaluate_entry(symbol: str, daily_df: pd.DataFrame, h4_df: Optional[pd.DataFrame], cfg,
+                   disabled_gates: Optional[set[str]] = None) -> Signal:
+    """`disabled_gates`: verilirse (read-only ablasyon/teşhis amaçlı — asla
+    üretim/paper/real modda kullanılmaz), isimleri bu kümede olan gate'ler
+    ÇAĞRILMAZ, otomatik PASS sayılır (huninin geri kalanı aynen işler).
+    Verilmezse (None/boş, varsayılan) davranış BİREBİR ENTRY_GATES'in tam
+    listesiyle çalışan eski haliyle aynıdır."""
     d = prepare_row_context(daily_df, len(daily_df) - 1)  # SON KAPANMIŞ günlük bar
     h4 = h4_df.iloc[-1] if h4_df is not None and not h4_df.empty else None
 
     results: list[str] = []
     features = snapshot_features(d, h4, cfg)
-    for gate in ENTRY_GATES:
+    for gate, name in zip(ENTRY_GATES, GATE_NAMES):
+        if disabled_gates and name in disabled_gates:
+            results.append(f"[PASS] {name}: DEVRE DIŞI (disabled_gates ablasyon parametresi) — otomatik PASS")
+            continue
         r = gate(d, h4, cfg)
         results.append(f"[{'PASS' if r.passed else 'FAIL'}] {r.name}: {r.detail}")
         if not r.passed:

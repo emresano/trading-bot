@@ -97,7 +97,13 @@ def generate_report(
     benchmark_loader: Optional[Callable[[], pd.DataFrame]] = None,
     stamps: Optional[dict] = None,
     ghost_bars_removed: Optional[list[dict]] = None,
+    disabled_gates: Optional[list[str]] = None,
+    trace: Optional[list] = None,
 ) -> dict:
+    """`disabled_gates`/`trace`: verilirse (read-only portföy-ablasyon turu —
+    bkz. `tools/portfolio_ablation.py`), sırasıyla ana koşuma VE walk-forward'a
+    (yalnızca disabled_gates) aynen iletilir. İkisi de verilmezse (None,
+    varsayılan) davranış BİREBİR aynıdır — mevcut hiçbir çağıran etkilenmez."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -110,7 +116,8 @@ def generate_report(
     # oluşturma/silme işlemi tek seferde yapılır.
     breaker_dir = Path(tempfile.mkdtemp(prefix="backtest_cli_breaker_"))
 
-    result = run_backtest(symbols, cfg, load_daily, breaker_file=breaker_dir / "BREAKER_main")
+    result = run_backtest(symbols, cfg, load_daily, breaker_file=breaker_dir / "BREAKER_main",
+                          disabled_gates=disabled_gates, trace=trace)
     metrics = compute_metrics(result.equity_curve, result.trades)
 
     _write_trades_csv(result.trades, out_dir / "trades.csv")
@@ -158,7 +165,8 @@ def generate_report(
 
     wf_results = None
     if do_walk_forward:
-        wf_results = run_walk_forward(symbols, cfg, load_daily, breaker_dir=breaker_dir)
+        wf_results = run_walk_forward(symbols, cfg, load_daily, breaker_dir=breaker_dir,
+                                      disabled_gates=disabled_gates)
         acceptance = evaluate_acceptance(wf_results)
         lines.append("## Walk-Forward")
         for r in wf_results:

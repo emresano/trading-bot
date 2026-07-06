@@ -305,6 +305,38 @@ def test_funnel_nine_pass_one_fail_yields_hold_cash_with_ten_reasons():
     assert "mtf" in failed[0]
 
 
+def test_disabled_gates_forces_automatic_pass():
+    """Portföy ablasyon turu: `disabled_gates`'te ismi geçen gate hiç
+    çağrılmaz, otomatik PASS sayılır — 9-PASS-1-FAIL (rsi) senaryosunda
+    rsi'yi devre dışı bırakmak HOLD_CASH'i ENTER_LONG'a çevirmeli."""
+    daily_df = _daily_df_for_funnel(all_pass=False)  # rsi FAIL eder
+    sig = evaluate_entry("TEST", daily_df, None, CFG, disabled_gates={"rsi"})
+    assert sig.action == SignalAction.ENTER_LONG
+    assert len(sig.reasons) == 10
+    rsi_reason = [ln for ln in sig.reasons if "rsi" in ln][0]
+    assert rsi_reason.startswith("[PASS]")
+    assert "DEVRE DIŞI" in rsi_reason
+
+
+def test_disabled_gates_none_or_empty_matches_baseline():
+    daily_df = _daily_df_for_funnel(all_pass=False)
+    baseline = evaluate_entry("TEST", daily_df, None, CFG)
+    with_none = evaluate_entry("TEST", daily_df, None, CFG, disabled_gates=None)
+    with_empty = evaluate_entry("TEST", daily_df, None, CFG, disabled_gates=set())
+    assert baseline.action == with_none.action == with_empty.action == SignalAction.HOLD_CASH
+    assert baseline.reasons == with_none.reasons == with_empty.reasons
+
+
+def test_disabled_gates_other_gate_still_evaluated_and_fails():
+    """rsi FAIL eden senaryoda BAŞKA bir gate'i (örn. macd) devre dışı
+    bırakmak sonucu değiştirmemeli — rsi hâlâ FAIL eder, HOLD_CASH kalır."""
+    daily_df = _daily_df_for_funnel(all_pass=False)
+    sig = evaluate_entry("TEST", daily_df, None, CFG, disabled_gates={"macd"})
+    assert sig.action == SignalAction.HOLD_CASH
+    rsi_reason = [ln for ln in sig.reasons if "rsi" in ln][0]
+    assert rsi_reason.startswith("[FAIL]")
+
+
 def test_funnel_short_circuits_before_last_gate_when_early_gate_fails():
     daily_df = _daily_df_for_funnel(all_pass=False)
     daily_df.iloc[-1, daily_df.columns.get_loc("close")] = 50  # gate_trend now fails first

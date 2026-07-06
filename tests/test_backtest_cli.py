@@ -172,6 +172,39 @@ def test_ghost_bars_removed_absent_by_default(tmp_path):
     assert "hayalet bar" not in content
 
 
+# --- Portföy ablasyon turu: disabled_gates/trace geçişi ---
+
+def test_disabled_gates_and_trace_forwarded_to_main_run_backtest(tmp_path, monkeypatch):
+    import backtest.cli as cli_mod
+    calls = []
+    original = cli_mod.run_backtest
+
+    def _spy(*args, **kwargs):
+        calls.append(kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(cli_mod, "run_backtest", _spy)
+
+    cfg = make_cfg()
+    df = _flat_series()
+    trace: list = []
+    generate_report(["TEST"], cfg, lambda s: df, tmp_path, disabled_gates=["rsi"], trace=trace)
+
+    assert len(calls) == 1
+    assert calls[0]["disabled_gates"] == ["rsi"]
+    assert calls[0]["trace"] is trace
+
+
+def test_disabled_gates_and_trace_absent_by_default_do_not_change_report(tmp_path):
+    cfg = make_cfg()
+    df = _flat_series()
+    out_with = generate_report(["TEST"], cfg, lambda s: df, tmp_path / "a")
+    out_without = generate_report(["TEST"], cfg, lambda s: df, tmp_path / "b",
+                                  disabled_gates=None, trace=None)
+    assert out_with["metrics"].total_return == out_without["metrics"].total_return
+    assert out_with["metrics"].trade_count == out_without["metrics"].trade_count
+
+
 # --- Monte Carlo kırmızı bayrağı: worst-5% (dd_p5), dd_p95 DEĞİL (harness düzeltme turu) ---
 
 def test_monte_carlo_red_flag_uses_worst_5_percent_not_best_case(tmp_path, monkeypatch):

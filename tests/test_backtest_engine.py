@@ -471,3 +471,89 @@ def test_default_breaker_file_still_creates_and_cleans_own_tempdir():
     df = _extend(base, [dict(open=120.0, high=130.0, low=119.0, close=125.0, volume=1000.0)])
     result = run_backtest(["TEST"], cfg, lambda s: df)  # breaker_file=None (varsayılan)
     assert result is not None  # yalnızca hatasız tamamlandığını doğrular
+
+
+def test_same_day_multiple_exits_are_ordered_alphabetically():
+    """Bir önceki süreçte (v7 sonrası ablasyon turu sırasında) bulunan gerçek
+    bir bug: `pending_exits` bir `set[str]` olduğundan, Python'ın string
+    hash'leri PYTHONHASHSEED'e göre süreç başına rastgeleleştiği için, AYNI
+    veriyle İKİ AYRI SÜREÇ çalıştırması aynı güne denk gelen birden fazla
+    çıkışı FARKLI sırada üretebiliyordu (finansal sonuç aynı, yalnızca
+    trades.csv'deki SIRA değişiyordu — CLAUDE.md Bölüm 12.8'in "aynı komut
+    iki koşuda bit-bit aynı çıktı" şartını ihlal ediyordu). Düzeltme:
+    `sorted(pending_exits)`. Bu test, İKİ FARKLI sembol AYNI gün exit
+    sinyali üretip AYNI gün dolduğunda, trades listesinin HER ZAMAN
+    alfabetik sırada olduğunu doğrular (sembol adları kasıtlı olarak
+    "insertion sırasının tersi" seçildi: ZZZ, AAA)."""
+    # max_position_notional_pct/risk_per_trade_pct gerçekçi değerlere çekildi ki
+    # HER İKİ sembol de cash'in küçük bir kısmını kullansın (aksi halde tek
+    # pozisyon cash'in neredeyse tamamını tüketip ikinci sembolün fiilen
+    # dolmasını engeller — burada test edilen konu bu değil). correlation_max=1.0:
+    # iki sembol BİREBİR AYNI fiyat serisini kullandığından korelasyonları tam
+    # 1.0 — varsayılan (0.99) eşik bu senaryoda ikinci sembolü CORRELATION_LIMIT
+    # ile reddederdi (test edilen konu bu değil).
+    cfg = make_cfg(max_position_notional_pct=0.25, risk_per_trade_pct=0.0075, correlation_max=1.0)
+    base = _pretrigger_bars(seed=13)
+    # Stop seviyesi ~114.31 (entry~116.88, atr_stop_mult=1.5) — düşüş barının
+    # low'u bu seviyenin ÜSTÜNDE tutuluyor ki STOP değil EXIT_LONG (close<ema_5)
+    # tetiklensin (aksi halde stop-önceliği kuralı devreye girip trade'i STOP
+    # ile kapatır, bu testin ölçmek istediği senaryo değil).
+    ext = _extend(base, [
+        dict(open=120.0, high=121.0, low=119.0, close=120.5, volume=1000.0),  # fill günü
+        dict(open=120.5, high=121.5, low=119.5, close=120.8, volume=1000.0),
+        dict(open=120.8, high=121.8, low=119.8, close=121.0, volume=1000.0),
+        dict(open=118.0, high=118.5, low=115.0, close=115.5, volume=1000.0),  # close<ema_5 -> EXIT_LONG sinyali
+        dict(open=115.5, high=116.0, low=114.5, close=115.0, volume=1000.0),  # exit fill günü
+    ])
+    data = {"ZZZ": ext, "AAA": ext}  # kasıtlı ters-alfabetik ekleme sırası (dict literal sırası)
+
+    result = run_backtest(list(data.keys()), cfg, lambda s: data[s])
+
+    # Aynı gün exit fill olan trade'lerin sembolleri alfabetik sırada olmalı.
+    exit_trades = [t for t in result.trades if t.exit_reason == "SIGNAL_EXIT"]
+    assert len(exit_trades) == 2
+    assert exit_trades[0].exit_date == exit_trades[1].exit_date  # ikisi de aynı gün doldu
+    assert [t.symbol for t in exit_trades] == sorted(t.symbol for t in exit_trades)
+    assert [t.symbol for t in exit_trades] == ["AAA", "ZZZ"]
+
+
+def test_disabled_gates_none_is_byte_identical_to_baseline():
+    """Portföy ablasyon turu: `disabled_gates` verilmediğinde (None, varsayılan)
+    sonuç BİREBİR aynı kalmalı — kanıt: trades/equity_curve karşılaştırması
+    (v6 breaker turundaki early-binding dersi burada da geçerli: disabled_gates
+    None-varsayılanlı ve çağrı-anında set()'e çevriliyor, modül-seviyesi bir
+    sabite erken bağlanmıyor)."""
+    cfg = make_cfg()
+    base = _pretrigger_bars()
+    df = _extend(base, [
+        dict(open=120.0, high=130.0, low=119.0, close=125.0, volume=1000.0),
+        dict(open=125.0, high=126.0, low=124.0, close=125.5, volume=1000.0),
+    ])
+
+    baseline = run_backtest(["TEST"], cfg, lambda s: df)
+    explicit_none = run_backtest(["TEST"], cfg, lambda s: df, disabled_gates=None)
+
+    assert baseline.equity_curve.equals(explicit_none.equity_curve)
+    assert len(baseline.trades) == len(explicit_none.trades)
+    assert [t.pnl for t in baseline.trades] == [t.pnl for t in explicit_none.trades]
+
+
+def test_disabled_gates_forces_pass_and_can_produce_more_trades():
+    """`disabled_gates`'te ismi geçen gate otomatik PASS sayılmalı — bunu
+    kanıtlamak için, huniyi kilitleyen TEK bir gate'i (gate_regime, ADX
+    eşiği) devre dışı bırakarak, aksi halde HOLD_CASH kalacak bir senaryonun
+    ENTER_LONG'a dönüştüğünü göster."""
+    cfg = make_cfg()
+    cfg.signal.adx_min = 999.0  # gate_regime'i HER ZAMAN FAIL ettirecek kadar sıkı
+    base = _pretrigger_bars()
+    df = _extend(base, [dict(open=120.0, high=130.0, low=119.0, close=125.0, volume=1000.0)])
+
+    with_regime = run_backtest(["TEST"], cfg, lambda s: df)
+    assert len(with_regime.trades) == 0  # gate_regime FAIL -> hiç giriş yok
+
+    without_regime = run_backtest(["TEST"], cfg, lambda s: df, disabled_gates=["regime"])
+    # regime devre dışı -> huni geçilebilir, en azından bir pending entry/trade oluşmalı
+    # (trade kapanmasa bile equity_curve'de pozisyon açıldığını dolaylı doğrulamak için
+    # decision_log üzerinden ENTER_LONG arıyoruz)
+    enter_signals = [d for d in without_regime.decision_log if d["action"] == "ENTER_LONG"]
+    assert len(enter_signals) >= 1

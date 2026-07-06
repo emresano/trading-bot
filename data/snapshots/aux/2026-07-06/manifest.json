@@ -1,0 +1,19 @@
+{
+  "created_at_utc": "2026-07-06T10:28:30.946016+00:00",
+  "scope": "USDTRY bilgilendirici seri — YALNIZCA raporlama (USD-cevrimi), hicbir sinyal/risk hesabina girmez",
+  "source": "yfinance (TRY=X / USDTRY=X)",
+  "download_params": {
+    "interval": "1d",
+    "period": "max",
+    "auto_adjust": true
+  },
+  "files": {
+    "USDTRY": {
+      "rows": 5591,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-05 23:00:00+00:00",
+      "sha256": "b625c1c715ffb4619a9b9a16ebb86db1821401f280974a1f5c908b8d92d78bb7",
+      "bytes": 206916
+    }
+  }
+}

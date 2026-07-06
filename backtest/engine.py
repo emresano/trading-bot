@@ -76,6 +76,7 @@ def run_backtest(
     precomputed_features: Optional[dict[str, pd.DataFrame]] = None,
     trace: Optional[list] = None,
     breaker_file: Optional[Path] = None,
+    disabled_gates: Optional[list[str]] = None,
 ) -> BacktestResult:
     """Event-driven, bar-bazlı backtest motoru (Bölüm 12.2).
 
@@ -116,8 +117,16 @@ def run_backtest(
     her çağrıya İÇİNDE farklı bir dosya YOLU vermelidir (breaker durumu yine
     çağrılar arasında İZOLE kalır — yalnızca dizin oluşturma/silme yükü tek
     seferde ödenir). Bkz. `backtest/cli.py::generate_report` (v7 performans turu).
+
+    `disabled_gates`: verilirse (read-only portföy-ablasyon turu amaçlı —
+    ASLA üretim/paper/real modda kullanılmaz, `main.py`/`PaperBroker` bu
+    parametreyi hiç geçmez), listelenen isimdeki gate'ler `evaluate_entry`
+    içinde otomatik PASS sayılır (bkz. `strategy/signal_engine.py::GATE_NAMES`).
+    Verilmezse (None, varsayılan) davranış BİREBİR aynıdır — kanıt:
+    `tests/test_backtest_engine.py::test_disabled_gates_none_is_byte_identical_to_baseline`.
     """
     initial_equity = initial_equity if initial_equity is not None else cfg.backtest.initial_equity
+    disabled_gates_set = set(disabled_gates) if disabled_gates else None
 
     if precomputed_features is not None:
         daily_features = precomputed_features
@@ -187,7 +196,16 @@ def run_backtest(
                     last_known_close[s] = float(df.loc[date]["close"])
 
             # --- 0. Önceki barın sinyaliyle planlanmış işlemleri BUGÜNÜN açılışında doldur ---
-            for symbol in list(pending_exits):
+            # `pending_exits` bir set olduğundan, Python'ın string hash'leri
+            # PYTHONHASHSEED'e göre süreç başına RASTGELELEŞTİRİLDİĞİNDEN,
+            # sorted() OLMADAN iterasyon aynı veriyle bile İKİ AYRI SÜREÇ
+            # ÇALIŞTIRMASI arasında farklı sırada trade üretebilirdi (finansal
+            # sonuç aynı kalır, yalnızca aynı güne denk gelen birden fazla
+            # çıkışın trades.csv'deki SIRASI değişirdi — CLAUDE.md Bölüm 12.8'in
+            # "aynı komut iki koşuda bit-bit aynı çıktı" şartını ihlal ederdi).
+            # Deterministik alfabetik sıra, giriş huninin (sorted(symbols)) v7
+            # düzeltmesiyle tutarlı.
+            for symbol in sorted(pending_exits):
                 df = daily_features[symbol]
                 if symbol in positions and date in df.index:
                     bar = df.loc[date]
@@ -335,7 +353,7 @@ def run_backtest(
                 window = df.iloc[: idx_pos + 1]
                 if len(window) < min_history:
                     continue
-                sig = evaluate_entry(symbol, window, None, cfg)
+                sig = evaluate_entry(symbol, window, None, cfg, disabled_gates=disabled_gates_set)
                 decision_log.append({"date": date, "symbol": symbol, "action": sig.action.value, "mode": "degrade"})
                 if sig.action != SignalAction.ENTER_LONG:
                     continue

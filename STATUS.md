@@ -1,16 +1,83 @@
 # Proje Durumu
-Son güncelleme: 2026-07-06T13:10:00+03:00 (Europe/Istanbul)
-Şu an: **EXPANSION.md E1 (Veri Temeli) tamamlandı — E1'in kendi durma
-noktasında duruluyor, kullanıcı onayı bekleniyor. BIST hattı (v7, Durma
-Noktası 1) PARALEL olarak hâlâ aynı durumda: Faz 5'e geçilmedi, hiçbir
-strateji eşiği/gate/parametre değiştirilmedi. E2+'a BAŞLANMADI (EXPANSION.md
-Bölüm 0.4 sıralama kilidi: v7 + BIST yeniden-tasarım kararı olmadan
-başlamaz).**
+Son güncelleme: 2026-07-06T22:10:00+03:00 (Europe/Istanbul)
+Şu an: **Portföy-seviyesi gate ablasyon turu (ABLATION_PORTFOLIO.md)
+tamamlandı — Durma Noktası 1'de duruluyor, kullanıcı onayı bekleniyor.
+Hiçbir eşik/gate/parametre `config.yaml`'da değiştirilmedi. Faz 5'e/E2'ye
+geçilmedi (EXPANSION.md Bölüm 0.4 sıralama kilidi hâlâ geçerli: v7 + BIST
+yeniden-tasarım kararı olmadan E2 başlamaz).**
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7) + HARDENING.md
 Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) + Teşhis turu v6
-+ Motor+veri düzeltme turu v7 + EXPANSION.md E1 (Veri Temeli).
++ Motor+veri düzeltme turu v7 + EXPANSION.md E1 (Veri Temeli) + Portföy
+ablasyon turu.
 
-Bu oturumda yapılan (onaylı EXPANSION.md E1 — "E1 onaylandı, başlat" talimatı):
+## KALICI KAYIT 1 — Başarı Çıtası (kullanıcı kararı, 2026-07-06)
+USD bazında CAGR > 0 taban şart; Sharpe > XU100 al-tut Sharpe VE max DD ≤
+endeks max DD'sinin yarısı. Resmi walk-forward kabul kriterleri değişmedi;
+güncellemesi yeniden-tasarım turunda ayrı onayla.
+
+**Durum (ABLATION_PORTFOLIO.md'den, 2026-07-06 ölçümü): hiçbir varyant
+(baseline dahil) bu çıtayı geçmiyor** — tüm varyantlar USD CAGR ≈ -%15.7 ile
+-%16.2 arası (TRY'nin USD karşısındaki yapısal değer kaybı baskın; stratejinin
+TRY-bazlı performansından bağımsız). max DD/endeks-DD oranı ise ÇOK iyi
+(0.106-0.172 — endeksin altıda/beşte biri) — bu kısım geçiyor, USD-CAGR
+kısmı geçmiyor.
+
+## KALICI KAYIT 2 — Haber/Olay Politikası Güncellemesi (kullanıcı kararı, 2026-07-06)
+Yapılandırılmamış haber (LLM/Tier 1) veto-only kalır. Deterministik olay
+verisi (earnings takvimi/sürprizi, Tier 0) giriş tarafında KULLANILABİLİR —
+yalnızca backtest edilebilir, tek-değişiklik-turu ve aynı kabul
+kriterlerinden geçen bir gate/özellik olarak; ilk aday US sleeve (E1: earnings
+tarihçesi 2001'e kadar mevcut, bkz. DATA_AUDIT_US.md). İmplementasyon
+yeniden-tasarım/E-fazlarında, şimdi değil.
+
+Bu oturumda yapılan (onaylı portföy-seviyesi gate ablasyon turu):
+- **Madde 1 — `run_backtest`'e `disabled_gates: Optional[list[str]] = None`
+  parametresi eklendi** (geç bağlama — None-varsayılan, call-time'da
+  `set()`'e çevriliyor). Verilmediğinde davranış BİREBİR aynı — kanıt: kısa
+  3-sembollü koşuda trades.csv bayt-bayt aynı (hem sentetik testte hem gerçek
+  A1 snapshot verisiyle doğrulandı). `strategy/signal_engine.py::evaluate_entry`
+  ve `backtest/walkforward.py::run_walk_forward` ile `backtest/cli.py::generate_report`
+  fonksiyonlarına da aynı ilkeyle (None-varsayılan, geriye dönük uyumlu)
+  iletildi.
+- **ÖNEMLİ YAN BULGU — yeni bir determinizm bug'ı bulundu ve düzeltildi:**
+  baseline'ın v7 ile "bayt-bayt aynı" olması doğrulanırken, `backtest/engine.py`'de
+  `pending_exits`'in bir `set[str]` olması nedeniyle, Python'ın string
+  hash'lerinin `PYTHONHASHSEED`'e göre SÜREÇ BAŞINA rastgeleleştiği fark
+  edildi — aynı veriyle çalıştırılan İKİ AYRI SÜREÇ, aynı güne denk gelen
+  birden fazla sembol çıkışını FARKLI SIRADA üretebiliyordu (finansal sonuç
+  aynı, yalnızca trades.csv satır SIRASI değişiyordu). **Düzeltme**:
+  `for symbol in sorted(pending_exits):` — giriş huninin v7'deki alfabetik
+  sıra ilkesiyle tutarlı. Kanıt: yeni regresyon testi + 4 farklı
+  `PYTHONHASHSEED` değeriyle manuel doğrulama (hepsi aynı, alfabetik sırayı
+  üretti). Bu düzeltme SONRASI baseline, v7 ile İÇERİK olarak (sort sonrası)
+  TAM AYNI — yalnızca tüm tarihçedeki 2 "aynı-gün-çoklu-çıkış" çakışmasının
+  (ARCLK/TOASO 2010-12-10, ASELS/TCELL 2026-06-04) SIRASI, v7'nin dondurulmuş
+  (rastgele hash tohumlu) dosyasından farklı — bu beklenen ve dokümante
+  edilmiş bir fark, v7 DEĞİŞTİRİLMEDİ.
+- **Madde 2 — USDTRY bilgilendirici snapshot**: `data/snapshots/aux/2026-07-06/USDTRY.parquet`
+  (manifest hash'li). Yalnızca raporlama, hiçbir sinyal/risk hesabına girmiyor.
+- **Madde 3 — `tools/portfolio_ablation.py`** (YENİ, read-only): A1
+  snapshot'ından, 12 sembol, 2005+, `data/cleaning.py` açık, 5 varyant
+  (`baseline`, `no_trend`, `no_regime`, `no_rsi`, `no_trend_regime_rsi`) —
+  her biri tam süit + walk-forward + MC + XU100 benchmark (sweep yok).
+  ~6 saat sürdü (5 × ~70dk).
+- **Madde 4/5 — Ek metrikler + gap-proximity**: time-in-market, ortalama
+  sermaye kullanımı, USD çevrimi (CAGR/toplam getiri), DD/endeks-DD oranı,
+  Sharpe-vs-endeks, gap-proximity (DATA_AUDIT_v2.md'nin 79 "açıklanamayan
+  gap" gününe ±5 bar) — hepsi `ABLATION_PORTFOLIO.md`'de.
+- **Madde 6 — Ana bulgu: izole (DIAGNOSTICS_v6.md Paket 3) ile portföy
+  sonuçları ÇELİŞİYOR.** no_trend ve no_rsi portföy düzeyinde BELİRGİN DAHA
+  KÖTÜ (no_rsi: TRY getirisi negatife dönüyor, PF<1, OOS max DD -31%'e
+  fırlıyor — baseline'ın 2 katı; no_trend: max DD -10.04%, breaker
+  tetikleniyor). no_regime karma (getiri/Sharpe/OOS-PF iyileşiyor ama DD
+  kötüleşiyor, breaker tetikleniyor). Üçü birden kaldırılınca (no_trend_regime_rsi)
+  TÜM metriklerde EN KÖTÜ sonuç (Sharpe negatif, OOS max DD -32.87%) — gate'lerin
+  portföy düzeyinde birbirini TAMAMLAYAN bir risk-azaltma işlevi gördüğünü
+  düşündürüyor, izole ölçümün yakalayamadığı bir etkileşim.
+- 276 test yeşil (yeni disabled_gates + determinizm testleri dahil,
+  regresyon yok).
+
+Önceki oturumda yapılan (onaylı EXPANSION.md E1 — "E1 onaylandı, başlat" talimatı, hâlâ geçerli):
 - **US evren önerisi**: 20 sembol, 8 sektör (Teknoloji, Sağlık, Finans,
   Enerji, Temel Tüketim, Tüketici Takdiri, İletişim, Sanayi), 2005-01-03'ten
   itibaren tam tarihçe doğrulandı. Getiriye göre seçim YAPILMADI. Survivorship
@@ -214,21 +281,23 @@ Paket 1 bulgularının düzeltmesi, hâlâ geçerli):
   adaylarda kazanan/kaybeden ayrımı göstermiyor (küçük örneklem, ön-bulgu).
 - `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
-**Sırada:** İki paralel bekleme:
-(a) **BIST hattı**: Durma Noktası 1'de duruluyor. Önerilen (kullanıcı onayı
-gerekir): Paket 1'in iki bug'ı artık DÜZELTİLDİ ve v7'de doğrulandı; kalan
-gerçek (bug olmayan) zayıflıklar — walk-forward OOS performansı ve MC
-worst-5% sınırda kalması — ile DIAGNOSTICS_v6.md Paket 3'ün gate ablasyon
-bulgusu (trend/regime/rsi izole ölçümde değer katmıyor gibi görünüyor)
-birlikte, artık bir gate/parametre yeniden tasarım konuşmasının girdisi
-olabilir.
+**Sırada:** Üç paralel bekleme:
+(a) **BIST hattı**: Durma Noktası 1'de duruluyor. DIAGNOSTICS_v6.md Paket 3'ün
+izole gate bulgusu artık ABLATION_PORTFOLIO.md ile PORTFÖY seviyesinde test
+edildi ve ÇELİŞTİĞİ görüldü (no_trend/no_rsi belirgin daha kötü, no_regime
+karma) — "bu üç gate gereksiz" hükmü artık DESTEKLENMİYOR. Kalan gerçek
+zayıflıklar (walk-forward OOS, MC worst-5%, hiçbir varyantın USD-CAGR>0
+çıtasını geçmemesi) yeniden tasarım konuşmasının girdisi olabilir, ama
+"gate'leri kaldır" yönünde bir sonuç ÇIKMADI.
 (b) **EXPANSION.md**: E1 tamamlandı, kullanıcı onayı bekleniyor. E2 (Motor
 Genelleştirme) ancak "v7 bitti + BIST yeniden-tasarım kararı verildi + E2
-onaylandı" üçlü şartı sağlanınca başlar (Bölüm 0.4 + Bölüm 16) — yani (a)'daki
-karar E2'nin de ön şartı. E1'in kendi açık maddeleri: E2'ye devredilen FX
-OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/GBP_USD) ve lxml'in
-requirements.txt'e eklenip eklenmeyeceği (yalnızca events.py'nin gerçek
-implementasyonu kararlaştırılırsa).
+onaylandı" üçlü şartı sağlanınca başlar (Bölüm 0.4 + Bölüm 16). E1'in açık
+maddeleri: E2'ye devredilen FX OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/
+GBP_USD) ve lxml'in requirements.txt'e eklenip eklenmeyeceği.
+(c) **Portföy ablasyon turu**: tamamlandı, kullanıcı onayı bekleniyor. Açık
+madde: 4/5 varyantta breaker'ın 1 kez tetiklenmesinin kök nedeni (veri
+artefaktı mı gerçek drawdown mu) bu turda İNCELENMEDİ — istenirse ayrı bir
+teşhis turu konusu olabilir.
 
 Bilinen sorun/blok:
 1. **Kullanıcı onayı bekleniyor (Durma Noktası 1, BIST)** — kasıtlı, aşılamaz kapı.
@@ -249,11 +318,13 @@ Bilinen sorun/blok:
    doğrulandı ki bunlar motor/veri bug'ı DEĞİL, stratejinin kendi zayıflığı.
 7. KCHOL 2007-06-08 hâlâ açıklanamadı (DATA_AUDIT_v2.md'de "açıklanamayan
    gap" — dış BIST/KAP doğrulaması gerekiyor, bu turda yapılmadı).
-8. Gate ablasyon (DIAGNOSTICS_v6.md Paket 3): trend/regime/rsi izole ölçümde
-   değer katmıyor gibi görünüyor (counterfactual PF > baseline PF); portföy-
-   seviyesi etkiler ölçülmedi — eşik değiştirmeye tek başına yeterli kanıt
-   değil, ama artık (v7'nin temiz taban çizgisiyle) bir tasarım konuşmasının
-   girdisi olabilir.
+8. ~~Gate ablasyon (DIAGNOSTICS_v6.md Paket 3): trend/regime/rsi izole
+   ölçümde değer katmıyor gibi görünüyor~~ **PORTFÖY SEVİYESİNDE TEST EDİLDİ
+   (ABLATION_PORTFOLIO.md) VE ÇELİŞTİĞİ BULUNDU** — no_trend/no_rsi belirgin
+   daha kötü (özellikle no_rsi: OOS max DD -31%'e fırlıyor), no_regime karma
+   (getiri/Sharpe iyileşiyor ama DD kötüleşiyor). "Bu gate'ler gereksiz"
+   hükmü artık DESTEKLENMİYOR — izole ölçüm portföy-seviyesi risk azaltma
+   etkileşimini yakalayamamış.
 9. `.gitignore`'da genel `.env`/`*.log` deseni eksikliği (A3'ten, düşük öncelik).
 10. **FX snapshot'ında EUR_USD/GBP_USD 2010-07-01'de OHLC ihlali** (close>high,
     yfinance kaynaklı, USD_JPY etkilenmedi) — DÜZELTİLMEDİ (E1 read-only
@@ -268,6 +339,19 @@ Bilinen sorun/blok:
     arşiv yok (Bölüm 10.4 fallback protokolü devrede, E2+'ta uygulanacak).
 13. US evreni survivorship yanlılığı taşıyor (bilinen, kabul edilen sınırlama
     — bkz. DATA_AUDIT_US.md).
+14. **YENİ (bu tur) — `pending_exits` set-iteration determinizm bug'ı
+    DÜZELTİLDİ**: `backtest/engine.py`'de aynı güne denk gelen çoklu sembol
+    çıkışlarının sırası PYTHONHASHSEED'e göre süreç başına değişebiliyordu
+    (finansal sonuç etkilenmez, yalnızca trades.csv satır sırası). Düzeltme
+    `sorted(pending_exits)`. v7'nin dondurulmuş trades.csv'si bu yüzden yeni
+    koşumlarla artık İÇERİK olarak (sort sonrası) aynı ama BAYT-BAYT aynı
+    DEĞİL (2 bilinen aynı-gün-çoklu-çıkış çakışmasında sıra farklı) — v7
+    DEĞİŞTİRİLMEDİ, bu beklenen bir fark.
+15. **Hiçbir varyant (baseline dahil) USD-CAGR>0 başarı çıtasını geçmiyor**
+    (bkz. KALICI KAYIT 1) — TRY'nin USD karşısındaki yapısal değer kaybı
+    baskın. max DD/endeks-DD oranı kısmı İYİ (0.106-0.172).
+16. 4/5 varyantta breaker 1 kez tetiklendi — kök nedeni (veri artefaktı mı
+    gerçek drawdown mu) bu turda İNCELENMEDİ.
 
 Önceki fazlardan taşınan varsayımlar: pandas-ta yerine pandas-ta-classic +
 numpy 2.2 (e31e401); BIST seans saatleri yaklaşık; backtest degrade modda;
@@ -279,6 +363,8 @@ breaker backtest entegrasyonu + MC dd_p5 düzeltmesi (c906d10, 53ba4b3); v7
 motor+veri düzeltme turu — equity forward-fill + aynı-gün-çoklu-onay +
 data/cleaning.py + DATA_AUDIT_v2.md + performans (5227438); EXPANSION.md
 eklendi (d0ab81d); E1 veri temeli — US/FX adapter'ları, snapshot'lar,
-DATA_AUDIT_US/FX.md, data/events.py (bu tur).
+DATA_AUDIT_US/FX.md, data/events.py; portföy ablasyon turu — disabled_gates
+parametresi + pending_exits determinizm düzeltmesi + ABLATION_PORTFOLIO.md
+(bu tur).
 
 Limit nedeniyle durdu mu: hayır — Durma Noktası 1 nedeniyle duruldu.

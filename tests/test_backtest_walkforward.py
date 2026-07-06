@@ -118,6 +118,47 @@ def test_run_walk_forward_produces_non_overlapping_windows():
         assert results[1].train_start == expected_next_start
 
 
+def test_disabled_gates_forwarded_to_all_internal_run_backtest_calls(monkeypatch):
+    """Portföy ablasyon turu: `run_walk_forward`'a verilen `disabled_gates`,
+    train grid taramasının HER kombinasyonuna VE test koşumuna aynen
+    iletilmeli."""
+    import backtest.walkforward as wf_mod
+    calls = []
+    original = wf_mod.run_backtest
+
+    def _spy(*args, **kwargs):
+        calls.append(kwargs.get("disabled_gates"))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(wf_mod, "run_backtest", _spy)
+
+    cfg = make_cfg()
+    df = _flat_series(n=500)
+    run_walk_forward(["TEST"], cfg, lambda s: df, disabled_gates=["regime"])
+
+    assert len(calls) > 0
+    assert all(c == ["regime"] for c in calls)
+
+
+def test_disabled_gates_none_default_forwards_none(monkeypatch):
+    import backtest.walkforward as wf_mod
+    calls = []
+    original = wf_mod.run_backtest
+
+    def _spy(*args, **kwargs):
+        calls.append(kwargs.get("disabled_gates"))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(wf_mod, "run_backtest", _spy)
+
+    cfg = make_cfg()
+    df = _flat_series(n=500)
+    run_walk_forward(["TEST"], cfg, lambda s: df)  # disabled_gates verilmedi
+
+    assert len(calls) > 0
+    assert all(c is None for c in calls)
+
+
 def test_run_walk_forward_empty_data_returns_empty_list():
     cfg = make_cfg()
     empty = pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
