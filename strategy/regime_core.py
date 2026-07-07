@@ -312,19 +312,24 @@ def run_regime_core_prod(
         peak_equity = max(peak_equity, equity_today)
 
         # Breaker değerlendirmesi (gün sonu equity'ye göre; FREEZE gelecekteki ENTER'ları etkiler).
-        # trip sayımı EPİZOT (edge) bazlı: OK→ALARM ve *→FREEZE geçişlerinde artar.
+        # ALARM epizot bazlı sayılır (bildirim latch'iyle tutarlı: bir excursion'da
+        # bir kez; drawdown alarm_pct/2 altına inince epizot kapanır — aynı derin
+        # düşüşteki 25% çizgisi yeniden-geçişleri MÜKERRER SAYILMAZ). FREEZE edge bazlı.
         if breaker is not None:
             state = breaker.evaluate(date, equity_today, peak_equity)
             drawdown_now = 1 - equity_today / peak_equity
+            if drawdown_now < breaker.alarm_pct * 0.5:
+                prev_breaker_state = BreakerState.OK   # epizot kapandı → latch reset
             if state == BreakerState.ALARM and prev_breaker_state != BreakerState.ALARM:
                 alarm_trips += 1
                 breaker_events.append({"date": date, "state": "ALARM", "drawdown": drawdown_now,
                                        "equity": equity_today, "peak": peak_equity})
+                prev_breaker_state = BreakerState.ALARM
             elif state == BreakerState.FREEZE and prev_breaker_state != BreakerState.FREEZE:
                 freeze_trips += 1
                 breaker_events.append({"date": date, "state": "FREEZE_TRIP", "drawdown": drawdown_now,
                                        "equity": equity_today, "peak": peak_equity})
-            prev_breaker_state = state
+                prev_breaker_state = BreakerState.FREEZE
 
         if date_range is None or (date_range[0] <= date < date_range[1]):
             equity_points.append((date, equity_today))
