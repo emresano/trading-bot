@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.tradingbot.watchdog — AYRI gözcü servisi (F5-B1 / CLAUDE.md 13.3).
+
+  NE YAPAR: her 15 dk `runtime/paper/heartbeat` dosyasının yaşını kontrol eder;
+  bayatsa (> safety.heartbeat_stale_sec) Telegram'a CRITICAL bildirir. Bot'tan
+  BAĞIMSIZDIR — bot çökse bile ayakta kalır (tek bağımlılığı Telegram token'ı).
+
+  Token yoksa watchdog log-only çalışır (bildirim gönderemez ama çöker de değildir).
+
+  KURULUM:
+    cp deploy/com.tradingbot.watchdog.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.tradingbot.watchdog.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tradingbot.watchdog</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/sano/trading-bot/.venv/bin/python</string>
+        <string>-m</string>
+        <string>safety.heartbeat</string>
+        <string>--config</string>
+        <string>/Users/sano/trading-bot/config/regime_core.yaml</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/sano/trading-bot</string>
+
+    <!-- Her 900 sn (15 dk). Bot günde bir koşsa da heartbeat her döngüde tazelenir;
+         watchdog uzun sessizliği (çökme/asılma) yakalar. -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/sano/trading-bot/runtime/paper/logs/watchdog.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/sano/trading-bot/runtime/paper/logs/watchdog.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

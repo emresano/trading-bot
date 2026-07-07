@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.tradingbot.paper — Gölge paper scheduler (F5-B1) günlük EOD işi.
+
+  NE YAPAR: BIST kapanışı (18:00 Istanbul) + grace sonrası her İŞ GÜNÜ bir kez
+  koşar: yfinance EOD veri güncelle (--refresh) + günlük döngü (--cycle). Tatil/
+  hafta sonu günleri scheduler kendi içinde bist_calendar ile atlar (zararsız koşar).
+
+  KURULUM (operatör, README/OPERATOR_GUIDE §Başlat):
+    1) Bir kez bootstrap:  .venv/bin/python main.py --config config/regime_core.yaml --bootstrap
+    2) cp deploy/com.tradingbot.paper.plist ~/Library/LaunchAgents/
+    3) launchctl load ~/Library/LaunchAgents/com.tradingbot.paper.plist
+
+  NOT: Yol/kullanıcı-adı Mac Mini'ye göre; gerekiyorsa düzenle. Saat SİSTEM yerel
+  saatidir — Mac Istanbul saatinde varsayılıyor (aksi halde Hour'u ayarla).
+  'real'e geçiş YOK — bu servis yalnızca paper (Durma Noktası 2).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tradingbot.paper</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/sano/trading-bot/.venv/bin/python</string>
+        <string>/Users/sano/trading-bot/main.py</string>
+        <string>--config</string>
+        <string>/Users/sano/trading-bot/config/regime_core.yaml</string>
+        <string>--refresh</string>
+        <string>--cycle</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/sano/trading-bot</string>
+
+    <!-- Her iş günü 19:30 yerel (kapanış 18:00 + ~1.5s grace). Cumartesi/Pazar hariç. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>30</integer></dict>
+    </array>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/sano/trading-bot/runtime/paper/logs/paper.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/sano/trading-bot/runtime/paper/logs/paper.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
