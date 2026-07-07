@@ -184,18 +184,28 @@ def snapshot_features(d: pd.Series, h4: Optional[pd.Series], cfg) -> dict[str, f
 
 
 def evaluate_entry(symbol: str, daily_df: pd.DataFrame, h4_df: Optional[pd.DataFrame], cfg,
-                   disabled_gates: Optional[set[str]] = None) -> Signal:
+                   disabled_gates: Optional[set[str]] = None,
+                   gates: Optional[list[Gate]] = None,
+                   gate_names: Optional[list[str]] = None) -> Signal:
     """`disabled_gates`: verilirse (read-only ablasyon/teşhis amaçlı — asla
     üretim/paper/real modda kullanılmaz), isimleri bu kümede olan gate'ler
     ÇAĞRILMAZ, otomatik PASS sayılır (huninin geri kalanı aynen işler).
     Verilmezse (None/boş, varsayılan) davranış BİREBİR ENTRY_GATES'in tam
-    listesiyle çalışan eski haliyle aynıdır."""
+    listesiyle çalışan eski haliyle aynıdır.
+
+    `gates`/`gate_names` (EXPANSION.md 8): verilirse huni bu profil listesiyle
+    kurulur (strategy.gate_registry.build_entry_gates çıktısı). İkisi de
+    verilmezse (varsayılan) modül-düzeyi ENTRY_GATES/GATE_NAMES kullanılır —
+    BIST davranışı bit-bit aynı (golden çapası kanıtlar)."""
+    active_gates = gates if gates is not None else ENTRY_GATES
+    active_names = gate_names if gate_names is not None else GATE_NAMES
+
     d = prepare_row_context(daily_df, len(daily_df) - 1)  # SON KAPANMIŞ günlük bar
     h4 = h4_df.iloc[-1] if h4_df is not None and not h4_df.empty else None
 
     results: list[str] = []
     features = snapshot_features(d, h4, cfg)
-    for gate, name in zip(ENTRY_GATES, GATE_NAMES):
+    for gate, name in zip(active_gates, active_names):
         if disabled_gates and name in disabled_gates:
             results.append(f"[PASS] {name}: DEVRE DIŞI (disabled_gates ablasyon parametresi) — otomatik PASS")
             continue
