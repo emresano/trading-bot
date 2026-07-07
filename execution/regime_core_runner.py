@@ -73,12 +73,14 @@ class RegimeCoreRunner:
                  cash_rate: Optional[pd.Series] = None,
                  breaker: Optional[RegimeCoreBreaker] = None,
                  state_path: Path | str = DEFAULT_RUNNER_STATE,
-                 decision_hook: Optional[Callable[[DailyDecision], None]] = None):
+                 decision_hook: Optional[Callable[[DailyDecision], None]] = None,
+                 ledger=None):
         self.broker = broker
         self.params = params
         self.cash_rate = cash_rate
         self.breaker = breaker
         self.decision_hook = decision_hook
+        self.ledger = ledger    # safety.reconciliation.LocalLedger | None (B2)
         self.state_path = Path(state_path)
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.state_path))
@@ -209,6 +211,10 @@ class RegimeCoreRunner:
             if self.decision_hook is not None:
                 self.decision_hook(dec)
             self._save_state(date, peak, prev_state, latched)
+            # B2: döngü SONUNDA yerel defteri broker gerçeğine eşitle. Bu yazımdan
+            # ÖNCE bir çöküş olursa broker≠yerel → bir sonraki startup_reconcile FREEZE.
+            if self.ledger is not None:
+                self.ledger.sync_from(self.broker.quantities())
         return decisions
 
     def _mtm_prices(self, closes: dict[str, pd.Series], date) -> dict[str, float]:
