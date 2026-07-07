@@ -71,3 +71,32 @@ cash_yield:
   enabled: true
   aux_snapshot: "data/snapshots/aux/2026-07-07/TRY_ON_RATE.parquet"
   haircut_bps: 200   # bkz. backtest/regime_core.py::CASH_YIELD_HAIRCUT (0.02 olarak sabit kodlanmış, burada yalnızca belge amaçlı)
+
+# ============================================================ FAZ 5 (PAPER) — F5A-4
+# Kill-switch hiyerarşisi (HARDENING B3). Tümü KOD SABİTİ DEĞİL, config'tedir.
+# Her switch bağımsız; tetiklenince loglanır + bildirilir; TÜM FREEZE çıkışları
+# YALNIZCA kullanıcı komutuyla (otomatik reset YOK). Eşikler D1 ailesine uyarlandı:
+# D1 yılda ~3-4 anahtarlama (~33 tarihsel round-trip) ürettiğinden MUHAFAZAKÂR.
+# NOT: Bu blok yalnızca paper runtime'ı tarafından okunur; backtest/golden yolu OKUMAZ.
+# Değerler ÖNERİDİR — kullanıcı/baş danışman gözden geçirmesine tabidir (PHASE5A_REVIEW).
+safety:
+  # 1. Drawdown breaker (KALICI KAYIT 6) — RegimeCoreBreaker'a bağlanır (bilgi amaçlı burada).
+  alarm_drawdown_pct: 0.25    # bildirim, davranış değişmez
+  freeze_drawdown_pct: 0.40   # yeni ENTER yok; çıkış serbest; reset yalnız kullanıcı
+  # 2. Günlük zarar limiti → gün sonuna kadar yeni ENTER FREEZE.
+  #    D1 basket tüm-portföy; tek-gün %8+ düşüş = anomali/kriz sinyali. (config.yaml'daki
+  #    10-gate %2.5 buraya UYGUN DEĞİL — o per-işlem risk rejimine ait.) D1'de pratik
+  #    etki sınırlı (ENTER nadir) ama kriz gününde yeniden-giriş churn'ünü engeller.
+  daily_loss_limit_pct: 0.08
+  # 3. Ardışık N zararlı round-trip (ENTER→EXIT) → FREEZE.
+  #    Gerekçe: ~33 tarihsel round-trip'te 4 ardışık zarar istatistiksel olarak nadir;
+  #    rejim filtresinin bozulduğunun / piyasa yapısının değiştiğinin sinyali.
+  consecutive_losses_freeze: 4
+  # 4. Veri anomalisi → FREEZE.
+  data_stale_sec: 172800      # ~2 takvim günü yeni bar yok (günlük kadans) → donma şüphesi
+  data_max_price_jump_pct: 0.20  # bir sembol tek-gün >%20 ham sıçrama → bozuk/split veri şüphesi
+  # 5. API hata oranı → FREEZE.
+  api_error_freeze_count: 5   # pencere içinde >=5 hata
+  api_error_window_sec: 300
+  # Manuel kill-switch dosyası (config.yaml safety.kill_switch_file ile aynı ad).
+  freeze_dir: "runtime/freeze"
