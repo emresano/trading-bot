@@ -100,3 +100,22 @@ safety:
   api_error_window_sec: 300
   # Manuel kill-switch dosyası (config.yaml safety.kill_switch_file ile aynı ad).
   freeze_dir: "runtime/freeze"
+
+# ============================================================ FAZ 5 (PAPER) — F5-B1
+# Gölge paper scheduler (main.py). AlgoLab İPTAL (2025-12-31); veri kaynağı yfinance
+# EOD, emir katmanı PaperBroker (dahili simülatör). Bu blok yalnızca paper runtime'ı
+# okur; backtest/golden yolu OKUMAZ. mode:paper ve eşikler DEĞİŞMEZ (config.yaml).
+paper:
+  data_source: yfinance        # F5-B1: yfinance EOD (AlgoLab kaldırıldı)
+  snapshot_bootstrap: "data/snapshots/2026-07-06"   # canlı deponun bootstrap kaynağı
+  initial_cash: 100000         # başlangıç nakdi (initial_equity ile aynı; açıklık için)
+  # go_live_date: OPERATÖR kararı (Faz 6 resmi başlangıcı AYRI). null iken scheduler
+  # 'observe' modda koşar: sinyal/kompozit hesaplar, journal'a signal_eval yazar,
+  # heartbeat + EOD özet üretir AMA paper hesabı BAŞLATMAZ, İŞLEM AÇMAZ. Operatör
+  # bu alanı bir işlem gününe (YYYY-MM-DD) set edince 'active' moda geçer ve o gün
+  # rejim AÇIKSA INITIAL_ENTER (madde 3), KAPALIYSA nakitte + faiz tahakkuku başlar.
+  go_live_date: null
+  bar_close_grace_sec: 3600    # BIST kapanışı sonrası yfinance gün barı otursun diye
+  eod_fetch_retries: 3         # 'bar yok' → tekrar dene
+  eod_fetch_retry_sec: 300
+  runtime_dir: "runtime/paper" # canlı depo + state + journal + heartbeat kökü

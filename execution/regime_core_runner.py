@@ -45,6 +45,12 @@ CREATE TABLE IF NOT EXISTS runner_state (
 );
 """
 
+# F5-B1: go-live'da mevcut rejimi benimseme (INITIAL_ENTER) bayrağı — geriye
+# uyumlu ALTER (eski DB'lerde kolon yoksa eklenir; varsayılan 0).
+_MIGRATIONS = [
+    ("golive_pending", "ALTER TABLE runner_state ADD COLUMN golive_pending INTEGER DEFAULT 0"),
+]
+
 
 @dataclass
 class DailyDecision:
@@ -56,7 +62,7 @@ class DailyDecision:
     confirm_count: int          # son confirm_days içinde üst-bant üstü gün sayısı
     signal_yesterday: bool      # dün kapanışta hesaplanan rejim kararı (bugün uygulanır)
     in_position_before: bool
-    action: str                 # "ENTER" | "EXIT" | "HOLD_POSITION" | "HOLD_CASH" | "FREEZE_BLOCK_ENTER"
+    action: str                 # "ENTER" | "INITIAL_ENTER" | "EXIT" | "HOLD_POSITION" | "HOLD_CASH" | "FREEZE_BLOCK_ENTER"
     planned_qty: dict[str, int] = field(default_factory=dict)
     executed_order_ids: list[str] = field(default_factory=list)
     equity_before: float = 0.0
@@ -85,6 +91,7 @@ class RegimeCoreRunner:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.state_path))
         self._conn.executescript(_SCHEMA)
+        self._apply_migrations()
         row = self._conn.execute("SELECT id FROM runner_state WHERE id=1").fetchone()
         if row is None:
             self._conn.execute(
@@ -95,25 +102,39 @@ class RegimeCoreRunner:
     def close(self) -> None:
         self._conn.close()
 
-    # ------------------------------------------------------------------ state
-    def _state(self) -> tuple[Optional[pd.Timestamp], float, str, bool]:
-        r = self._conn.execute(
-            "SELECT last_processed_date, peak_equity, prev_breaker_state, alarm_latched "
-            "FROM runner_state WHERE id=1").fetchone()
-        last = pd.Timestamp(r[0]) if r[0] else None
-        return last, float(r[1]), r[2], bool(r[3])
-
-    def _save_state(self, last_date: pd.Timestamp, peak: float, prev_state: str, latched: bool) -> None:
-        self._conn.execute(
-            "UPDATE runner_state SET last_processed_date=?, peak_equity=?, prev_breaker_state=?, "
-            "alarm_latched=? WHERE id=1",
-            (last_date.isoformat(), peak, prev_state, int(latched)))
+    def _apply_migrations(self) -> None:
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(runner_state)").fetchall()}
+        for col, ddl in _MIGRATIONS:
+            if col not in cols:
+                self._conn.execute(ddl)
         self._conn.commit()
 
-    def initialize_flat(self, as_of_date) -> None:
-        """Canlı başlangıç: geçmişi TİCARETSİZ atla — bu tarihe kadar işlenmiş say,
-        nakitte başla. (Paper go-live; geçmiş 20 yılı yeniden ticaretleme.)"""
-        self._save_state(pd.Timestamp(as_of_date), self.params.initial_equity, "OK", False)
+    # ------------------------------------------------------------------ state
+    def _state(self) -> tuple[Optional[pd.Timestamp], float, str, bool, bool]:
+        r = self._conn.execute(
+            "SELECT last_processed_date, peak_equity, prev_breaker_state, alarm_latched, "
+            "golive_pending FROM runner_state WHERE id=1").fetchone()
+        last = pd.Timestamp(r[0]) if r[0] else None
+        return last, float(r[1]), r[2], bool(r[3]), bool(r[4])
+
+    def _save_state(self, last_date: pd.Timestamp, peak: float, prev_state: str, latched: bool,
+                    golive_pending: bool = False) -> None:
+        self._conn.execute(
+            "UPDATE runner_state SET last_processed_date=?, peak_equity=?, prev_breaker_state=?, "
+            "alarm_latched=?, golive_pending=? WHERE id=1",
+            (last_date.isoformat(), peak, prev_state, int(latched), int(golive_pending)))
+        self._conn.commit()
+
+    def initialize_flat(self, as_of_date, adopt_regime_on: bool = False) -> None:
+        """Canlı başlangıç (go-live): geçmişi TİCARETSİZ atla — bu tarihe kadar
+        işlenmiş say, nakitte başla (geçmiş 20 yılı yeniden ticaretleme).
+
+        `adopt_regime_on=True` (go-live'da rejim zaten AÇIK): ilk işlenen günde
+        üretilen ENTER, mevcut rejimin BENİMSENMESİdir (yeni bir cross-up değil) →
+        `INITIAL_ENTER` olarak etiketlenir (F5-B1 madde 3, journal özel etiketi).
+        Offline parite yeniden-koşumu da aynı bayrakla aynı etiketi üretir (B5)."""
+        self._save_state(pd.Timestamp(as_of_date), self.params.initial_equity, "OK", False,
+                         golive_pending=bool(adopt_regime_on))
 
     # ------------------------------------------------------------------ ana döngü
     def process_up_to(self, closes: dict[str, pd.Series], today=None) -> list[DailyDecision]:
@@ -130,7 +151,7 @@ class RegimeCoreRunner:
         if today is not None:
             all_dates = all_dates[all_dates <= pd.Timestamp(today)]
 
-        last_processed, peak, prev_state, latched = self._state()
+        last_processed, peak, prev_state, latched, golive_pending = self._state()
         daily_rate = (self.cash_rate.reindex(all_dates, method="ffill").bfill()
                       if self.cash_rate is not None else None)
 
@@ -173,7 +194,9 @@ class RegimeCoreRunner:
                         for sym in self.params.symbols:
                             if sym in planned_qty:
                                 order_ids += self.broker.submit_market_order(sym, Side.BUY, planned_qty[sym])
-                        action = "ENTER"
+                        # go-live'da mevcut rejimi benimseme → INITIAL_ENTER (madde 3).
+                        action = "INITIAL_ENTER" if golive_pending else "ENTER"
+                        golive_pending = False
                 elif not signal_yesterday and in_position:
                     order_ids = self.broker.close_all(order=self.params.symbols)
                     action = "EXIT"
@@ -210,7 +233,7 @@ class RegimeCoreRunner:
             decisions.append(dec)
             if self.decision_hook is not None:
                 self.decision_hook(dec)
-            self._save_state(date, peak, prev_state, latched)
+            self._save_state(date, peak, prev_state, latched, golive_pending)
             # B2: döngü SONUNDA yerel defteri broker gerçeğine eşitle. Bu yazımdan
             # ÖNCE bir çöküş olursa broker≠yerel → bir sonraki startup_reconcile FREEZE.
             if self.ledger is not None:

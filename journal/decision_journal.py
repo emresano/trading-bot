@@ -79,6 +79,30 @@ class DecisionJournal:
         }
         self._write(rec)
 
+    def record_signal_evaluation(self, *, date, composite: float, ma: float,
+                                 upper_band: float, lower_band: float, confirm_count: int,
+                                 regime_on: bool, in_position: bool, mode: str = "observe") -> None:
+        """Gözlem modu 'değerlendirilen sinyal' kaydı (B7-D1 önerisi): paper hesabı
+        henüz başlatılmadan (go_live_date=null) her gün rejim değerlendirmesini
+        loglar. Bir İŞLEM DEĞİL — B7 karnesinde 'değerlendirilen sinyal' = günlük
+        rejim değerlendirmesi (bkz. PHASE5B1_REVIEW.md B7-D1 önerisi)."""
+        self._write({
+            "ts": _utcnow_iso(), "type": "signal_eval", "mode": mode,
+            "date": str(date),
+            "regime": {
+                "composite": _num(composite), "ma": _num(ma), "ma_period": self.ma_period,
+                "upper_band": _num(upper_band), "lower_band": _num(lower_band),
+                "band_pct": self.band_pct, "confirm_count": confirm_count,
+                "confirm_days": self.confirm_days, "regime_on": bool(regime_on),
+            },
+            "in_position": bool(in_position),
+        })
+
+    def record_event(self, level: str, category: str, message: str) -> None:
+        """Serbest olay kaydı (INFO/WARN/ERROR/CRITICAL). Kimlik maskeli."""
+        self._write({"ts": _utcnow_iso(), "type": "event",
+                     "level": level, "category": category, "message": message})
+
     def record_order_event(self, request: dict, response: dict, status: str) -> None:
         """Emir olayı — istek/yanıt özeti MASKELİ (B4). Kimlik bilgileri sanitize edilir."""
         self._write({"ts": _utcnow_iso(), "type": "order_event", "status": status,
