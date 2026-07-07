@@ -1,18 +1,23 @@
 # Proje Durumu
-Son güncelleme: 2026-07-07T08:15:00+03:00 (Europe/Istanbul)
-Şu an: **D1 (rejim-filtreli çekirdek) ailesi baş danışman kararıyla KABUL
-EDİLDİ (KALICI KAYIT 6, 2026-07-07)** — S1b'nin mühürlü tablosu 4/4 geçti,
-kullanıcının önceden koyduğu kural mekanik olarak uygulandı. Operasyonel
-breaker kalibrasyonu belirlendi (ALARM -%25, FREEZE -%40). **Üretim
-implementasyonu HENÜZ YAPILMADI — ayrı, onaylı bir tur.** Durma Noktası 1
-ve 2 hâlâ kullanıcıda; Faz 5'e/E2'ye geçilmedi. Hiçbir eşik/gate/parametre
-değiştirilmedi, `backtest/engine.py`/`strategy/`/`risk/`/`config/config.yaml`/
-mevcut snapshot'lar DOKUNULMADI (git diff boş).
+Son güncelleme: 2026-07-07T12:30:00+03:00 (Europe/Istanbul)
+Şu an: **EXPANSION.md E2 (Motor Genelleştirme) KOD İŞİ TAMAMLANDI —
+kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `EXPANSION_E2.md`).
+Çok-piyasa çekirdeği kuruldu: golden regresyon çapası (İLK İŞ), MarketSpec +
+registry, takvimler (XIST/XNYS/FX_24_5 + DST), gate_registry (bist davranış-nötr
+göç), CostModel katmanı (bist/us/fx) + daily_carry hook, yön farkındalığı
+(Direction mekaniği — short GATE tasarımı KAPSAM DIŞI), config yükleyici
+(portfolio+markets, 11.4 eşdeğerlik), FX OHLC onarımı + earnings/econ veto
+altyapısı. **DEMİR KURAL korundu: her E2 commit'i BIST golden'ıyla BAYT-BAYT
+aynı** (tests/test_golden_bist.py). Tam süit: **364 passed** (E2 öncesi 309).
+Hiçbir BIST eşiği/gate'i/parametresi değiştirilmedi; config/config.yaml DOKUNULMADI.
+**E3'e/E4'e/Faz 5'e/regime_core üretim portuna GEÇİLMEDİ.** İki durma noktası
+kullanıcıda.
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7, v7.1-golden) +
 HARDENING.md Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) +
 Teşhis turu v6 + Motor+veri düzeltme turu v7 + EXPANSION.md E1 (Veri Temeli)
 + Portföy ablasyon turu (+ kapanış R1) + S1 + S1b rejim-filtreli çekirdek
-spike'ları (D1 ailesi KABUL EDİLDİ, üretim implementasyonu bekliyor).
+spike'ları (D1 ailesi KABUL EDİLDİ, üretim implementasyonu bekliyor) +
+**EXPANSION.md E2 (Motor Genelleştirme — çok-piyasa çekirdeği, golden korundu)**.
 
 ## KALICI KAYIT 1 — Başarı Çıtası (kullanıcı kararı, 2026-07-06)
 USD bazında CAGR > 0 taban şart; Sharpe > XU100 al-tut Sharpe VE max DD ≤
@@ -115,6 +120,36 @@ veya E2'ye otomatik geçiş anlamına GELMEZ.
    (AlgoLab'da para piyasası fonu/repo süpürme mekanizması var mı, hangi
    oranla, hangi likidite/vade kısıtlarıyla) — şu anki %0/faizli model
    yalnızca bir YAKLAŞIKLIK, gerçek enstrüman farklı davranabilir.
+
+## KALICI KAYIT 7 — EXPANSION E2 (Motor Genelleştirme) tamamlandı (2026-07-07)
+Çok-piyasa çekirdeği kuruldu (bkz. `EXPANSION_E2.md`), **DEMİR KURAL korundu:
+her E2 commit'i BIST v7.1-golden'ıyla BAYT-BAYT aynı** (tests/test_golden_bist.py,
+iki katman: cost_model=None + BIST CostModel carry=0). Tam süit 364 passed
+(E2 öncesi 309). Kod işi tamam, kullanıcı/baş danışman değerlendirmesi bekliyor;
+E3/E4/Faz 5'e geçilmedi.
+
+**Kalıcı düzeltmeler/kararlar** (gelecek oturumlar için):
+- **Hayalet-bar tarihi düzeltmesi**: EXPANSION 15.2 (04-08) ve E2 talimatı (04-09)
+  "XIST tatili" varsayımı HATALI; gerçek 2024 Ramazan Bayramı XIST tatilleri
+  **04-10/11/12**. Repodaki gerçek hayalet bar EREGL 2024-04-09 bir volume=0
+  phantom'dur (data/cleaning.py yakalar), takvim katmanının sınıfı değil. Test
+  gerçek tatilleri çapa aldı.
+- **Bilinçli kapsam kararı (Bölüm 8'e uygun)**: run_backtest LONG-only bırakıldı;
+  engine-seviyesi SHORT execution short-gate tasarımından (Bölüm 17 #10) sonra.
+  Short MEKANİĞİ risk/direction.py'de tam test edilerek kuruldu (ayna simetrisi,
+  quote-ccy, marjin). two_sided profiller short-gate tanımlanana dek aktive edilmez.
+- **Ertelenenler (Faz 5 modülleri henüz yok)**: PaperBroker daily_carry, journal
+  market/currency kolonları. İnşa edilince eklenecek.
+- **exchange_calendars==4.13.2** eklendi (req.txt + lock birlikte). lxml eklenmedi.
+- **FX boyutlama IEEE754 float duyarlı** (belgelendi): EURUSD-direkt 9374 vs
+  USDJPY-conv 9375 (±1 birim, ikisi de mekanik doğru).
+
+Bu oturumda yapılan (onaylı E2 — Motor Genelleştirme turu):
+- E2.0–E2.9 sırayla, her biri golden-kanıtlı ayrı commit (git log): golden çapa,
+  models yön/piyasa ekleri, MarketSpec+registry, calendars+clock delegasyonu,
+  gate_registry göçü, CostModel katmanı+daily_carry hook, yön farkındalığı+risk
+  genişlemesi, config yükleyici (11.4 eşdeğerlik), FX onarımı+veto altyapısı.
+- Kapanış: EXPANSION_E2.md raporu, tam süit 364 passed, son golden bayt-bayt.
 
 Bu oturumda yapılan (onaylı S1b kapanış turu — eksik MC bölümü + resmi kabul kaydı):
 - **Madde 1 — Eksik MC satırı düzeltildi**: S1b'nin ana koşumu sırasında
@@ -458,22 +493,24 @@ Paket 1 bulgularının düzeltmesi, hâlâ geçerli):
   adaylarda kazanan/kaybeden ayrımı göstermiyor (küçük örneklem, ön-bulgu).
 - `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
-**Sırada:** D1 (rejim-filtreli çekirdek) ailesi **KABUL EDİLDİ** (KALICI
-KAYIT 6). **Bu üretime otomatik geçiş DEĞİL** — sıradaki somut iş, kullanıcı
-"üretim turu onaylandı" derse: D1'in `backtest/regime_core.py`'deki spike
-implementasyonunun, CLAUDE.md Bölüm 3.1 ilkesiyle ("backtest=canlı aynı
-fonksiyon") gerçek `strategy/`/`risk/`/`execution/` modüllerine taşınması —
-ayrı, onaylı, muhtemelen çok adımlı bir tur (E2 sonrası). Üç paralel konu:
-(a) **BIST hattı**: D1 KABUL EDİLDİ, operasyonel breaker kalibrasyonu
-belirlendi (ALARM -%25/FREEZE -%40). Üretim implementasyonu bekliyor —
-BAŞLANMADI.
-(b) **EXPANSION.md**: E1 tamamlandı. E2 ön şartı (v7 + BIST karar) sağlandı,
-ama "E2 onaylandı" talimatı hâlâ ayrı gerekiyor. E1'in açık maddeleri: FX
-OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/GBP_USD), lxml kararı.
-(c) **Ablasyon turu (R1 dahil) + S1 + S1b (+ kapanış)**: TAMAMLANDI. Açık
-madde yok — kalan işler (EVDS çapraz doğrulama, üretim nakit bacağı
-enstrümanı) real-öncesi/üretim-turu kuyruğuna alındı (bkz. KALICI KAYIT 6
-ve aşağıdaki liste, madde 17-18).
+**Sırada:** EXPANSION.md **E2 (Motor Genelleştirme) KOD İŞİ TAMAMLANDI** —
+kullanıcı/baş danışman değerlendirmesi bekliyor (`EXPANSION_E2.md`). Otomatik
+GEÇİŞ YOK. Üç paralel konu:
+(a) **BIST hattı**: D1 KABUL EDİLDİ (KALICI KAYIT 6), operasyonel breaker
+kalibrasyonu belirlendi (ALARM -%25/FREEZE -%40). regime_core üretim portu ayrı
+onaylı tur (E2'den SONRA, "üretim turu onaylandı" gerekir) — BAŞLANMADI.
+(b) **EXPANSION.md**: E1 + E2 TAMAMLANDI. E2'de FX OHLC-ihlali (2010-07-01)
+çözüldü (data/cleaning.py::repair_fx_ohlc), lxml EKLENMEDİ (veto altyapısı
+gerektirmiyor). Sıradaki E-fazı **E3 (broker adapter spike + karar)** — "E3
+onaylandı" talimatı AYRI gerekir. E2 açık maddeleri (E3/E4'e taşındı):
+SEC/TAF+swap resmî doğrulama, US hesap tipi kararı, short gate seti tasarımı
+(Bölüm 17 #10, FX aktivasyonu öncesi), US instruments[] config'e girişi,
+econ/earnings gerçek parquet dosyaları. Ertelenenler (Faz 5 modülleri
+inşa edilince): PaperBroker daily_carry entegrasyonu, journal market/currency
+kolonları, engine-seviyesi SHORT execution (short-gate sonrası).
+(c) **Ablasyon turu (R1 dahil) + S1 + S1b (+ kapanış)**: TAMAMLANDI. Kalan
+işler (EVDS çapraz doğrulama, üretim nakit bacağı enstrümanı) real-öncesi/
+üretim-turu kuyruğunda (bkz. KALICI KAYIT 6 ve aşağıdaki liste, madde 18-19).
 
 Bilinen sorun/blok:
 1. **Kullanıcı onayı bekleniyor (Durma Noktası 1, BIST)** — kasıtlı, aşılamaz kapı.
