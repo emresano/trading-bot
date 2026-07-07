@@ -1,19 +1,18 @@
 # Proje Durumu
-Son güncelleme: 2026-07-07T07:30:00+03:00 (Europe/Istanbul)
-Şu an: **S1b — Rejim-Çekirdek ölçüm tamamlama turu (nakit-getiri düzeltmesi,
-REGIME_CORE_S1B.md) tamamlandı — Durma Noktası 1'de duruluyor. Hiçbir eşik/
-gate/parametre değiştirilmedi, `backtest/engine.py`/`strategy/`/`risk/`/
-`config/config.yaml`/mevcut snapshot'lar DOKUNULMADI (git diff boş —
-v7.1-golden çapası korunuyor). Faz 5'e/E2'ye geçilmedi. **Mühürlü kabul
-tablosunda 4/4 kriter GEÇTİ (S1'de 2/4 idi)** — kullanıcının önceden
-belirlediği kurala göre bu, D1 ailesini bir KABUL ADAYI yapıyor (bkz.
-KALICI KAYIT 5) — ama nihai kabul/üretim kararı hâlâ kullanıcının/baş
-danışmanın, otomatik değil.**
+Son güncelleme: 2026-07-07T08:15:00+03:00 (Europe/Istanbul)
+Şu an: **D1 (rejim-filtreli çekirdek) ailesi baş danışman kararıyla KABUL
+EDİLDİ (KALICI KAYIT 6, 2026-07-07)** — S1b'nin mühürlü tablosu 4/4 geçti,
+kullanıcının önceden koyduğu kural mekanik olarak uygulandı. Operasyonel
+breaker kalibrasyonu belirlendi (ALARM -%25, FREEZE -%40). **Üretim
+implementasyonu HENÜZ YAPILMADI — ayrı, onaylı bir tur.** Durma Noktası 1
+ve 2 hâlâ kullanıcıda; Faz 5'e/E2'ye geçilmedi. Hiçbir eşik/gate/parametre
+değiştirilmedi, `backtest/engine.py`/`strategy/`/`risk/`/`config/config.yaml`/
+mevcut snapshot'lar DOKUNULMADI (git diff boş).
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7, v7.1-golden) +
 HARDENING.md Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) +
 Teşhis turu v6 + Motor+veri düzeltme turu v7 + EXPANSION.md E1 (Veri Temeli)
 + Portföy ablasyon turu (+ kapanış R1) + S1 + S1b rejim-filtreli çekirdek
-spike'ları.
+spike'ları (D1 ailesi KABUL EDİLDİ, üretim implementasyonu bekliyor).
 
 ## KALICI KAYIT 1 — Başarı Çıtası (kullanıcı kararı, 2026-07-06)
 USD bazında CAGR > 0 taban şart; Sharpe > XU100 al-tut Sharpe VE max DD ≤
@@ -82,7 +81,57 @@ bulunamadı); 9 aylık bir veri boşluğu (2023) forward-fill ile dolduruldu.
 ikiye ayrıldı, en kötü epizodun kimliği değişti) — bu METODOLOJİK bir
 gözlem, veri hatası değil.
 
-Bu oturumda yapılan (onaylı S1b ölçüm tamamlama turu — nakit-getiri düzeltmesi):
+## KALICI KAYIT 6 — D1 Ailesi KABUL EDİLDİ (2026-07-07, baş danışman kararı)
+D1 (rejim-filtreli çekirdek) ailesi, önceden mühürlenen kurala göre (S1b
+4/4) baş danışman kararıyla **KABUL EDİLDİ** (2026-07-07). Bu, KALICI KAYIT
+5'in mekanik "kabul adayı" tespitinin RESMİ, otoriter sonucudur — Claude
+Code'un kendi hükmü değil, kullanıcının/baş danışmanın kararı. Ölçüm:
+`REGIME_CORE_S1B.md` (nakit-getiri düzeltmeli).
+
+**Kabulle kayda giren çekinceler**:
+(a) USD Sharpe'ta 12-sembol sepeti al-tut üstün — BIST-içi çözülemez, US
+    sleeve gündemi (EXPANSION.md).
+(b) Faiz kaynağı FRED/OECD (TCMB'nin kendisi değil) — real öncesi EVDS
+    çapraz doğrulaması kuyruğa alındı (bkz. aşağı, madde 1).
+(c) Bilgilendirici -%20 DD hedefi (KALICI KAYIT 5'teki mühürlü tablonun
+    "bilgi" satırı) tutmadı — mühürlü/resmi kriter değil, yalnızca not.
+
+**Yeni ailenin operasyonel breaker kararı** (D1 üretim implementasyonu için):
+- **ALARM eşiği: -%25** (bildirim, işlem durdurmaz).
+- **FREEZE eşiği: -%40** (yeni ENTER yok; reset yalnızca kullanıcı elle).
+- Gerekçe: S1/S1b birleşik tarihsel zarf (en kötü gözlenen -%33.5, S1'in
+  faizsiz ana koşumu) + ~6.5 puanlık marj FREEZE eşiğine kadar. Tarihsel
+  tetiklenme sayısı: **0** (ne S1 ne S1b'de -%40'a yaklaşan bir epizot yok).
+
+**Üretim implementasyonu AYRI bir onaylı turdur** (E2 sonrası,
+"backtest=canlı aynı fonksiyon" ilkesiyle, CLAUDE.md Bölüm 3.1). **İki
+durma noktası kullanıcıda kalmaya devam ediyor** — bu kabul kaydı Faz 5'e
+veya E2'ye otomatik geçiş anlamına GELMEZ.
+
+**Kuyruğa eklenen iki madde** (real-öncesi / üretim-turu gündemi):
+1. EVDS API anahtarı temin edilip TRY_ON_RATE'in TCMB'nin resmi kaynağıyla
+   çapraz doğrulanması — real moda geçmeden ÖNCE tamamlanmalı.
+2. Üretim turunda nakit bacağının GERÇEK enstrümanı netleştirilecek
+   (AlgoLab'da para piyasası fonu/repo süpürme mekanizması var mı, hangi
+   oranla, hangi likidite/vade kısıtlarıyla) — şu anki %0/faizli model
+   yalnızca bir YAKLAŞIKLIK, gerçek enstrüman farklı davranabilir.
+
+Bu oturumda yapılan (onaylı S1b kapanış turu — eksik MC bölümü + resmi kabul kaydı):
+- **Madde 1 — Eksik MC satırı düzeltildi**: S1b'nin ana koşumu sırasında
+  ZATEN üretilmiş olan (ama ilk yazımda REGIME_CORE_S1B.md'ye eklenmemiş)
+  Monte Carlo sonucu (`runtime/regime_core_s1b/summary.json::monte_carlo_monthly`,
+  500 koşum, seed=42 — S1 ile AYNI yöntem/örnek sayısı) rapora "(g) Monte
+  Carlo" bölümü olarak eklendi (mevcut içerik değiştirilmedi, yalnızca
+  ekleme yapıldı). dd_p5: S1 -%48.57 → S1b -%44.68 (üç persentilde de
+  tutarlı iyileşme). Yeni bir koşum ÇALIŞTIRILMADI — veri zaten vardı.
+- **Madde 2 — KALICI KAYIT 6 eklendi**: D1 ailesinin resmi kabulü + yeni
+  ailenin operasyonel breaker kalibrasyonu (ALARM -%25, FREEZE -%40) +
+  kuyruğa iki madde (EVDS çapraz doğrulama, üretim nakit bacağı enstrümanı).
+- **Madde 3 — Git tag**: `regime-core-s1b-accepted` bu kapanış commit'ine atıldı.
+- Hiçbir eşik/parametre değiştirilmedi. `git diff backtest/engine.py
+  strategy/ risk/ config/config.yaml` BOŞ.
+
+Önceki oturumda yapılan (onaylı S1b ölçüm tamamlama turu — nakit-getiri düzeltmesi, hâlâ geçerli):
 - **Madde 1 — TRY gecelik faiz aux snapshot**: `data/snapshots/aux/2026-07-07/TRY_ON_RATE.parquet`.
   Kaynak merdiveni denendi: (a) EVDS API yok/başarısız, (b) TCMB statik
   indirme başarısız (302 login yönlendirmesi), (c) FRED/OECD
@@ -409,22 +458,22 @@ Paket 1 bulgularının düzeltmesi, hâlâ geçerli):
   adaylarda kazanan/kaybeden ayrımı göstermiyor (küçük örneklem, ön-bulgu).
 - `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
-**Sırada:** D1 tasarımının ölçümü TAMAMLANDI (S1 + S1b, KALICI KAYIT 4+5) —
-mühürlü tablonun 4/4 kriteri geçti, kullanıcının önceden koyduğu kurala göre
-D1 artık bir **KABUL ADAYI**. **Bu OTOMATİK kabul/üretime geçiş DEĞİL** —
-kullanıcının/baş danışmanın önünde şu seçenekler var: (i) mevcut haliyle
-kabul ve üretim implementasyonuna geçiş kararı (ayrı onaylı tur, "backtest=
-canlı" ilkesiyle main.py/PaperBroker entegrasyonu), (ii) USD-Sharpe
-nüansı (filtrenin USD'de sepetten daha düşük Sharpe'ı) ışığında ek bir
-değerlendirme/iterasyon, (iii) TRY_ON_RATE kaynağının (OECD/FRED, TCMB'nin
-kendisi değil) kalitesi konusunda ek bir doğrulama turu istenirse. Hiçbiri
-OTOMATİK değil, hepsi kullanıcı talimatı bekliyor. Üç paralel konu:
-(a) **BIST hattı**: D1'in ölçümü (S1+S1b) TAMAMLANDI, kabul adayı — üretim
-kararı bekliyor.
+**Sırada:** D1 (rejim-filtreli çekirdek) ailesi **KABUL EDİLDİ** (KALICI
+KAYIT 6). **Bu üretime otomatik geçiş DEĞİL** — sıradaki somut iş, kullanıcı
+"üretim turu onaylandı" derse: D1'in `backtest/regime_core.py`'deki spike
+implementasyonunun, CLAUDE.md Bölüm 3.1 ilkesiyle ("backtest=canlı aynı
+fonksiyon") gerçek `strategy/`/`risk/`/`execution/` modüllerine taşınması —
+ayrı, onaylı, muhtemelen çok adımlı bir tur (E2 sonrası). Üç paralel konu:
+(a) **BIST hattı**: D1 KABUL EDİLDİ, operasyonel breaker kalibrasyonu
+belirlendi (ALARM -%25/FREEZE -%40). Üretim implementasyonu bekliyor —
+BAŞLANMADI.
 (b) **EXPANSION.md**: E1 tamamlandı. E2 ön şartı (v7 + BIST karar) sağlandı,
 ama "E2 onaylandı" talimatı hâlâ ayrı gerekiyor. E1'in açık maddeleri: FX
 OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/GBP_USD), lxml kararı.
-(c) **Ablasyon turu (R1 dahil) + S1 + S1b**: TAMAMLANDI. Açık madde yok.
+(c) **Ablasyon turu (R1 dahil) + S1 + S1b (+ kapanış)**: TAMAMLANDI. Açık
+madde yok — kalan işler (EVDS çapraz doğrulama, üretim nakit bacağı
+enstrümanı) real-öncesi/üretim-turu kuyruğuna alındı (bkz. KALICI KAYIT 6
+ve aşağıdaki liste, madde 17-18).
 
 Bilinen sorun/blok:
 1. **Kullanıcı onayı bekleniyor (Durma Noktası 1, BIST)** — kasıtlı, aşılamaz kapı.
@@ -484,6 +533,14 @@ Bilinen sorun/blok:
     `runtime/backtest_reports_v7_1/trades.csv` (bu dosya özel olarak
     commitlenmiş, `.gitignore` istisnası ile). v7 tarihsel kayıt olarak
     kalıyor.
+18. **[real-öncesi kuyruk] EVDS API anahtarı temin edilip TRY_ON_RATE'in
+    TCMB'nin resmi kaynağıyla çapraz doğrulanması gerekiyor** — şu an
+    FRED/OECD rebroadcast'i kullanılıyor (KALICI KAYIT 6), gerçek paraya
+    geçmeden ÖNCE tamamlanmalı.
+19. **[üretim-turu kuyruğu] D1'in nakit bacağının GERÇEK enstrümanı
+    netleştirilecek** — AlgoLab'da para piyasası fonu/repo süpürme
+    mekanizması var mı, hangi oranla, hangi likidite/vade kısıtlarıyla;
+    şu anki %0/faizli model yalnızca bir yaklaşıklık.
 
 Önceki fazlardan taşınan varsayımlar: pandas-ta yerine pandas-ta-classic +
 numpy 2.2 (e31e401); BIST seans saatleri yaklaşık; backtest degrade modda;

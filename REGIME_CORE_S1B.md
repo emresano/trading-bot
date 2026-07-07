@@ -182,6 +182,25 @@ perspektifi) teriminde filtresiz sepet DAHA İYİ risk-ayarlı getiri
 sağlıyor. Bu, "başarı çıtası" tartışmasında (STATUS.md KALICI KAYIT 1)
 dikkate alınması gereken önemli bir nüans.
 
+## (g) Monte Carlo — Aylık Getiri Permütasyonu
+
+S1 ile AYNI yöntem (aylık getiri permütasyonu) ve AYNI örnek sayısı
+(500 koşum, seed=42, `config/regime_core.yaml::monte_carlo`):
+
+| Persentil | S1 (faizsiz) | **S1b (faizli)** |
+|---|---|---|
+| dd_p5 (en kötü %5 senaryo / worst-5%) | -%48.57 | **-%44.68** |
+| dd_median | -%34.03 | **-%31.28** |
+| dd_p95 (en iyi %5 senaryo) | -%25.23 | **-%23.03** |
+
+Nakit getirisi, MC'nin ÜÇ persentilinde de (worst-5%'ten best-5%'e kadar)
+tutarlı bir iyileşme gösteriyor — ana koşumun ve OOS'un gösterdiği aynı
+yönde bir etki. Bu koşum S1b'nin ana `main()` çalıştırması sırasında ZATEN
+üretilmişti (`runtime/regime_core_s1b/summary.json::monte_carlo_monthly`)
+ama ilk yazımda bu markdown'a EKLENMEMİŞTİ — bu, o eksikliğin
+düzeltilmesidir (S1b'nin hiçbir sayısı değişmedi, yalnızca rapora
+eklendi).
+
 ## Madde 3(j) — Gap-Proximity ve Maliyet Duyarlılığı
 
 **Gap-proximity**: 67 anahtarlamadan **3'ü (%4.48)** DATA_AUDIT_v2.md'nin
