@@ -1,15 +1,13 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-07T16:00:00+03:00 (Europe/Istanbul)
-Şu an: **P1 (D1 Rejim-Filtreli Çekirdek ÜRETİM PORTU) KOD İŞİ TAMAMLANDI —
-kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `BACKTEST_REVIEW_D1_PROD.md`,
-KALICI KAYIT 8). D1 ailesi spike'tan üretim yığınına taşındı ("backtest=canlı aynı
-fonksiyon"): `strategy/regime_core.py` (spike'a BAĞIMSIZ) + `strategy/family_registry.py`
-(iki aile config'ten seçilebilir) + breaker (ALARM -%25/FREEZE -%40). MÜHÜRLÜ
-kriterler A/B/C/D **4/4 GEÇTİ**: S1b'nin 67 anahtarlama tarihi BİREBİR, metrikler
-bit-bit özdeş (CAGR/maxDD/Sharpe Δ=0), v7.1-golden 3/3 bayt-bayt, tarihsel FREEZE=0.
-Faz 5'e geçilmedi, `mode`'a dokunulmadı, config/config.yaml DEĞİŞMEDİ.
+Son güncelleme: 2026-07-07T17:30:00+03:00 (Europe/Istanbul)
+Şu an: **FAZ 5 (PAPER) — F5-A İMPLEMENTASYONU BAŞLADI** (kullanıcı Durma Noktası 1'i
+2026-07-07'de AÇTI; bkz. KALICI KAYIT 9). Aşama planı: `PHASE5_PLAN.md`. Koşulan aile
+`regime_core` (D1). F5-A AlgoLab'a CANLI BAĞLANTI İÇERMEZ (kimlik gerektiren her şey
+F5-B'de). `mode: paper` ve eşikler DEĞİŞMEDİ; v7.1-golden bayt-bayt korunuyor; D1
+üretim sinyal fonksiyonları (`strategy/regime_core.py`) DEĞİŞMEDİ.
+Baseline tam süit (F5 öncesi): **378 passed**.
 
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7, v7.1-golden) +
 HARDENING.md Bölüm A + Teşhis v6 + Motor+veri v7 + EXPANSION.md E1 (Veri Temeli)
@@ -170,6 +168,21 @@ A) 67 anahtarlama tarihi S1b ile BİREBİR. B) CAGR/maxDD/Sharpe Δ=0 (bit-bit;
 tam-lot spike'ta zaten modelli → sapma yok). C) v7.1-golden 3/3 bayt-bayt. D)
 tarihsel FREEZE 0 + kuru-test yeşil. Hiçbir eşik/parametre değişmedi; Faz 5'e
 geçilmedi, mode'a dokunulmadı. İki durma noktası kullanıcıda.
+
+## KALICI KAYIT 9 — Faz 5 (paper) kullanıcı onayıyla AÇILDI (2026-07-07)
+Kullanıcı 2026-07-07'de **Durma Noktası 1'i AÇTI** — Faz 5 (paper) onaylandı.
+**Kapsam yalnızca paper.** Durma Noktası 2 (paper→real) AYNEN kapalı — "real'e geç"
+yolu kod/komut olarak **HİÇBİR ZAMAN var olmayacak** (HARDENING B6). Bağlayıcı spec:
+HARDENING.md Bölüm B (B1-B7) + CLAUDE.md Bölüm 14. Koşulan aile: `regime_core` (D1,
+KALICI KAYIT 6/8) — 10-gate ailesi (`ten_gate`) donmuş referans, paper'da KOŞULMAZ.
+
+**F5-A ↔ F5-B kırılımı** (`PHASE5_PLAN.md`): F5-A'da AlgoLab'a CANLI BAĞLANTI YOK —
+tüm modüller offline, fixture/kuru-testli. Kimlik bilgisi gerektiren canlı akış F5-B.
+Aşamalar: F5A-0 plan/kayıt · F5A-1 canlı veri deposu · F5A-2 PaperBroker (t+1 kapanış
+yürütme) · F5A-3 mutabakat+kurtarma · F5A-4 kill-switch hiyerarşisi · F5A-5 karar
+günlüğü (JSONL) · F5A-6 parite · F5A-7 izleme+Telegram iskeleti · F5A-8 AlgoLab adapter
+iskeleti · F5A-9 seans/takvim · F5A-Z kapanış (PHASE5A_REVIEW.md). Her aşama: commit +
+golden kanıtı + push + STATUS.
 
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
