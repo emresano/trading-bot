@@ -107,3 +107,24 @@ henüz oluşturulmadı — bu E2 işi).
 değiştirmediğini gösteriyor (bkz. commit). `tools/data_audit.py`
 DEĞİŞTİRİLMEDEN, yalnızca farklı `--snapshot`/`--out` argümanlarıyla yeniden
 kullanıldı.
+
+---
+
+## E2 NOTU — 2010-07-01 OHLC ihlali ele alındı (2026-07-07, Motor Genelleştirme turu)
+
+E1'de tespit edilen ve "E2'ye bırakılan" tekil-gün OHLC ihlali (EUR_USD &
+GBP_USD 2010-07-01, `close > high`) E2'de çözüldü:
+
+- **`data/cleaning.py::repair_fx_ohlc(df, symbol)`** — BIST hayalet-bar
+  filtresine benzer, FX-özel, LOGLANAN, BELLEK-İÇİ bir kural. Snapshot
+  parquet'lerine DOKUNMAZ. Onarım: `high = max(high, open, close)`,
+  `low = min(low, open, close)` — `close` (en önemli fiyat) korunur, OHLC
+  tutarlı hale gelir. Aksi halde `data/quality.py::check_quality` o günü FAIL
+  işaretleyip sembolü o gün işlemsiz bırakırdı.
+- **Kanıt**: `tests/test_cleaning_fx.py::test_real_snapshot_2010_07_01_repaired`
+  gerçek snapshot'ta iki sembol için de 2010-07-01'in onarım logunda olduğunu
+  ve onarım sonrası barın tutarlı olduğunu doğrular; `test_repair_makes_quality_pass`
+  onarımın check_quality'yi FAIL→PASS'a çevirdiğini gösterir.
+- Kaynak snapshot DEĞİŞMEDİ; onarım yalnızca yükleme anında (E4 FX backtest'i
+  bu fonksiyonu çağıracak). Genel kural (tarihe bağlı değil): `close`/`open`,
+  `[low, high]` dışına çıkan HER FX barını onarır ve loglar.

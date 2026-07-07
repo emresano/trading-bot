@@ -84,3 +84,39 @@ def load_and_clean_universe(
     uygula, sonra TÜM evren üzerinde hayalet-bar filtresini çalıştır."""
     normalized = {s: normalize_bist_dates(loader(s)) for s in symbols}
     return filter_ghost_bars(normalized)
+
+
+def repair_fx_ohlc(df: pd.DataFrame, symbol: str) -> tuple[pd.DataFrame, list[dict]]:
+    """FX-özel OHLC iç-tutarlılık onarımı (EXPANSION.md Bölüm 6/DATA_AUDIT_FX.md E2 notu).
+
+    Bilinen sorun: EUR_USD/GBP_USD 2010-07-01 barlarında `close > high` (yfinance
+    FX mid-price agregasyon artefaktı — merkezî borsa yok). Bu, BIST hayalet-bar
+    filtresine BENZER, FX-özel, LOGLANAN bir kuraldır: yükleme anında BELLEK-İÇİ
+    düzeltir; kaynak snapshot parquet'lerine DOKUNMAZ.
+
+    Onarım: high/low'u open+close'u kapsayacak şekilde genişletir
+    (new_high = max(high, open, close), new_low = min(low, open, close)) — close
+    (en önemli fiyat) korunur, OHLC tutarlı hale gelir; aksi halde
+    data/quality.py::check_quality o günü (ve pencereyi) FAIL işaretleyip
+    sembolü o gün işlemsiz bırakırdı. Onarılan her bar loglanır."""
+    if df.empty:
+        return df, []
+    high = df[["high", "open", "close"]].max(axis=1)
+    low = df[["low", "open", "close"]].min(axis=1)
+    violated = (high > df["high"]) | (low < df["low"])
+    if not violated.any():
+        return df, []
+    repaired = df.copy()
+    repaired["high"] = high
+    repaired["low"] = low
+    log = [
+        {
+            "symbol": symbol,
+            "date": ts,
+            "reason": "FX OHLC iç-tutarlılık onarımı (close/open, high/low dışında)",
+            "old_high": float(df.loc[ts, "high"]), "old_low": float(df.loc[ts, "low"]),
+            "new_high": float(high.loc[ts]), "new_low": float(low.loc[ts]),
+        }
+        for ts in df.index[violated]
+    ]
+    return repaired, log
