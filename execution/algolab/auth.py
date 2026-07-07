@@ -1,6 +1,13 @@
 # execution/algolab/auth.py
 """AlgoLab login + SMS + session yönetimi (CLAUDE.md Bölüm 11.2, Faz 5 F5A-8).
 
+**KAPATILMIŞ-BROKER REFERANSI (F5-B1, 2026-07-07):** AlgoLab 2025-12-31'de KAPATILDI
+(resmî mail teyidi). AlgoLab canlı entegrasyonu İPTAL — bu modül CANLI KULLANILMAZ.
+Silinmedi: BrokerAdapter deseni + throttle/maskeleme yaklaşımı için referans olarak
+saklanıyor (yeni bir BIST broker REST API'si çıkarsa emsal). F5-B2 yerine
+ManualExecutionAdapter tasarlanacak (sinyal→Telegram→elle yürütme→onaylı fill kaydı).
+
+
 **DOĞRULANMAMIŞ — REFERANS (oanda.py emsali):** endpoint adları/alanları AlgoLab'ın
 topluluk-bilinen davranışına dayanır. F5-B'nin İLK işi bunları resmî dokümanla
 karşılaştırmaktır (CLAUDE.md Bölüm 11 notu + Bölüm 16 #1). Bu modül HİÇBİR CANLI

@@ -1,6 +1,11 @@
 # execution/algolab/adapter.py
 """AlgoLab BrokerAdapter implementasyonu (CLAUDE.md Bölüm 11.4, Faz 5 F5A-8).
 
+**KAPATILMIŞ-BROKER REFERANSI (F5-B1, 2026-07-07):** AlgoLab 2025-12-31'de kapatıldı;
+canlı entegrasyon İPTAL. Bu modül CANLI KULLANILMAZ — BrokerAdapter implementasyon
+deseni için referans. F5-B2 yerine ManualExecutionAdapter tasarlanacak.
+
+
 **DOĞRULANMAMIŞ — REFERANS (oanda.py emsali):** endpoint adları ve yanıt ALAN
 ADLARI AlgoLab'ın topluluk-bilinen davranışına dayanır; F5-B'nin İLK işi resmî
 dokümanla karşılaştırıp bu dosyaya düzeltme notu eklemektir (CLAUDE.md 11 + 16 #1).

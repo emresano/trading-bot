@@ -120,6 +120,26 @@ def test_parity_not_applicable_in_observe(tmp_path: Path):
     sched.close()
 
 
+def test_provisional_bar_flagged_and_execution_deferred(tmp_path: Path):
+    """as_of barı henüz kapanmamışsa (seans-içi 'now') → signal_eval provisional=True."""
+    from datetime import datetime, timezone
+    store = LiveHistoryStore(tmp_path / "h.sqlite")
+    _seed_store(store, ["THYAO", "GARAN"], [100.0 + i for i in range(12)])
+    feed = LiveDataFeed(store, ["THYAO", "GARAN"], fetch_raw_fn=lambda y, s: pd.DataFrame())
+    cfg = _cfg(None)
+    cfg["safety"]["freeze_dir"] = str(tmp_path / "freeze")
+    # 'now' = son bar gününün seans-içi (12:00 Istanbul = 09:00 UTC) → bar henüz açık
+    as_of = BDAYS[-1].date()
+    now_intraday = datetime(as_of.year, as_of.month, as_of.day, 9, 0, tzinfo=timezone.utc)
+    sched = PaperScheduler(cfg, tmp_path / "rt", feed=feed, now_fn=lambda: now_intraday)
+    res = sched.run_cycle(as_of)
+    rows = sched.journal.read_all()
+    sev = [r for r in rows if r["type"] == "signal_eval"]
+    assert sev and sev[-1]["provisional"] is True
+    assert any("PROVISIONAL" in n or "KAPANMADI" in n for n in res.notes)
+    sched.close()
+
+
 def test_shadow_reconciliation_logs_no_broker(tmp_path: Path):
     sched, sent = _make(tmp_path, go_live=None)
     sched.startup()

@@ -1,6 +1,10 @@
 # execution/algolab/client.py
 """Throttle'lı AlgoLab HTTP istemcisi (CLAUDE.md Bölüm 11.3, Faz 5 F5A-8).
 
+**KAPATILMIŞ-BROKER REFERANSI (F5-B1, 2026-07-07):** AlgoLab 2025-12-31'de kapatıldı;
+canlı entegrasyon İPTAL. Bu modül CANLI KULLANILMAZ — throttle deseni için referans.
+
+
 AlgoLab bilinen kısıtı: ~5 sn/istek. Tüm çağrılar tek RateLimitedClient'tan geçer:
 Lock + son istek zamanı; gerekirse bekler. 429/limit hatasında üstel geri çekilme
 (5→10→20 sn, 3 deneme), sonra BrokerError.

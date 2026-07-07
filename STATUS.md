@@ -1,16 +1,20 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-07T19:30:00+03:00 (Europe/Istanbul)
-Şu an: **FAZ 5 (PAPER) — F5-A KOD İŞİ TAMAMLANDI — kullanıcı/baş danışman
-değerlendirmesi bekliyor** (bkz. `PHASE5A_REVIEW.md`). 9 aşama + kapanış: paper
-runtime iskeleti (canlı veri deposu, PaperBroker+runner, mutabakat, kill-switch,
-karar günlüğü, parite, izleme/Telegram, AlgoLab adapter iskeleti, seans/takvim) —
-TAMAMI OFFLINE, fixture/kuru-testli. **AlgoLab'a CANLI BAĞLANTI YOK** (F5-B'de).
-`mode: paper` ve eşikler DEĞİŞMEDİ; v7.1-golden her commit 3/3 bayt-bayt; D1 üretim
-fonksiyonları DEĞİŞMEDİ (runner ÇAĞIRIR). **backtest=canlı parite runner↔backtest
-testiyle KANITLANDI.** Faz 6'ya/real'e HİÇBİR adım yok; Durma Noktası 2 kapalı.
-Tam süit: **456 passed** (F5 öncesi 378 + 78 F5-A). F5-B: onay bekliyor.
+Son güncelleme: 2026-07-07T18:15:00+03:00 (Europe/Istanbul)
+Şu an: **FAZ 5 (PAPER) — F5-B1 (GÖLGE PAPER, AlgoLab'SIZ) KOD İŞİ TAMAMLANDI —
+kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `PHASE5B1_REVIEW.md`).
+Gölge paper döngüsü GERÇEK veriyle (yfinance EOD) uçtan uca çalışıyor: `data/live_feed.py`
+(temizlik-pariteli bootstrap+EOD), `main.py` PaperScheduler (observe/active mod), ilk-
+başlatma (INITIAL_ENTER), launchd plist'leri + OPERATÖR KILAVUZU, B7-D1 önerisi, EVDS
+denemesi (BLOCKED — endpoint), gözetimli ilk koşu. **AlgoLab İPTAL** (2025-12-31 kapandı;
+EK KAYIT aşağıda). `mode: paper` ve eşikler DEĞİŞMEDİ; v7.1-golden her commit 3/3 bayt-bayt;
+D1 üretim fonksiyonları DEĞİŞMEDİ (runner ÇAĞIRIR). **Canlı depo↔backtest kompozit paritesi
+bit-bit (5511 günde 0.0); snapshot↔yfinance 66132 bar-günde ~1e-7.** Faz 6 BAŞLATILMADI;
+Durma Noktası 2 kapalı. Tam süit: **470 passed** (F5-A 456 + F5-B1 14).
+
+**F5-A (offline runtime iskeleti) daha önce tamamlandı** (bkz. `PHASE5A_REVIEW.md`):
+9 aşama, fixture/kuru-testli, 456 passed.
 
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7, v7.1-golden) +
 HARDENING.md Bölüm A + Teşhis v6 + Motor+veri v7 + EXPANSION.md E1 (Veri Temeli)
@@ -216,6 +220,50 @@ golden kanıtı + push + STATUS.
       sonuçları, F5-B kullanıcı-aksiyon listesi), tam süit 456, golden bayt-bayt, push.
 **F5-A TAMAMLANDI — kullanıcı/baş danışman değerlendirmesi bekliyor. F5-B onayı AYRI.**
 
+## KALICI KAYIT 10 — F5-B1 (Gölge Paper, AlgoLab'SIZ) tamamlandı (2026-07-07)
+Gölge paper döngüsü broker olmadan GERÇEK veriyle çalışır hale getirildi (bkz.
+`PHASE5B1_REVIEW.md`). Teslimatlar + commit'ler:
+- **(1) yfinance veri bağlama** (`data/live_feed.py`, 8d1ca1c): LiveHistoryStore'u
+  yfinance EOD'a bağlar; snapshot bootstrap'ı backtest-pariteli temizlikle
+  (normalize_bist_dates + evren-ghost); snapshot↔yfinance çapraz-tutarlılık. **KANIT:**
+  canlı depo↔backtest kompozit 5511 günde bit-bit 0.0; snapshot↔yfinance 66132 bar-günde
+  ~1e-7; kompozit+MA(200) BUGÜNE (07-07) kadar hesaplanıyor. 6 test.
+- **(2) gölge scheduler** (`main.py` PaperScheduler): observe (go_live=null: sinyal/
+  journal/heartbeat, İŞLEM YOK, hesap başlatılmaz) / active (operatör kararı). yfinance
+  EOD retry + 'bar yok' zarafeti; kill-switch + parite işi + EOD özet + Telegram (token'sız
+  log-only) bağlandı. Mutabakat GÖLGE modda harici çekimi ATLAR + loglar (iç recon çalışır).
+  8 test.
+- **(3) ilk-başlatma** (`initialize_flat(adopt_regime_on)`): go-live'da rejim AÇIKSA t+1
+  kapanışta INITIAL_ENTER (journal özel etiket), KAPALIYSA nakit+faiz. Geriye uyumlu şema
+  migration. **Gerçek-veri dry-run:** go_live=07-06 → 07-07 INITIAL_ENTER (12 sembol,
+  parite OK).
+- **(4) launchd + log rot. + kılavuz** (`deploy/*.plist`, `deploy/tradingbot.newsyslog.conf`,
+  `OPERATOR_GUIDE.md`): bot + watchdog servisleri, log rotasyonu (journal döndürülmez),
+  başlat/durdur/durum/FREEZE-temizle + observe→active geçişi (Faz 6 başlangıcı ayrı karar).
+- **(5) B7-D1 önerisi** (`B7_D1_PROPOSAL.md`): 'değerlendirilen sinyal'=günlük rejim
+  değerlendirmesi; D1 karne alanları. Hiçbir eşik mühürlenmedi; ÖNERİ.
+- **(6) EVDS** (`tools/evds_compare.py`, `EVDS_COMPARISON.md`): anahtar VAR ama REST endpoint
+  evds2→evds3 SPA'ya yönlendiriyor → BLOCKED. **Snapshot DEĞİŞMEDİ.** endpoint doğrulanınca
+  script yeniden koşulur (kuyruk #18).
+- **(7) gözetimli ilk koşu:** gerçek CLI observe (işlem yok) + **oluşmakta olan bar bulgusu**
+  → kod-düzeyi koruma eklendi (sinyal yalnız FİNAL bardan; provisional işareti).
+
+**Kod-düzeyi yeni koruma (F5-B1):** oluşmakta olan (kapanmamış) bar üzerinde sinyal
+finalize edilmez / active'de yürütme son FİNAL güne sınırlanır. t+1 yürütmeye EK katman.
+Faz 6 BAŞLATILMADI (go_live_date=null); iki durma noktası kullanıcıda; mode/eşikler/D1
+fonksiyonları + v7.1-golden korundu.
+
+## EK KAYIT — AlgoLab KAPATILDI, F5-B2 yeniden tanımlandı (2026-07-07)
+**AlgoLab 2025-12-31'de KAPATILDI** (resmî mail teyidi, 2026-07-07). Sonuçlar:
+- **AlgoLab canlı entegrasyonu İPTAL.** `execution/algolab/` SİLİNMEDİ — "kapatılmış-broker
+  referansı" docstring notuyla işaretlendi (BrokerAdapter/throttle/maskeleme deseni emsali).
+- **F5-B2 yeniden tanımı:** `ManualExecutionAdapter` — bot sinyali → Telegram bildirimi →
+  kullanıcı elle yürütür → fill'ler kullanıcı onayıyla kaydedilir; B2 mutabakatı bu kayıtlara
+  karşı çalışır. (Tasarım F5-B2'de.)
+- **Kuyruğa eklendi:** "BIST broker REST API pazarını periyodik izle — uygun API çıkarsa
+  BrokerAdapter ile entegre edilebilir."
+- Bu turda başka kapsam değişikliği YOK; Faz 6 başlatılmadı, real'e adım yok.
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
@@ -223,9 +271,21 @@ golden kanıtı + push + STATUS.
   eki), tam süit 378 passed, git push. Tag: `regime-core-d1-prod`.
 
 ## Sırada
-**P1 (D1 üretim portu) KOD İŞİ TAMAMLANDI** — kullanıcı/baş danışman
-değerlendirmesi bekliyor (`BACKTEST_REVIEW_D1_PROD.md`, KALICI KAYIT 8). Otomatik
-GEÇİŞ YOK. Üç paralel konu:
+**F5-B1 (gölge paper) KOD İŞİ TAMAMLANDI** — kullanıcı/baş danışman değerlendirmesi
+bekliyor (`PHASE5B1_REVIEW.md`, KALICI KAYIT 10). Otomatik GEÇİŞ YOK. Sıradaki adımlar
+kullanıcı kararına bağlı:
+- **go_live kararı:** döngü birkaç gün stabil koştuktan sonra `config/regime_core.yaml`
+  `paper.go_live_date` set edilir → active mod + Faz 6 resmi başlangıcı (AYRI karar).
+- **F5-B2 (AlgoLab İPTAL, yeniden tanımlı):** `ManualExecutionAdapter` tasarımı (bot
+  sinyali→Telegram→elle yürütme→onaylı fill kaydı; B2 mutabakatı) + gerçek Telegram HTTP/
+  long-poll komut alıcısı. AlgoLab canlı akışı YAPILMAYACAK.
+- **Real-öncesi kuyruk:** EVDS endpoint doğrulama (#18), gerçek nakit bacağı enstrümanı
+  (#19), B1 kalanı (T+2/tick-lot/tedbir — manuel yürütmede kullanıcı gözetiminde).
+- **Kuyruk (yeni):** BIST broker REST API pazarını periyodik izle — uygun API çıkarsa
+  BrokerAdapter ile entegre edilebilir.
+
+**Önceki tur (P1 D1 üretim portu) TAMAMLANDI** — `BACKTEST_REVIEW_D1_PROD.md`, KALICI
+KAYIT 8. Üç paralel konu (referans):
 (a) **BIST hattı**: D1 KABUL EDİLDİ (KAYIT 6) + ÜRETİM PORTU TAMAM (P1, KAYIT 8);
 S1b'yle bit-bit özdeş, golden korundu. **Sıradaki iş kullanıcı onayına bağlı**:
 canlı/paper emir katmanı Faz 5 (HARDENING B onayı) — PaperBroker/AlgoLab
@@ -269,9 +329,11 @@ engine-seviyesi SHORT execution (short-gate sonrası).
     — TRY'nin USD karşısındaki yapısal değer kaybı baskın. max DD/endeks-DD oranı İYİ.
 17. Golden regresyon çapası `backtest-v7.1-golden` — `runtime/backtest_reports_v7_1/
     trades.csv` (commitli, `.gitignore` istisnası). E2+ her commit bayt-bayt kıyaslar.
-18. **[real-öncesi kuyruk] EVDS API anahtarı + TRY_ON_RATE'in TCMB resmi kaynağıyla
-    çapraz doğrulanması** — şu an FRED/OECD rebroadcast'i (KALICI KAYIT 6), gerçek
-    paraya geçmeden ÖNCE tamamlanmalı.
+18. **[real-öncesi kuyruk] EVDS↔TRY_ON_RATE çapraz doğrulama — DENENDİ, BLOCKED** (F5-B1,
+    `EVDS_COMPARISON.md`): EVDS_API_KEY VAR ama REST endpoint evds2→evds3 geçişiyle SPA
+    döndürüyor (JSON yok). `tools/evds_compare.py` hazır — endpoint/auth doğrulanınca ya da
+    seri CSV export edilince yeniden koşulur. Snapshot DEĞİŞMEDİ; hâlâ FRED/OECD (KAYIT 6).
+    2023 boşluğu ff → cash-yield MUHAFAZAKÂR sapma (yön güvenli). Real öncesi tamamlanmalı.
 19. **[üretim-turu kuyruğu] D1 nakit bacağının GERÇEK enstrümanı** netleştirilecek
     (AlgoLab para piyasası fonu/repo süpürme; oran/likidite/vade). Şu anki
     %0/faizli model yalnızca bir yaklaşıklık.
@@ -287,6 +349,8 @@ v7 motor+veri düzeltme turu (5227438); EXPANSION.md eklendi (d0ab81d); E1 veri
 temeli (US/FX adapter'ları, snapshot'lar, DATA_AUDIT_US/FX.md, data/events.py);
 portföy ablasyon (disabled_gates + pending_exits determinizm düzeltmesi);
 EXPANSION E2 (MarketSpec/CostModel/gate_registry/calendars/Direction, golden çapa,
-exchange_calendars); P1 (strategy/regime_core.py + family_registry, D1 üretim portu).
+exchange_calendars); P1 (strategy/regime_core.py + family_registry, D1 üretim portu);
+F5-B1 (data/live_feed.py yfinance EOD + main.py PaperScheduler observe/active +
+INITIAL_ENTER + oluşmakta-olan-bar koruması; AlgoLab İPTAL, F5-B2=ManualExecutionAdapter).
 
 Limit nedeniyle durdu mu: hayır — Durma Noktası 1 nedeniyle duruldu.

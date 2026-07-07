@@ -75,10 +75,13 @@ class PaperScheduler:
     def __init__(self, cfg: dict, runtime_dir: Path | str,
                  feed: Optional[LiveDataFeed] = None,
                  notifier_sender: Optional[Callable[[str], None]] = None,
-                 known_secrets: tuple = ()):
+                 known_secrets: tuple = (),
+                 now_fn: Optional[Callable[[], datetime]] = None):
         self.cfg = cfg
         self.runtime = Path(runtime_dir)
         self.runtime.mkdir(parents=True, exist_ok=True)
+        self.now_fn = now_fn or _utcnow
+        self.grace_sec = int(cfg.get("paper", {}).get("bar_close_grace_sec", 3600))
         self.symbols = cfg["symbols"]
         reg = cfg["regime"]
         costs = cfg["costs"]
@@ -197,6 +200,34 @@ class PaperScheduler:
         self._log("INFO" if res.matched else "CRITICAL", "RECON", res.summary())
         self.notifier.send(f"Paper bot başladı ({self.mode} mod). {res.summary()}")
 
+    # ------------------------------------------------------------------ bar finalliği
+    def _is_bar_final(self, as_of: date) -> bool:
+        """as_of gününün BIST barı KAPANMIŞ mı (oluşmakta olan bar yasağı, CLAUDE.md
+        BrokerAdapter.get_bars). Geçmiş gün → final. Bugün → seans kapanışı+grace
+        geçtiyse final. Gelecek → değil. Sinyal yalnız FİNAL bardan hesaplanmalı;
+        aksi halde yfinance gün-içi güncellenen bar sinyali sahte oynatır."""
+        from datetime import datetime as _dt, timedelta
+        from core.clock import to_istanbul
+        now_local = to_istanbul(self.now_fn())
+        as_of_d = self.calendar._d(as_of)
+        if as_of_d < now_local.date():
+            return True
+        if as_of_d > now_local.date():
+            return False
+        end = self.calendar.continuous_end_for(as_of_d)
+        close_dt = _dt.combine(as_of_d, end).replace(tzinfo=now_local.tzinfo) + timedelta(seconds=self.grace_sec)
+        return now_local >= close_dt
+
+    def _last_final_date(self, as_of: date) -> pd.Timestamp:
+        """as_of ve öncesindeki son FİNAL (kapanmış) işlem günü (UTC ts)."""
+        from datetime import timedelta
+        d = self.calendar._d(as_of)
+        for _ in range(10):
+            if self.calendar.is_trading_day(d) and self._is_bar_final(d):
+                return pd.Timestamp(d, tz="UTC")
+            d -= timedelta(days=1)
+        return pd.Timestamp(as_of, tz="UTC")
+
     # ------------------------------------------------------------------ sinyal
     def evaluate_signal(self, closes: dict[str, pd.Series], as_of: pd.Timestamp) -> Optional[dict]:
         """as_of gününe kadar kompozit/rejim değerlendirmesi (observe modu için)."""
@@ -249,6 +280,13 @@ class PaperScheduler:
             self._log("WARN", "DATA", res.notes[-1])
 
         st = self._sched_state()
+        final = self._is_bar_final(as_of)
+        if not final:
+            res.notes.append("as_of barı henüz KAPANMADI (oluşmakta) → sinyal PROVISIONAL; "
+                             "yürütme son kapanmış güne kadar sınırlı")
+            self._log("WARN", "SIGNAL", res.notes[-1])
+        # yürütmede kullanılacak son FİNAL gün (oluşmakta olan bar yasağı)
+        exec_today = as_of_ts if final else self._last_final_date(as_of)
 
         if self.mode == "observe":
             snap = self.evaluate_signal(closes, as_of_ts)
@@ -261,7 +299,7 @@ class PaperScheduler:
                     date=snap["date"], composite=snap["composite"], ma=snap["ma"],
                     upper_band=snap["upper_band"], lower_band=snap["lower_band"],
                     confirm_count=snap["confirm_count"], regime_on=snap["regime_on"],
-                    in_position=False, mode="observe")
+                    in_position=False, mode="observe", provisional=not final)
                 res.action = "OBSERVE_REGIME_ON" if snap["regime_on"] else "OBSERVE_REGIME_OFF"
             acct = self.broker.get_account_state()
             res.equity, res.cash = acct.equity, acct.cash
@@ -274,7 +312,8 @@ class PaperScheduler:
                 self._log("INFO", "GOLIVE",
                           f"go_live={self.go_live_date.date()} adopt_regime_on={adopt} "
                           f"(AÇIKSA t+1 kapanışta INITIAL_ENTER)")
-            decisions = self.runner.process_up_to(closes, today=as_of_ts)
+            # oluşmakta olan bar üzerinde yürütme YOK — yalnız son FİNAL güne kadar işle.
+            decisions = self.runner.process_up_to(closes, today=exec_today)
             acct = self.broker.get_account_state()
             res.equity, res.cash = acct.equity, acct.cash
             if decisions:
@@ -301,6 +340,10 @@ class PaperScheduler:
             in_position=bool(self.broker.quantities()), breaker_state="OK",
             frozen_switches=self.killswitch.frozen_switches(),
             modeled_interest_total=res.modeled_interest_total, next_calendar_note=next_note)
+        if self.mode == "observe":
+            res.eod_summary = (f"[GÖZLEM — paper hesabı başlatılmadı, işlem yok] "
+                               f"Rejim değerlendirmesi: {'ON' if res.regime_on else 'OFF'}\n"
+                               + res.eod_summary)
         self.notifier.send(res.eod_summary)
 
         st["last_equity"] = res.equity
