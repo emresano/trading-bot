@@ -6,6 +6,10 @@
 # `costs`/`paper.initial_equity` bloklarıyla aynı sayısal değerler, otomatik
 # senkronizasyon YOK — kasıtlı, bağımsızlık ilkesi gereği).
 
+# Strateji ailesi seçimi (P1 üretim portu) — bu config regime_core ailesini seçer.
+# config/config.yaml bu alanı İÇERMEZ → orada varsayılan ten_gate (10-gate huni).
+strategy_family: regime_core
+
 symbols:
   - THYAO
   - GARAN
