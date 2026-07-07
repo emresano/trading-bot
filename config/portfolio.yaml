@@ -1,0 +1,25 @@
+# config/portfolio.yaml — sleeve tahsisleri + global limitler (EXPANSION.md Bölüm 11.1)
+# Sabit sermaye tahsisi; değişiklik YALNIZCA kullanıcı elle (Bölüm 1 ilke 1).
+# Cross-margin YOK. Her sleeve kendi para biriminde muhasebe tutar.
+base_reporting_currency: "TRY"        # yalnızca raporlama
+fx_rate_source: "yfinance:USDTRY=X"   # günlük kapanış; raporlamada kullanılır
+sleeves:
+  bist:
+    enabled: true
+    mode: paper                        # Durma Noktası 2'ye tabi (sleeve başına) — yalnızca kullanıcı değiştirir
+    allocation: 100000                 # TRY
+    market_config: "config/markets/bist.yaml"
+  us:
+    enabled: false                     # E4 kabulüne kadar false kalır
+    mode: paper
+    allocation: 3000                   # USD — kullanıcı Faz 6 öncesi gerçekçi değer girer
+    market_config: "config/markets/us_equities.yaml"
+  fx:
+    enabled: false
+    mode: paper
+    allocation: 2000                   # USD
+    market_config: "config/markets/fx.yaml"
+global:
+  global_max_open_positions: 5
+  global_dd_alert_pct: 0.15            # yalnızca CRITICAL alarm (Bölüm 9.5 gerekçesi)
+  kill_switch_file: "runtime/KILL_SWITCH"

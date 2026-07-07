@@ -1,0 +1,56 @@
+# config/markets/us_equities.yaml — ABD hisse sleeve config'i (EXPANSION.md Bölüm 11.2)
+market:
+  market_id: us
+  calendar_id: XNYS
+  currency: USD
+  direction_mode: long_only
+  settlement_days: 1
+  account_type: cash                  # cash | margin (Bölüm 9.3/9.4; E3 karar maddesi)
+  qty_step: 1
+  price_decimals: 2
+  cost_model_id: us_equities
+  data_adapter_id: yf_us
+  eval_after_close_min: 15
+instruments: []                        # E1 çıktısıyla doldurulur (DATA_AUDIT_US.md); {symbol, yf_symbol, sector}
+signal:                                # başlangıç = bist değerleri; E4 kalibrasyonu ayrı onaylı turlarla
+  ema_fast: 50
+  ema_slow: 200
+  adx_period: 14
+  adx_min: 25
+  rsi_period: 14
+  rsi_entry_low: 40
+  rsi_entry_high: 55
+  macd: [12, 26, 9]
+  atr_period: 14
+  atr_stop_mult: 1.5
+  atr_anomaly_mult: 2.0
+  bb_period: 20
+  bb_std: 2.0
+  swing_lookback: 50
+  swing_fractal_n: 2
+  volume_confirm_mult: 1.5
+  min_history_bars: 260
+gate_profile:
+  entry: [trend, regime, rsi, macd, atr_anomaly, bb_overextension,
+          structure_rr, volume, trigger_4h, mtf]
+risk:                                  # bist bloğunun kopyası; para birimi USD yorumuyla
+  risk_per_trade_pct: 0.0075
+  daily_loss_limit_pct: 0.025
+  weekly_loss_limit_pct: 0.05
+  max_open_positions: 2
+  max_position_notional_pct: 0.25
+  max_drawdown_breaker_pct: 0.10
+  min_rr: 1.8
+  correlation_lookback_days: 90
+  correlation_max: 0.85
+  news_blackout: true
+costs:
+  commission_bps: 0
+  sec_fee_bps: 0.28                    # SATIŞTA; güncel oranı E3'te doğrula (Bölüm 17 #3)
+  taf_per_share: 0.000166              # SATIŞTA; tavanıyla birlikte E3'te doğrula
+  slippage_bps: 5
+vetoes:
+  earnings_blackout: {enabled: true, days_before: 3, days_after: 1, hold_through: false}
+backtest:
+  start: "2005-01-01"
+  benchmark: "SPY"                     # al-tut kıyası zorunlu satır (+ "sadece nakit")

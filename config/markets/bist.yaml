@@ -1,0 +1,25 @@
+# config/markets/bist.yaml — BIST piyasa config'i (EXPANSION.md Bölüm 11.4)
+# DAVRANIŞ-NÖTR GÖÇ: mevcut config/config.yaml KALIR ve BIST'in signal/risk/backtest
+# doğruluk kaynağıdır. Bu dosya MarketSpec + cost model + gate profili metadata'sını
+# taşır; yükleyici (core/portfolio_config.py) costs ve gate_profile'ın config.yaml +
+# ENTRY_GATES ile EŞDEĞER olduğunu başlatmada doğrular (fark = başlatma hatası).
+market:
+  market_id: bist
+  calendar_id: XIST
+  currency: TRY
+  direction_mode: long_only
+  settlement_days: 2
+  qty_step: 1
+  price_decimals: 2
+  cost_model_id: bist
+  data_adapter_id: bist_yf
+  eval_after_close_min: 10
+gate_profile:
+  entry: [trend, regime, rsi, macd, atr_anomaly, bb_overextension,
+          structure_rr, volume, trigger_4h, mtf]
+costs:                        # config/config.yaml::costs ile EŞDEĞER olmalı (11.4 doğrulaması)
+  commission_bps: 10
+  slippage_bps: 5
+# signal / risk / backtest: config/config.yaml doğruluk kaynağıdır (11.4).
+signal_source: "config/config.yaml"
+risk_source: "config/config.yaml"
