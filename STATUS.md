@@ -1,7 +1,16 @@
 # Proje Durumu
-Son güncelleme: 2026-07-07T12:30:00+03:00 (Europe/Istanbul)
-Şu an: **EXPANSION.md E2 (Motor Genelleştirme) KOD İŞİ TAMAMLANDI —
-kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `EXPANSION_E2.md`).
+Son güncelleme: 2026-07-07T15:00:00+03:00 (Europe/Istanbul)
+Şu an: **P1 (D1 Rejim-Filtreli Çekirdek ÜRETİM PORTU) KOD İŞİ TAMAMLANDI —
+kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `BACKTEST_REVIEW_D1_PROD.md`,
+KALICI KAYIT 8). D1 ailesi spike'tan üretim yığınına taşındı ("backtest=canlı aynı
+fonksiyon"): `strategy/regime_core.py` (spike'a BAĞIMSIZ) + `strategy/family_registry.py`
+(iki aile config'ten seçilebilir) + breaker (ALARM -%25/FREEZE -%40). MÜHÜRLÜ
+kriterler A/B/C/D **4/4 GEÇTİ**: S1b'nin 67 anahtarlama tarihi BİREBİR, metrikler
+bit-bit özdeş (CAGR/maxDD/Sharpe Δ=0), v7.1-golden 3/3 bayt-bayt, tarihsel FREEZE=0.
+Faz 5'e geçilmedi, `mode`'a dokunulmadı, config/config.yaml DEĞİŞMEDİ.
+
+--- (önceki tur) ---
+EXPANSION.md E2 (Motor Genelleştirme) KOD İŞİ TAMAMLANDI (bkz. `EXPANSION_E2.md`).
 Çok-piyasa çekirdeği kuruldu: golden regresyon çapası (İLK İŞ), MarketSpec +
 registry, takvimler (XIST/XNYS/FX_24_5 + DST), gate_registry (bist davranış-nötr
 göç), CostModel katmanı (bist/us/fx) + daily_carry hook, yön farkındalığı
@@ -143,6 +152,31 @@ E3/E4/Faz 5'e geçilmedi.
 - **exchange_calendars==4.13.2** eklendi (req.txt + lock birlikte). lxml eklenmedi.
 - **FX boyutlama IEEE754 float duyarlı** (belgelendi): EURUSD-direkt 9374 vs
   USDJPY-conv 9375 (±1 birim, ikisi de mekanik doğru).
+
+## KALICI KAYIT 8 — D1 üretim portu (P1) tamamlandı (2026-07-07)
+KALICI KAYIT 6 ile kabul edilen D1 ailesi, spike'tan (`backtest/regime_core.py`,
+REFERANS kalır) üretim yığınına taşındı ("backtest=canlı aynı fonksiyon").
+Referans ölçüm REGIME_CORE_S1B.md. Bkz. `BACKTEST_REVIEW_D1_PROD.md`.
+- `strategy/regime_core.py`: üretim regime-core, spike'a BAĞIMSIZ. Saf sinyal +
+  saf boyutlama (TAM-LOT/artık nakit) + cash-yield + breaker.
+- `strategy/family_registry.py`: StrategyFamily soyutlaması (ten_gate/regime_core,
+  config'ten seçilebilir; ten_gate run_backtest'i delege eder → golden korunur).
+- `backtest/run_family.py`: aile-dispatch + S1b mutabakatı.
+- **Breaker (bu aile)**: ALARM -%25 (bildirim), FREEZE -%40 (yeni ENTER yok,
+  çıkış serbest, reset yalnız kullanıcı). Tarihsel FREEZE=0; ALARM 4 sığ epizot
+  (bildirim-only, davranış değişmez).
+
+**MÜHÜRLÜ KRİTERLER 4/4 GEÇTİ** (mekanik doldurma; kabul kararı kullanıcının):
+A) 67 anahtarlama tarihi S1b ile BİREBİR. B) CAGR/maxDD/Sharpe Δ=0 (bit-bit;
+tam-lot spike'ta zaten modelli → sapma yok). C) v7.1-golden 3/3 bayt-bayt. D)
+tarihsel FREEZE 0 + kuru-test yeşil. Hiçbir eşik/parametre değişmedi; Faz 5'e
+geçilmedi, mode'a dokunulmadı. İki durma noktası kullanıcıda.
+
+Bu oturumda yapılan (onaylı P1 — D1 üretim portu turu):
+- Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
+  breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
+- Kapanış: BACKTEST_REVIEW_D1_PROD.md, STATUS güncelleme (KALICI KAYIT 8 + kuyruk
+  eki), tam süit, git push.
 
 Bu oturumda yapılan (onaylı E2 — Motor Genelleştirme turu):
 - E2.0–E2.9 sırayla, her biri golden-kanıtlı ayrı commit (git log): golden çapa,
@@ -493,12 +527,18 @@ Paket 1 bulgularının düzeltmesi, hâlâ geçerli):
   adaylarda kazanan/kaybeden ayrımı göstermiyor (küçük örneklem, ön-bulgu).
 - `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
-**Sırada:** EXPANSION.md **E2 (Motor Genelleştirme) KOD İŞİ TAMAMLANDI** —
-kullanıcı/baş danışman değerlendirmesi bekliyor (`EXPANSION_E2.md`). Otomatik
+**Sırada:** **P1 (D1 üretim portu) KOD İŞİ TAMAMLANDI** — kullanıcı/baş danışman
+değerlendirmesi bekliyor (`BACKTEST_REVIEW_D1_PROD.md`, KALICI KAYIT 8). Otomatik
 GEÇİŞ YOK. Üç paralel konu:
-(a) **BIST hattı**: D1 KABUL EDİLDİ (KALICI KAYIT 6), operasyonel breaker
-kalibrasyonu belirlendi (ALARM -%25/FREEZE -%40). regime_core üretim portu ayrı
-onaylı tur (E2'den SONRA, "üretim turu onaylandı" gerekir) — BAŞLANMADI.
+(a) **BIST hattı**: D1 KABUL EDİLDİ (KALICI KAYIT 6) + ÜRETİM PORTU TAMAM (P1,
+KALICI KAYIT 8): strategy/regime_core.py + family_registry + breaker; S1b'yle
+bit-bit özdeş, golden korundu. **Sıradaki iş kullanıcı onayına bağlı**: canlı/
+paper emir katmanı Faz 5 (HARDENING B onayı) — PaperBroker/AlgoLab regime_core
+ailesini de sürebilmeli. **[real-öncesi kuyruk, B1] Canlı takvim gerçeği**:
+yarım-gün seanslar ve idari-izin köprü tatilleri için canlıda takvim
+kütüphanesine (exchange_calendars) GÜVENİLMEZ — resmî kaynak (BIST/Borsa
+İstanbul duyuruları) + veri-yok toleransı gerekir; canlı döngü bir günü
+yanlış "işlem günü" sayarsa regime-core o gün hatalı sinyal/yürütme üretebilir.
 (b) **EXPANSION.md**: E1 + E2 TAMAMLANDI. E2'de FX OHLC-ihlali (2010-07-01)
 çözüldü (data/cleaning.py::repair_fx_ohlc), lxml EKLENMEDİ (veto altyapısı
 gerektirmiyor). Sıradaki E-fazı **E3 (broker adapter spike + karar)** — "E3
