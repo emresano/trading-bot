@@ -6,9 +6,13 @@ from zoneinfo import ZoneInfo
 TZ_ISTANBUL = ZoneInfo("Europe/Istanbul")
 TZ_UTC = timezone.utc
 
-# BIST seans saatleri (Europe/Istanbul, yaklaşık) — Faz 5'te resmi kaynakla doğrulanacak (CLAUDE.md Bölüm 16 #5).
+# BIST Pay Piyasası seans saatleri (Europe/Istanbul) — F5A-9'da resmî kaynakla
+# DOĞRULANDI (2026-07-07, borsaistanbul.com/en/markets/equity-market/trading-hours):
+# açılış müzayedesi (emir toplama) 09:40'ta başlar; sürekli işlem 10:00–18:00;
+# kapanış seansı 18:00–18:10. (Önceki 09:55 sürekli-başlangıç değeri düzeltildi.)
+# Yarım-gün + tatil ayrıntıları config/bist_calendar.yaml + core/bist_calendar.py'de.
 BIST_OPENING_AUCTION_START = time(9, 40)
-BIST_CONTINUOUS_START = time(9, 55)
+BIST_CONTINUOUS_START = time(10, 0)
 BIST_CONTINUOUS_END = time(18, 0)
 BIST_CLOSING_AUCTION_END = time(18, 10)
 

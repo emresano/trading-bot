@@ -1,0 +1,51 @@
+# config/bist_calendar.yaml — BIST Pay Piyasası seans/takvim (Faz 5, F5A-9, B1)
+#
+# DOĞRULAMA (2026-07-07, web): resmî kaynak Borsa İstanbul + aracı kurum teyidi.
+# Kaynaklar:
+#   - https://www.borsaistanbul.com/en/markets/equity-market/trading-hours
+#   - https://www.borsaistanbul.com/files/pay-piyasasi-2026-yili-tatil-tablosu.pdf
+#   - İş/Garanti/İkon aracı kurum işlem-saati sayfaları (çapraz teyit)
+#
+# İLKE (B1): takvim kütüphanesi (exchange_calendars) TEK OTORİTE DEĞİL. Bu config
+# resmî tatil/yarım-gün tablosunun otoriter kopyasıdır; kütüphaneyle uyuşmazlık
+# LOGLANIR (idari-izin köprü tatilleri kütüphanede olmayabilir). "Veri-yok" günü
+# zarafetle atlanır (core.bist_calendar.missing_data_days).
+
+timezone: "Europe/Istanbul"
+
+# Sürekli işlem 10:00–18:00. Emir toplama (açılış müzayedesi) 09:40'ta başlar;
+# 09:40–10:00 açılış müzayede penceresi (SÜREKLİ işlem YOK). Kapanış seansı
+# 18:00–18:10. Müzayede pencerelerinde yeni emir gönderilmez.
+session:
+  opening_auction_start: "09:40"
+  continuous_start: "10:00"
+  continuous_end: "18:00"
+  closing_auction_end: "18:10"
+  # Yarım günlerde sürekli işlem 12:40'a kadar (2026 teyidi).
+  half_day_continuous_end: "12:40"
+
+# 2026 tam-gün kapalı (hafta içi olanlar operasyonel önemde; hafta sonu bilgi amaçlı).
+holidays_2026:
+  - {date: "2026-01-01", name: "Yılbaşı"}
+  - {date: "2026-03-20", name: "Ramazan Bayramı 1. gün"}
+  - {date: "2026-03-21", name: "Ramazan Bayramı 2. gün (Cmt)"}
+  - {date: "2026-03-22", name: "Ramazan Bayramı 3. gün (Paz)"}
+  - {date: "2026-04-23", name: "Ulusal Egemenlik ve Çocuk Bayramı"}
+  - {date: "2026-05-01", name: "Emek ve Dayanışma Günü"}
+  - {date: "2026-05-19", name: "Atatürk'ü Anma, Gençlik ve Spor Bayramı"}
+  - {date: "2026-05-27", name: "Kurban Bayramı 1. gün"}
+  - {date: "2026-05-28", name: "Kurban Bayramı 2. gün"}
+  - {date: "2026-05-29", name: "Kurban Bayramı 3. gün"}
+  - {date: "2026-05-30", name: "Kurban Bayramı 4. gün (Cmt)"}
+  - {date: "2026-07-15", name: "Demokrasi ve Milli Birlik Günü"}
+  - {date: "2026-10-29", name: "Cumhuriyet Bayramı"}
+
+# 2026 yarım günler (sürekli işlem 12:40'a kadar).
+half_days_2026:
+  - {date: "2026-03-19", name: "Ramazan Bayramı Arefesi"}
+  - {date: "2026-05-26", name: "Kurban Bayramı Arefesi"}
+  - {date: "2026-10-28", name: "Cumhuriyet Bayramı Arefesi"}
+
+# İdari-izin köprü tatilleri: hükümet duyurusuna bağlı, önceden kesin değil.
+# Duyurulduğunda buraya eklenecek (kütüphane bunları bilmez — B1 gerekçesi).
+admin_leave_bridges_2026: []
