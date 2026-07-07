@@ -58,3 +58,12 @@ backtest:
 benchmark:
   index_symbol: "XU100"
   index_yf_symbol: "XU100.IS"
+
+# S1b — nakit-getiri düzeltmesi (madde 2). N/b/M ve maliyetler YUKARIDA
+# AYNEN kalır, bu blok yalnızca rejim KAPALI (nakit) günlerde nakdin
+# tahakkuk edip etmeyeceğini kontrol eder. `--cash-yield` CLI bayrağı
+# verilmezse bu blok hiç okunmaz (S1 davranışı, tahakkuk yok).
+cash_yield:
+  enabled: true
+  aux_snapshot: "data/snapshots/aux/2026-07-07/TRY_ON_RATE.parquet"
+  haircut_bps: 200   # bkz. backtest/regime_core.py::CASH_YIELD_HAIRCUT (0.02 olarak sabit kodlanmış, burada yalnızca belge amaçlı)

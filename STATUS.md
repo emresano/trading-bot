@@ -1,16 +1,19 @@
 # Proje Durumu
-Son güncelleme: 2026-07-06T23:55:00+03:00 (Europe/Istanbul)
-Şu an: **S1 — Rejim-Filtreli Çekirdek spike backtest'i (REGIME_CORE_S1.md,
-D1 tasarımının tek-tur değerlendirmesi) tamamlandı — Durma Noktası 1'de
-duruluyor. Hiçbir eşik/gate/parametre değiştirilmedi, `backtest/engine.py`/
-`strategy/`/`risk/`/`config/config.yaml` DOKUNULMADI (git diff boş —
-v7.1-golden çapası otomatik korunuyor). Faz 5'e/E2'ye geçilmedi. Mühürlü
-kabul tablosunda 4 kriterden 2'si GEÇTİ, 2'si dar farkla GEÇMEDİ — karar
-kullanıcının/baş danışmanın.**
+Son güncelleme: 2026-07-07T07:30:00+03:00 (Europe/Istanbul)
+Şu an: **S1b — Rejim-Çekirdek ölçüm tamamlama turu (nakit-getiri düzeltmesi,
+REGIME_CORE_S1B.md) tamamlandı — Durma Noktası 1'de duruluyor. Hiçbir eşik/
+gate/parametre değiştirilmedi, `backtest/engine.py`/`strategy/`/`risk/`/
+`config/config.yaml`/mevcut snapshot'lar DOKUNULMADI (git diff boş —
+v7.1-golden çapası korunuyor). Faz 5'e/E2'ye geçilmedi. **Mühürlü kabul
+tablosunda 4/4 kriter GEÇTİ (S1'de 2/4 idi)** — kullanıcının önceden
+belirlediği kurala göre bu, D1 ailesini bir KABUL ADAYI yapıyor (bkz.
+KALICI KAYIT 5) — ama nihai kabul/üretim kararı hâlâ kullanıcının/baş
+danışmanın, otomatik değil.**
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7, v7.1-golden) +
 HARDENING.md Bölüm A (kalite/güvenilirlik sertleştirme, CLAUDE.md'ye ek) +
 Teşhis turu v6 + Motor+veri düzeltme turu v7 + EXPANSION.md E1 (Veri Temeli)
-+ Portföy ablasyon turu (+ kapanış R1) + S1 rejim-filtreli çekirdek spike'ı.
++ Portföy ablasyon turu (+ kapanış R1) + S1 + S1b rejim-filtreli çekirdek
+spike'ları.
 
 ## KALICI KAYIT 1 — Başarı Çıtası (kullanıcı kararı, 2026-07-06)
 USD bazında CAGR > 0 taban şart; Sharpe > XU100 al-tut Sharpe VE max DD ≤
@@ -50,7 +53,56 @@ eritiyor). Bu bir üretim implementasyonu DEĞİL, bir spike'tı — kabul/red/
 iterasyon kararı kullanıcının/baş danışmanın; bu turda hiçbir parametre
 ayarı yapılmadı.
 
-Bu oturumda yapılan (onaylı S1 spike backtest'i — D1 tasarımının tek-tur testi):
+## KALICI KAYIT 5 — S1b Ölçüm Tamamlama Sonucu (2026-07-07)
+Nakit-getiri düzeltmesi (rejim KAPALI günlerde TRY gecelik faizi tahakkuku,
+200bp kırpmalı) eklendi — **tek davranış değişikliği**, N=200/b=%1/M=3 ve
+maliyetler AYNEN kaldı. Sonuç — bkz. `REGIME_CORE_S1B.md`: **Mühürlü kabul
+tablosunun 4 kriterinin TAMAMI GEÇTİ** (S1'de 2/4 idi):
+1) TRY Sharpe 1.215 > XU100 Sharpe 0.851 — GEÇTİ (S1'de de geçmişti).
+2) Max DD -%28.43 ≤ gerekli -%31.72 — **YENİ GEÇTİ** (S1'de -%33.50 ile dar
+   farkla geçmemişti).
+3) OOS aylık-Sharpe 1.068>0.972 VE OOS max DD -%24.55≤-%28.12 — **YENİ
+   GEÇTİ** (S1'de ikisi de başarısızdı).
+4) Uçurum kontrolü temiz — GEÇTİ (S1'de de geçmişti).
+
+**Kullanıcının ÖNCEDEN belirlediği kurala göre** ("4/4 geçerse aile kabul
+adayı, herhangi biri kalırsa aile reddedilir — üçüncü bakış yok"): **bu
+mekanik sonuç D1 ailesini bir KABUL ADAYI yapıyor.** Bu, Claude Code'un
+kendi hükmü DEĞİL — kullanıcının önceden koyduğu kuralın mekanik
+uygulanmasıdır. **Nihai kabul/red/üretime geçiş kararı hâlâ kullanıcının/
+baş danışmanın** — otomatik olarak Faz 5'e/E2'ye geçilmedi, geçilmeyecek.
+
+Önemli nüanslar (dürüst rapor, karar etkilenmeden): (a) USD-terimde
+filtrenin Sharpe üstünlüğü TERSİNE dönüyor — 12-sembol sepeti al-tut'un USD
+Sharpe'ı (0.577) stratejininkinden (0.435) yüksek; "başarı" tanımı para
+birimine göre değişebilir. (b) TRY_ON_RATE kaynağı TCMB'nin kendisi değil,
+OECD/FRED rebroadcast'i (TCMB EVDS'ye erişim yok — kimlik bilgisi
+bulunamadı); 9 aylık bir veri boşluğu (2023) forward-fill ile dolduruldu.
+(c) Drawdown epizot TOPOLOJİSİ nakit getirisiyle değişti (bazı epizotlar
+ikiye ayrıldı, en kötü epizodun kimliği değişti) — bu METODOLOJİK bir
+gözlem, veri hatası değil.
+
+Bu oturumda yapılan (onaylı S1b ölçüm tamamlama turu — nakit-getiri düzeltmesi):
+- **Madde 1 — TRY gecelik faiz aux snapshot**: `data/snapshots/aux/2026-07-07/TRY_ON_RATE.parquet`.
+  Kaynak merdiveni denendi: (a) EVDS API yok/başarısız, (b) TCMB statik
+  indirme başarısız (302 login yönlendirmesi), (c) FRED/OECD
+  `IRSTCI01TRM156N` kullanıldı (herkese açık, doğrulanmış, TCMB'nin kendisi
+  değil ama gerçek veri — hiçbir şey uydurulmadı). 2005-01→2026-03, aylık,
+  9 ay boşluk (2023, muhtemelen deprem sonrası OECD veri aksaması).
+- **Madde 2 — `backtest/regime_core.py`'ye nakit getirisi eklendi** (tek
+  davranış değişikliği): `r_net=max(faiz-200bp,0)`, ACT/365,
+  `cash*=(1+r_net/365)^gün_farkı`. Pozisyon günlerinde/EXIT gününde
+  tahakkuk yok. Zorunlu regresyon kanıtı: `cash_rate=None` VE
+  `cash_rate=<tümü sıfır>` ikisi de S1 ile bayt-bayt aynı (hem kütüphane
+  hem CLI seviyesinde doğrulandı). 22 yeni birim testi, hepsi yeşil.
+- **Madde 3 — S1 süiti nakit getirisiyle yeniden koşuldu**: `tools/run_regime_core.py`'ye
+  `--cash-yield` bayrağı eklendi (verilmezse S1 davranışı korunur).
+  `REGIME_CORE_S1B.md` yazıldı (a-j bölümleri, mühürlü tablo MEKANİK
+  dolduruldu, hüküm verilmedi).
+- 307+ test yeşil (regresyon yok). `git diff` korunan dosyalarda (motor,
+  strateji, risk, config, mevcut snapshot'lar) BOŞ.
+
+Önceki oturumda yapılan (onaylı S1 spike backtest'i — D1 tasarımının tek-tur testi, hâlâ geçerli):
 - **Madde 1 — `backtest/regime_core.py`** (YENİ, tamamen bağımsız
   simülatör — `backtest/engine.py`/`strategy/`/`risk/`/`config/config.yaml`'a
   dokunmuyor/bağımlı değil): 12 sembol eşit ağırlık kompozit (t0=2005-01-03,
@@ -357,21 +409,22 @@ Paket 1 bulgularının düzeltmesi, hâlâ geçerli):
   adaylarda kazanan/kaybeden ayrımı göstermiyor (küçük örneklem, ön-bulgu).
 - `BACKTEST_REVIEW_v6.md` ve `GATE_ANALYSIS.md` yazıldı.
 
-**Sırada:** D1 tasarımının S1 spike'ı sonuçlandı (KALICI KAYIT 4) — 2/4
-mühürlü kriter geçti, 2/4 dar farkla geçmedi. **Bu, D1'i otomatik olarak
-kabul VEYA red ETMİYOR** — sonuç kullanıcının/baş danışmanın değerlendirmesini
-bekliyor: (i) mevcut parametrelerle kabul (dar farkla kaçırılan kriterler
-göz ardı edilebilir mi?), (ii) D2 iterasyonu (farklı bir tasarım denemesi —
-bu turun uçurum-kontrolü grid'i SEÇİM için kullanılamaz, yeni bir D-tasarımı
-gerekir), (iii) üretim implementasyonuna geçiş (kabul edilirse, ayrı onaylı
-turda "backtest=canlı" ilkesiyle). Hiçbiri OTOMATİK değil. Üç paralel konu:
-(a) **BIST hattı**: D1'in S1 spike'ı bitti, sonucu değerlendirme bekliyor.
-Kabul edilirse bile üretim implementasyonu (main.py/PaperBroker entegrasyonu)
-ayrı bir onaylı tur.
+**Sırada:** D1 tasarımının ölçümü TAMAMLANDI (S1 + S1b, KALICI KAYIT 4+5) —
+mühürlü tablonun 4/4 kriteri geçti, kullanıcının önceden koyduğu kurala göre
+D1 artık bir **KABUL ADAYI**. **Bu OTOMATİK kabul/üretime geçiş DEĞİL** —
+kullanıcının/baş danışmanın önünde şu seçenekler var: (i) mevcut haliyle
+kabul ve üretim implementasyonuna geçiş kararı (ayrı onaylı tur, "backtest=
+canlı" ilkesiyle main.py/PaperBroker entegrasyonu), (ii) USD-Sharpe
+nüansı (filtrenin USD'de sepetten daha düşük Sharpe'ı) ışığında ek bir
+değerlendirme/iterasyon, (iii) TRY_ON_RATE kaynağının (OECD/FRED, TCMB'nin
+kendisi değil) kalitesi konusunda ek bir doğrulama turu istenirse. Hiçbiri
+OTOMATİK değil, hepsi kullanıcı talimatı bekliyor. Üç paralel konu:
+(a) **BIST hattı**: D1'in ölçümü (S1+S1b) TAMAMLANDI, kabul adayı — üretim
+kararı bekliyor.
 (b) **EXPANSION.md**: E1 tamamlandı. E2 ön şartı (v7 + BIST karar) sağlandı,
 ama "E2 onaylandı" talimatı hâlâ ayrı gerekiyor. E1'in açık maddeleri: FX
 OHLC-ihlali düzeltmesi (2010-07-01, EUR_USD/GBP_USD), lxml kararı.
-(c) **Ablasyon turu (R1 dahil) + S1 spike**: TAMAMLANDI. Açık madde yok.
+(c) **Ablasyon turu (R1 dahil) + S1 + S1b**: TAMAMLANDI. Açık madde yok.
 
 Bilinen sorun/blok:
 1. **Kullanıcı onayı bekleniyor (Durma Noktası 1, BIST)** — kasıtlı, aşılamaz kapı.

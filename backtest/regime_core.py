@@ -129,21 +129,76 @@ def compute_regime_signal(composite: pd.Series, ma_period: int, band_pct: float,
     return regime_on
 
 
+CASH_YIELD_HAIRCUT = 0.02  # 200bp — muhafazakâr kırpma (bkz. run_regime_core docstring)
+
+
+def _build_daily_cash_rate(cash_rate: Optional[pd.Series], all_dates: pd.DatetimeIndex) -> Optional[pd.Series]:
+    """`cash_rate` (aylık veya günlük, HAM — ondalık yıllık oran, örn. 0.1748)
+    verilmişse `all_dates`'e forward-fill edilmiş bir Series döner. `cash_rate`
+    None ise None döner (çağıran bunu "tahakkuk YOK" olarak yorumlar — S1
+    davranışıyla BİREBİR aynı kalır, bkz. regresyon testi)."""
+    if cash_rate is None:
+        return None
+    reindexed = cash_rate.reindex(all_dates, method="ffill")
+    return reindexed.bfill()
+
+
+def compute_cash_only_curve(dates: pd.DatetimeIndex, cash_rate: pd.Series, initial_equity: float,
+                            haircut: float = CASH_YIELD_HAIRCUT) -> pd.Series:
+    """'Sadece nakit, faizli' BİLGİLENDİRİCİ benchmark eğrisi (S1b madde 3b):
+    tüm dönem boyunca hiç pozisyon açılmadan yalnızca nakitte kalınsaydı,
+    nakdin `run_regime_core` ile AYNI ACT/365 tahakkuk formülüyle nasıl
+    büyüyeceğini hesaplar. Strateji hesaplamasından TAMAMEN bağımsız bir
+    yardımcıdır — yalnızca karşılaştırma amaçlı."""
+    daily_rate = _build_daily_cash_rate(cash_rate, dates)
+    equity = initial_equity
+    points: list[tuple[pd.Timestamp, float]] = [(dates[0], equity)]
+    for i in range(1, len(dates)):
+        days_elapsed = (dates[i] - dates[i - 1]).days
+        annual_rate = daily_rate.loc[dates[i]] if daily_rate is not None else None
+        if annual_rate is not None and pd.notna(annual_rate) and days_elapsed > 0:
+            r_net = max(float(annual_rate) - haircut, 0.0)
+            equity *= (1 + r_net / 365) ** days_elapsed
+        points.append((dates[i], equity))
+    return pd.Series(dict(points)).sort_index()
+
+
 def run_regime_core(
     daily_closes: dict[str, pd.Series],
     cfg: RegimeCoreConfig,
     date_range: Optional[tuple[pd.Timestamp, pd.Timestamp]] = None,
+    cash_rate: Optional[pd.Series] = None,
 ) -> RegimeCoreResult:
     """Ana simülasyon döngüsü. `daily_closes`: sembol -> kapanış fiyatı
     Series (data/cleaning.py'den geçmiş, tz-aware DatetimeIndex).
     `date_range`: verilirse yalnızca bu (start, end] aralığındaki günler
     equity_curve'e yazılır (ama kompozit/MA HER ZAMAN tam tarihçe üzerinden
     hesaplanır — ısınma ve look-ahead-siz warm-up walk-forward'ın OOS
-    dilimlerinde de geçerli olsun diye)."""
+    dilimlerinde de geçerli olsun diye).
+
+    `cash_rate` (S1b — nakit-getiri düzeltmesi): verilirse (yıllık ondalık
+    oran Series'i, örn. 0.1748 = %17.48), rejim KAPALI (tamamen nakitte)
+    olunan günlerde nakit `r_net = max(rate - 200bp, 0)` oranıyla, basit
+    ACT/365 ile, barlar arası geçen TAKVİM günü kadar tahakkuk eder:
+    `cash *= (1 + r_net/365) ** gün_farkı`. 200bp'lik kırpma muhafazakâr bir
+    seçimdir (gerçek mevduat/repo getirisi politika faizinin altında kalır —
+    spread, vergi, likidite farkı vb. için kaba bir tampon).
+
+    Tahakkuk, o günün transition'ı uygulanmadan ÖNCEKİ `in_position`
+    durumuna göre karar verilir — bu, ENTER gününü DAHİL eder (kapanışa
+    kadar nakitti) ama EXIT gününün KENDİSİNİ HARİÇ tutar (kapanışa kadar
+    hisse pozisyonundaydı, o gün nakit hiç "boşta" durmadı) — muhafazakâr
+    bir seçim, gerçek işlem mekaniğiyle de tutarlı.
+
+    `cash_rate=None` (varsayılan) → HİÇBİR tahakkuk uygulanmaz, S1'in
+    davranışıyla BİREBİR aynı kalır (bkz. regresyon testi:
+    `test_cash_rate_none_is_byte_identical_to_s1_baseline` ve
+    `test_cash_rate_all_zero_series_is_also_byte_identical`)."""
     composite, fill_log = build_composite(daily_closes)
     regime_on = compute_regime_signal(composite, cfg.ma_period, cfg.band_pct, cfg.confirm_days)
 
     all_dates = composite.index
+    daily_cash_rate = _build_daily_cash_rate(cash_rate, all_dates)
     cash = cfg.initial_equity
     quantities: dict[str, int] = {}
     in_position = False
@@ -171,6 +226,17 @@ def run_regime_core(
     for i, date in enumerate(all_dates):
         signal_today = bool(regime_on.iloc[i])
         signal_yesterday = bool(regime_on.iloc[i - 1]) if i > 0 else False
+
+        # Nakit getirisi tahakkuku (S1b): BUGÜNÜN transition'ı uygulanmadan
+        # ÖNCEKİ `in_position` durumuna göre (bkz. docstring) — ENTER gününü
+        # dahil eder, EXIT gününü hariç tutar. `daily_cash_rate` None ise
+        # (varsayılan) bu blok hiç çalışmaz — S1 davranışı korunur.
+        if i > 0 and not in_position and daily_cash_rate is not None:
+            days_elapsed = (date - all_dates[i - 1]).days
+            annual_rate = daily_cash_rate.loc[date]
+            if pd.notna(annual_rate) and days_elapsed > 0:
+                r_net = max(float(annual_rate) - CASH_YIELD_HAIRCUT, 0.0)
+                cash *= (1 + r_net / 365) ** days_elapsed
 
         # t+1 yürütme: BUGÜN dünün sinyal DEĞİŞİMİNİ (yesterday's close'da
         # karar verilen) uygula. i=0 için önceki gün yok, işlem yapılmaz.

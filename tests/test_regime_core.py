@@ -5,6 +5,7 @@ import pytest
 from backtest.regime_core import (
     RegimeCoreConfig,
     build_composite,
+    compute_cash_only_curve,
     compute_regime_signal,
     run_regime_core,
 )
@@ -190,3 +191,163 @@ def test_run_regime_core_never_open_position_when_regime_off_throughout():
     result = run_regime_core(closes, cfg)
     assert len(result.switches) == 0
     assert (result.equity_curve == 100_000.0).all()
+
+
+# --- S1b: nakit getirisi (cash_rate) — tek davranış değişikliği ---
+
+def _cost_free_cfg():
+    return RegimeCoreConfig(symbols=["A", "B", "C"], ma_period=10, band_pct=0.01,
+                            confirm_days=3, commission_bps=0.0, slippage_bps=0.0,
+                            initial_equity=100_000.0)
+
+
+def test_cash_rate_none_is_byte_identical_to_s1_baseline():
+    """ZORUNLU regresyon kanıtı (madde 2): cash_rate verilmezse (None,
+    varsayılan) davranış S1 ile BİREBİR aynı kalmalı."""
+    closes = _step_composite_scenario()
+    cfg = _cost_free_cfg()
+    baseline = run_regime_core(closes, cfg)  # cash_rate parametresi hiç verilmiyor (S1 çağrısı)
+    explicit_none = run_regime_core(closes, cfg, cash_rate=None)
+    assert baseline.equity_curve.equals(explicit_none.equity_curve)
+    assert baseline.switches == explicit_none.switches
+
+
+def test_cash_rate_all_zero_series_is_also_byte_identical_to_baseline():
+    """ZORUNLU regresyon kanıtı (madde 2): TÜMÜ SIFIR bir faiz serisi
+    verilse bile (None değil, gerçek bir Series) sonuç S1 ile BİREBİR
+    aynı olmalı — mekanizmanın kendisinin matematiksel olarak etkisiz
+    (r_net=0 -> cash *= 1.0) olduğunun kanıtı."""
+    closes = _step_composite_scenario()
+    cfg = _cost_free_cfg()
+    baseline = run_regime_core(closes, cfg)
+    zero_rate = pd.Series(0.0, index=closes["A"].index)
+    result = run_regime_core(closes, cfg, cash_rate=zero_rate)
+    assert baseline.equity_curve.equals(result.equity_curve)
+    assert baseline.switches == result.switches
+
+
+def test_cash_accrual_math_matches_act365_formula_on_flat_period():
+    """Rejim hep KAPALI (hiç pozisyon açılmıyor) bir senaryoda, sabit bir
+    yıllık faizle, N gün sonraki nakit bakiyesi ACT/365 üstel formülüyle
+    BİREBİR eşleşmeli: cash_N = cash_0 * (1+r_net/365)^N (günlük bar
+    aralığı = 1 takvim günü olduğundan her adımda üs artışı 1)."""
+    closes = _flat_closes(["A", "B", "C"], n=30, base=100.0)  # hiçbir zaman rejim ON olmaz (ma_period=200 > 30)
+    cfg = RegimeCoreConfig(symbols=["A", "B", "C"], ma_period=200, band_pct=0.01,
+                          confirm_days=3, initial_equity=100_000.0)
+    annual_rate = 0.20  # %20
+    rate_series = pd.Series(annual_rate, index=closes["A"].index)
+    result = run_regime_core(closes, cfg, cash_rate=rate_series)
+
+    r_net = annual_rate - 0.02  # 200bp kırpma
+    expected = 100_000.0 * (1 + r_net / 365) ** np.arange(len(result.equity_curve))
+    np.testing.assert_allclose(result.equity_curve.to_numpy(), expected, rtol=1e-9)
+
+
+def test_cash_accrual_haircut_floors_at_zero_below_200bp():
+    """Faiz 200bp'nin altındaysa (örn. %1) r_net negatif olmaz, SIFIRDA
+    kırpılır -> nakit büyümez (ama KÜÇÜLMEZ de)."""
+    closes = _flat_closes(["A", "B", "C"], n=30, base=100.0)
+    cfg = RegimeCoreConfig(symbols=["A", "B", "C"], ma_period=200, band_pct=0.01,
+                          confirm_days=3, initial_equity=100_000.0)
+    low_rate = pd.Series(0.01, index=closes["A"].index)  # %1 < 200bp kırpma
+    result = run_regime_core(closes, cfg, cash_rate=low_rate)
+    assert (result.equity_curve == 100_000.0).all()  # r_net=0 -> hiç büyüme, hiç küçülme
+
+
+def test_cash_accrual_uses_calendar_days_not_trading_days():
+    """Hafta sonu atlanan (Cuma->Pazartesi) bir tarih dizisinde, o
+    aralıktaki tahakkuk 1 değil 3 TAKVİM günü üzerinden hesaplanmalı."""
+    # Cuma, sonra (hafta sonu atlanarak) Pazartesi -> Salı ... (iş günü indeksi)
+    dates = pd.bdate_range("2020-01-03", periods=10, tz="UTC")  # is günleri (haftaici)
+    closes = {s: pd.Series(100.0, index=dates) for s in ["A", "B", "C"]}
+    cfg = RegimeCoreConfig(symbols=["A", "B", "C"], ma_period=200, band_pct=0.01,
+                          confirm_days=3, initial_equity=100_000.0)
+    annual_rate = 0.20
+    rate_series = pd.Series(annual_rate, index=dates)
+    result = run_regime_core(closes, cfg, cash_rate=rate_series)
+
+    r_net = annual_rate - 0.02
+    # Cuma (2020-01-03) -> Pazartesi (2020-01-06): 3 takvim günü farkı
+    gaps = [(dates[i] - dates[i - 1]).days for i in range(1, len(dates))]
+    assert 3 in gaps  # hafta sonu atlaması gerçekten 3 günlük bir boşluk yaratmış olmalı
+    expected = [100_000.0]
+    acc = 100_000.0
+    for g in gaps:
+        acc *= (1 + r_net / 365) ** g
+        expected.append(acc)
+    np.testing.assert_allclose(result.equity_curve.to_numpy(), np.array(expected), rtol=1e-9)
+
+
+def test_cash_accrual_ratio_stable_while_in_position_then_grows_after_exit():
+    """Pozisyondayken (ENTER dahil, EXIT dahil) faizli/faizsiz equity ORANI
+    yaklaşık SABİT kalmalı (o dönemde YENİ tahakkuk yok — ENTER günündeki
+    TEK seferlik tahakkuk yüzünden kalan küçük nakit artığının fiyat
+    hareketiyle payı kaydığından ufak bir sürüklenme olabilir, ama bu EXIT
+    sonrası büyümeyle KIYASLANAMAYACAK kadar küçük olmalı). EXIT'ten SONRAKİ
+    günden itibaren oran BELİRGİN ŞEKİLDE artmalı (nakit tekrar tahakkuk
+    ediyor)."""
+    closes = _step_composite_scenario()
+    cfg = _cost_free_cfg()
+    rate_series = pd.Series(0.30, index=closes["A"].index)
+
+    r_no_rate = run_regime_core(closes, cfg)
+    r_with_rate = run_regime_core(closes, cfg, cash_rate=rate_series)
+
+    enter = next(sw for sw in r_no_rate.switches if sw.action == "ENTER")
+    exit_sw = next(sw for sw in r_no_rate.switches if sw.action == "EXIT")
+    ratio = r_with_rate.equity_curve / r_no_rate.equity_curve
+
+    in_position_ratios = ratio.loc[enter.date:exit_sw.date]
+    in_position_drift = in_position_ratios.max() - in_position_ratios.min()
+    assert in_position_drift < 1e-3  # kalıntı nakdin fiyat-ağırlıklı ufak sürüklenmesi
+
+    idx_list = list(ratio.index)
+    day_after_exit = idx_list[idx_list.index(exit_sw.date) + 1]
+    ten_days_after_exit = idx_list[min(idx_list.index(exit_sw.date) + 10, len(idx_list) - 1)]
+    growth_after_exit = ratio.loc[ten_days_after_exit] - ratio.loc[day_after_exit]
+    assert growth_after_exit > in_position_drift * 10  # net tahakkuk büyümesi, kalıntı sürüklenmeden AÇIKÇA büyük
+
+
+def test_cash_accrual_excluded_exactly_on_exit_day():
+    """EXIT gününün KENDİSİNDE hiç tahakkuk uygulanmamalı: EXIT günü
+    equity'sinin faizli/faizsiz oranı, ENTER gününkiyle (o ana kadar tek
+    kaynak ENTER'daki tek seferlik tahakkuk) yaklaşık aynı olmalı —
+    ENTER'dan EXIT'e kadar ORANDA sıçrama YOK."""
+    closes = _step_composite_scenario()
+    cfg = _cost_free_cfg()
+    rate_series = pd.Series(0.30, index=closes["A"].index)
+
+    r_no_rate = run_regime_core(closes, cfg)
+    r_with_rate = run_regime_core(closes, cfg, cash_rate=rate_series)
+
+    enter = next(sw for sw in r_no_rate.switches if sw.action == "ENTER")
+    exit_sw = next(sw for sw in r_no_rate.switches if sw.action == "EXIT")
+    ratio = r_with_rate.equity_curve / r_no_rate.equity_curve
+
+    assert ratio.loc[exit_sw.date] == pytest.approx(ratio.loc[enter.date], abs=1e-3)
+
+
+def test_cash_rate_run_is_deterministic_across_runs():
+    closes = _step_composite_scenario()
+    cfg = _cost_free_cfg()
+    rate_series = pd.Series(0.20, index=closes["A"].index)
+    r1 = run_regime_core(closes, cfg, cash_rate=rate_series)
+    r2 = run_regime_core(closes, cfg, cash_rate=rate_series)
+    assert r1.equity_curve.equals(r2.equity_curve)
+    assert r1.switches == r2.switches
+
+
+def test_compute_cash_only_curve_matches_act365_formula():
+    idx = pd.date_range("2020-01-01", periods=10, freq="1D", tz="UTC")
+    rate = pd.Series(0.20, index=idx)
+    curve = compute_cash_only_curve(idx, rate, 100_000.0)
+    r_net = 0.20 - 0.02
+    expected = 100_000.0 * (1 + r_net / 365) ** np.arange(len(idx))
+    np.testing.assert_allclose(curve.to_numpy(), expected, rtol=1e-9)
+
+
+def test_compute_cash_only_curve_below_haircut_stays_flat():
+    idx = pd.date_range("2020-01-01", periods=5, freq="1D", tz="UTC")
+    rate = pd.Series(0.01, index=idx)
+    curve = compute_cash_only_curve(idx, rate, 100_000.0)
+    assert (curve == 100_000.0).all()

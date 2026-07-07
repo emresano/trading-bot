@@ -1,0 +1,31 @@
+{
+  "created_at_utc": "2026-07-07T03:59:08.797909+00:00",
+  "scope": "S1b (nakit-getiri düzeltmesi) — TRY gecelik/politika faizi, YALNIZCA cash-yield modeline girer, hiçbir sinyal/gate hesabına girmez",
+  "source_ladder_attempted": [
+    "(a) TCMB EVDS API: BAŞARISIZ — secrets.env yok, API anahtarı bulunamadı (denenmedi, önkoşul karşılanmadı)",
+    "(b) TCMB herkese açık statik indirme: BAŞARISIZ — evds2.tcmb.gov.tr programatik erişim 302/login yönlendirmesi döndürdü, basit HTTP GET ile ayrıştırılabilir statik dosya bulunamadı",
+    "(c) KULLANILAN KAYNAK: FRED (St. Louis Fed) üzerinden OECD MEI verisi — IRSTCI01TRM156N, \"Interest Rates: Immediate Rates (< 24 Hours): Call Money/Interbank Rate: Total for Turkey\". Herkese açık, kimlik doğrulamasız CSV indirme. TCMB'nin KENDİ sitesi DEĞİL ama TCMB'nin gecelik/bankalar arası faiz verisini yansıtan, OECD tarafından toplanan, saygın bir üçüncü-taraf kaynak."
+  ],
+  "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=IRSTCI01TRM156N",
+  "frequency_native": "monthly",
+  "note": "Aylık seri — günlük takvime forward-fill YÜKLEME anında (regime_core kullanım noktasında) uygulanır, bu parquet HAM (aylık) veriyi tutar.",
+  "rows": 255,
+  "start": "2005-01-01 00:00:00+00:00",
+  "end": "2026-03-01 00:00:00+00:00",
+  "nan_count": 9,
+  "nan_gap_months": [
+    "2023-02-01",
+    "2023-03-01",
+    "2023-04-01",
+    "2023-05-01",
+    "2023-06-01",
+    "2023-09-01",
+    "2023-10-01",
+    "2023-11-01",
+    "2023-12-01"
+  ],
+  "negative_or_zero_count": 0,
+  "duplicate_date_count": 0,
+  "sha256": "5ada39662683e58745311da779ce909b56953ce60ee406c0d48c6a1b0c85bc61",
+  "bytes": 5189
+}

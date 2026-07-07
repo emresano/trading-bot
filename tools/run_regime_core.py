@@ -1,32 +1,39 @@
 # tools/run_regime_core.py
-"""S1 spike backtest sürücüsü — Rejim-Filtreli Çekirdek (D1 tasarımı).
+"""S1/S1b spike backtest sürücüsü — Rejim-Filtreli Çekirdek (D1 tasarımı).
 
 `backtest/regime_core.py`nin (bağımsız simülatör) 4 koşumunu (A: ana koşum,
 B: walk-forward, C: Monte Carlo, D: uçurum kontrolü grid'i) + 3 benchmark'ı
 (XU100 al-tut, 12-sembol sepeti al-tut, sadece-nakit) çalıştırır, sonuçları
-JSON olarak yazar (REGIME_CORE_S1.md'nin girdisi).
+JSON olarak yazar (REGIME_CORE_S1.md / REGIME_CORE_S1B.md'nin girdisi).
 
 `backtest/engine.py`, `strategy/`, `risk/`, `config/config.yaml`'a
 DOKUNMAZ/BAĞIMLI DEĞİLDİR — tüm istatistik fonksiyonları bu dosyada
 bağımsız olarak (yeniden) yazılmıştır.
 
-Kullanım: python -m tools.run_regime_core
+Kullanım:
+  python -m tools.run_regime_core                  # S1 (nakit getirisi YOK)
+  python -m tools.run_regime_core --cash-yield      # S1b (nakit getirisi VAR,
+                                                     # config/regime_core.yaml'daki
+                                                     # cash_yield bloğundan okunur)
 """
 from __future__ import annotations
+import argparse
 import json
 from datetime import date
 from itertools import product
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
 import yaml
 
-from backtest.regime_core import RegimeCoreConfig, run_regime_core
+from backtest.regime_core import RegimeCoreConfig, compute_cash_only_curve, run_regime_core
 from data.cleaning import load_and_clean_universe
 
 CFG_PATH = Path("config/regime_core.yaml")
-OUT_DIR = Path("runtime/regime_core_s1")
+OUT_DIR_S1 = Path("runtime/regime_core_s1")
+OUT_DIR_S1B = Path("runtime/regime_core_s1b")
 TRADING_DAYS_PER_YEAR = 252
 MONTHS_PER_YEAR = 12
 
@@ -47,6 +54,19 @@ def load_closes(cfg: dict) -> dict[str, pd.Series]:
     cleaned, ghost_log = load_and_clean_universe(symbols, _load_daily_raw)
     closes = {s: df["close"] for s, df in cleaned.items()}
     return closes, ghost_log
+
+
+def load_cash_rate(cfg: dict) -> Optional[pd.Series]:
+    """S1b (madde 2): `config/regime_core.yaml`'daki `cash_yield.aux_snapshot`
+    yolundan TRY_ON_RATE.parquet'i okur, YÜZDE -> ONDALIK'a çevirir (örn.
+    17.48 -> 0.1748). `cash_yield` bloğu yoksa/`enabled: false` ise None
+    döner (S1 davranışı — hiç tahakkuk yok)."""
+    cy = cfg.get("cash_yield")
+    if not cy or not cy.get("enabled"):
+        return None
+    path = Path(cy["aux_snapshot"])
+    df = pd.read_parquet(path)
+    return df["rate_pct"] / 100.0
 
 
 # --- İstatistik yardımcıları (bağımsız, backtest/metrics.py'ye bağımlı değil) ---
@@ -154,9 +174,20 @@ def gen_walk_forward_windows(all_dates: pd.DatetimeIndex, train_months, test_mon
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="S1/S1b rejim-çekirdek spike sürücüsü")
+    parser.add_argument("--cash-yield", action="store_true",
+                        help="S1b: config/regime_core.yaml'daki cash_yield bloğunu oku, "
+                             "rejim KAPALI günlerde nakde TRY_ON_RATE tahakkuku uygula. "
+                             "Verilmezse S1 davranışı (tahakkuk yok) aynen korunur.")
+    args = parser.parse_args()
+
     cfg_dict = load_config()
     closes, ghost_log = load_closes(cfg_dict)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = OUT_DIR_S1B if args.cash_yield else OUT_DIR_S1
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    cash_rate = load_cash_rate(cfg_dict) if args.cash_yield else None
+    print(f"cash_yield etkin: {args.cash_yield} (cash_rate {'yüklendi' if cash_rate is not None else 'None — S1 davranışı'})")
 
     reg = cfg_dict["regime"]
     core_cfg = RegimeCoreConfig(
@@ -166,18 +197,18 @@ def main() -> None:
     )
 
     print("=== Koşum A: ana koşum ===")
-    result_a = run_regime_core(closes, core_cfg)
+    result_a = run_regime_core(closes, core_cfg, cash_rate=cash_rate)
     summary_a = compute_summary(result_a.equity_curve)
     monthly_a = compute_monthly_returns(result_a.equity_curve)
     print(json.dumps(summary_a, indent=2))
     print(f"switches: {len(result_a.switches)}, composite_fill_log: {len(result_a.composite_fill_log)}")
 
-    result_a.equity_curve.to_csv(OUT_DIR / "equity_curve_main.csv")
+    result_a.equity_curve.to_csv(out_dir / "equity_curve_main.csv")
     pd.DataFrame([{"date": sw.date, "action": sw.action, "equity_before": sw.equity_before,
                   "equity_after": sw.equity_after} for sw in result_a.switches]).to_csv(
-        OUT_DIR / "switches_main.csv", index=False)
+        out_dir / "switches_main.csv", index=False)
 
-    print("\n=== Benchmark: 12-sembol sepeti al-tut (filtresiz) ===")
+    print("\n=== Benchmark: 12-sembol sepeti al-tut (filtresiz — nakit modeli DEĞMEZ) ===")
     basket_equity = result_a.composite * core_cfg.initial_equity
     basket_equity = basket_equity.loc[result_a.equity_curve.index[0]:]
     summary_basket = compute_summary(basket_equity)
@@ -194,6 +225,13 @@ def main() -> None:
     print(json.dumps(summary_xu100, indent=2))
 
     cash_only_summary = {"total_return": 0.0, "cagr": 0.0, "max_drawdown": 0.0, "sharpe": 0.0}
+    cash_only_with_yield_summary = None
+    if cash_rate is not None:
+        print("\n=== Benchmark (bilgilendirici ek satır): sadece nakit, FAİZLİ ===")
+        cash_only_yield_curve = compute_cash_only_curve(result_a.equity_curve.index, cash_rate,
+                                                         core_cfg.initial_equity)
+        cash_only_with_yield_summary = compute_summary(cash_only_yield_curve)
+        print(json.dumps(cash_only_with_yield_summary, indent=2))
 
     print("\n=== En kötü 5 drawdown epizodu ===")
     episodes = find_drawdown_episodes(result_a.equity_curve)[:5]
@@ -219,7 +257,7 @@ def main() -> None:
     oos_monthly_returns_bench = []
     window_rows = []
     for train_start, train_end, test_start, test_end in windows:
-        result_w = run_regime_core(closes, core_cfg, date_range=(test_start, test_end))
+        result_w = run_regime_core(closes, core_cfg, date_range=(test_start, test_end), cash_rate=cash_rate)
         m_ret = compute_monthly_returns(result_w.equity_curve)
         oos_monthly_returns_strategy.extend(m_ret.tolist())
 
@@ -253,15 +291,15 @@ def main() -> None:
         grid_cfg = RegimeCoreConfig(symbols=cfg_dict["symbols"], ma_period=n, band_pct=b, confirm_days=m,
                                     commission_bps=core_cfg.commission_bps, slippage_bps=core_cfg.slippage_bps,
                                     initial_equity=core_cfg.initial_equity)
-        result_g = run_regime_core(closes, grid_cfg)
+        result_g = run_regime_core(closes, grid_cfg, cash_rate=cash_rate)
         s = compute_summary(result_g.equity_curve)
         grid_rows.append({"ma_period": n, "band_pct": b, "confirm_days": m,
                           "sharpe": s["sharpe"], "max_drawdown": s["max_drawdown"],
                           "total_return": s["total_return"], "n_switches": len(result_g.switches)})
         print(f"N={n} b={b} M={m}: sharpe={s['sharpe']:.3f} maxdd={s['max_drawdown']:.3f} switches={len(result_g.switches)}")
 
-    pd.DataFrame(grid_rows).to_csv(OUT_DIR / "cliff_grid.csv", index=False)
-    pd.DataFrame(window_rows).to_csv(OUT_DIR / "walk_forward_windows.csv", index=False)
+    pd.DataFrame(grid_rows).to_csv(out_dir / "cliff_grid.csv", index=False)
+    pd.DataFrame(window_rows).to_csv(out_dir / "walk_forward_windows.csv", index=False)
 
     output = {
         "main_run": {
@@ -272,6 +310,7 @@ def main() -> None:
         "benchmarks": {
             "basket_buy_hold": summary_basket, "xu100_buy_hold": summary_xu100,
             "cash_only": cash_only_summary,
+            "cash_only_with_yield": cash_only_with_yield_summary,
         },
         "drawdown_episodes_top5": [
             {"peak_date": str(e["peak_date"]), "trough_date": str(e["trough_date"]),
@@ -293,8 +332,8 @@ def main() -> None:
             "oos_max_dd_benchmark": oos_dd_bench,
         },
     }
-    (OUT_DIR / "summary.json").write_text(json.dumps(output, indent=2, default=str), encoding="utf-8")
-    print(f"\nÖzet yazıldı: {OUT_DIR / 'summary.json'}")
+    (out_dir / "summary.json").write_text(json.dumps(output, indent=2, default=str), encoding="utf-8")
+    print(f"\nÖzet yazıldı: {out_dir / 'summary.json'}")
 
 
 if __name__ == "__main__":
