@@ -77,6 +77,7 @@ def run_backtest(
     trace: Optional[list] = None,
     breaker_file: Optional[Path] = None,
     disabled_gates: Optional[list[str]] = None,
+    cost_model=None,
 ) -> BacktestResult:
     """Event-driven, bar-bazlı backtest motoru (Bölüm 12.2).
 
@@ -238,6 +239,22 @@ def run_backtest(
                             cost_basis=cost, risk_amount=per_share_risk * decision.quantity,
                         )
             pending_entries.clear()
+
+            # --- 0b. Günlük taşıma (daily_carry) tahakkuku (EXPANSION.md Bölüm 7.1) ---
+            # `cost_model is None` (BIST/golden yolu) → bu blok HİÇ çalışmaz, cash
+            # değişmez → golden bit-bit korunur. cost_model verildiğinde (FX) her
+            # açık pozisyon için işaretli taşıma P&L'i cash'e eklenir; BIST/US
+            # CostModel'leri 0.0 döndürdüğünden onlar için de nötr (çapa kanıtlar).
+            # Deterministik sıra: sorted(positions).
+            if cost_model is not None and positions:
+                for symbol in sorted(positions):
+                    p = positions[symbol]
+                    carry = cost_model.daily_carry(
+                        Position(symbol, p.quantity, p.entry_price, p.stop_price,
+                                 p.target_price, p.entry_date),
+                        date.date() if hasattr(date, "date") else date,
+                    )
+                    cash += carry
 
             # --- 1. Açık pozisyonlar için stop/target intrabar kontrolü (bugünün high/low'u) ---
             for symbol in list(positions.keys()):

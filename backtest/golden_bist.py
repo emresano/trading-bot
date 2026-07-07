@@ -48,8 +48,12 @@ def _trades_to_csv_bytes(trades) -> bytes:
     return buf.getvalue().encode("utf-8")
 
 
-def reproduce_golden_trades_bytes(breaker_file: Path | None = None) -> bytes:
-    """Golden koşumu tekrarlar ve trades.csv'nin bytes'ını döner (diske yazmaz)."""
+def reproduce_golden_trades_bytes(breaker_file: Path | None = None, cost_model=None) -> bytes:
+    """Golden koşumu tekrarlar ve trades.csv'nin bytes'ını döner (diske yazmaz).
+
+    `cost_model`: verilirse run_backtest'e iletilir. BIST CostModel'i daily_carry=0
+    döndürdüğünden çıktı golden ile bit-bit aynı kalmalıdır (daily_carry hook'unun
+    BIST-güvenliğini kanıtlar — tests/test_golden_bist.py)."""
     # Yerel importlar: bu modül config yüklemeden de import edilebilsin (test toplama hızı).
     from backtest.engine import run_backtest
     from core.config import load_config
@@ -62,5 +66,6 @@ def reproduce_golden_trades_bytes(breaker_file: Path | None = None) -> bytes:
         return df.loc[START_DATE:]
 
     cleaned, _ghost = load_and_clean_universe(GOLDEN_SYMBOLS, _load_daily_raw)
-    result = run_backtest(GOLDEN_SYMBOLS, cfg, lambda s: cleaned[s], breaker_file=breaker_file)
+    result = run_backtest(GOLDEN_SYMBOLS, cfg, lambda s: cleaned[s],
+                          breaker_file=breaker_file, cost_model=cost_model)
     return _trades_to_csv_bytes(result.trades)

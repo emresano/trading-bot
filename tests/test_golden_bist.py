@@ -40,3 +40,20 @@ def test_bist_backtest_byte_identical_to_golden(tmp_path: Path):
         "BIST backtest çıktısı golden'dan SAPTI — E2 çekirdek genelleştirmesi "
         "BIST davranışını değiştirdi. Commit YASAK; önce sapmayı gider."
     )
+
+
+def test_daily_carry_hook_is_bist_safe(tmp_path: Path):
+    """daily_carry hook'u BIST CostModel'iyle (carry=0) çalıştırıldığında da çıktı
+    golden ile bit-bit aynı (EXPANSION.md 7.1 — 'BIST/US 0 döndürdüğünden bit-bit aynı')."""
+    if not GOLDEN_TRADES.exists():
+        pytest.skip("golden dosya yok")
+    from costs.bist import BistCostModel
+    from core.config import load_config
+    from backtest.golden_bist import GOLDEN_CONFIG
+
+    cfg = load_config(str(GOLDEN_CONFIG))
+    cm = BistCostModel(cfg.costs.commission_bps, cfg.costs.slippage_bps)
+    got = reproduce_golden_trades_bytes(breaker_file=tmp_path / "BREAKER_carry", cost_model=cm)
+    assert got == GOLDEN_TRADES.read_bytes(), (
+        "daily_carry hook'u BIST CostModel'iyle golden'ı bozdu — carry 0 olmalıydı."
+    )
