@@ -1,13 +1,16 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-07T17:30:00+03:00 (Europe/Istanbul)
-Şu an: **FAZ 5 (PAPER) — F5-A İMPLEMENTASYONU BAŞLADI** (kullanıcı Durma Noktası 1'i
-2026-07-07'de AÇTI; bkz. KALICI KAYIT 9). Aşama planı: `PHASE5_PLAN.md`. Koşulan aile
-`regime_core` (D1). F5-A AlgoLab'a CANLI BAĞLANTI İÇERMEZ (kimlik gerektiren her şey
-F5-B'de). `mode: paper` ve eşikler DEĞİŞMEDİ; v7.1-golden bayt-bayt korunuyor; D1
-üretim sinyal fonksiyonları (`strategy/regime_core.py`) DEĞİŞMEDİ.
-Baseline tam süit (F5 öncesi): **378 passed**.
+Son güncelleme: 2026-07-07T19:30:00+03:00 (Europe/Istanbul)
+Şu an: **FAZ 5 (PAPER) — F5-A KOD İŞİ TAMAMLANDI — kullanıcı/baş danışman
+değerlendirmesi bekliyor** (bkz. `PHASE5A_REVIEW.md`). 9 aşama + kapanış: paper
+runtime iskeleti (canlı veri deposu, PaperBroker+runner, mutabakat, kill-switch,
+karar günlüğü, parite, izleme/Telegram, AlgoLab adapter iskeleti, seans/takvim) —
+TAMAMI OFFLINE, fixture/kuru-testli. **AlgoLab'a CANLI BAĞLANTI YOK** (F5-B'de).
+`mode: paper` ve eşikler DEĞİŞMEDİ; v7.1-golden her commit 3/3 bayt-bayt; D1 üretim
+fonksiyonları DEĞİŞMEDİ (runner ÇAĞIRIR). **backtest=canlı parite runner↔backtest
+testiyle KANITLANDI.** Faz 6'ya/real'e HİÇBİR adım yok; Durma Noktası 2 kapalı.
+Tam süit: **456 passed** (F5 öncesi 378 + 78 F5-A). F5-B: onay bekliyor.
 
 Tamamlanan fazlar: Faz 1-3, Faz 4 (Backtest Harness — v1→v7, v7.1-golden) +
 HARDENING.md Bölüm A + Teşhis v6 + Motor+veri v7 + EXPANSION.md E1 (Veri Temeli)
@@ -183,6 +186,35 @@ yürütme) · F5A-3 mutabakat+kurtarma · F5A-4 kill-switch hiyerarşisi · F5A-
 günlüğü (JSONL) · F5A-6 parite · F5A-7 izleme+Telegram iskeleti · F5A-8 AlgoLab adapter
 iskeleti · F5A-9 seans/takvim · F5A-Z kapanış (PHASE5A_REVIEW.md). Her aşama: commit +
 golden kanıtı + push + STATUS.
+
+**F5-A İLERLEME (canlı takip):**
+- [x] F5A-0 plan/kayıt (0b6f600) — PHASE5_PLAN.md.
+- [x] F5A-1 canlı veri deposu (cf26836) — `data/live_store.py` (LiveHistoryStore),
+      8 test. SQLite; snapshot bootstrap + EOD arayüzü + çapraz-kaynak tutarlılık.
+- [x] F5A-2 PaperBroker + runner (18406cf) — `execution/{broker_adapter,paper_broker,
+      regime_core_runner}.py`, 11 test. **PARİTE KANITI**: runner switch'leri
+      run_regime_core_prod ile BİREBİR, equity rel=1e-9. Nakit tahakkuku = regime_core
+      formülü (modellenmiş faiz ayrı). Restart state kurtarma. Bracket stop-önceliği.
+- [x] F5A-3 mutabakat + kurtarma (a1e44ef) — `safety/reconciliation.py` (LocalLedger +
+      reconcile → FREEZE, adopt yalnız kullanıcı), "emir gönderildi/yanıt yok/çöküş"
+      mock testli. 5 test.
+- [x] F5A-4 kill-switch hiyerarşisi (b60ede0) — `safety/kill_switch.py` (5 switch),
+      eşikler `config/regime_core.yaml::safety` (D1-uyarlı, ÖNERİ). 9 kuru-test.
+- [x] F5A-5 karar günlüğü (2cec791) — `journal/{masking,decision_journal}.py`, D1-uyarlı
+      JSONL şema, merkezî maskeleme, runner hook. 6 test.
+- [x] F5A-6 parite (4335e21) — `safety/parity.py`, offline↔canlı anahtarlama diff =
+      kırmızı alarm; equity farkı parite başarısızlığı sayılmaz. 3 test.
+- [x] F5A-7 izleme + Telegram (2fda861) — `notify/{telegram_bot,eod_summary}.py`,
+      `safety/heartbeat.py`. config-gated, token'sız, read-only vs çift-onay, 'real'
+      komutu YOK, watchdog. 16 test.
+- [x] F5A-8 AlgoLab adapter iskeleti (f1e8aab) — `execution/algolab/{auth,client,
+      adapter}.py`, DOĞRULANMAMIŞ (F5-B'de resmî doküman), CANLI ÇAĞRI YOK, fixture. 12 test.
+- [x] F5A-9 seans/takvim (970caa2) — `config/bist_calendar.yaml` + `core/bist_calendar.py`
+      (2026 doğrulandı; sürekli 10:00-18:00; yarım-gün; kütüphane tek-otorite değil;
+      veri-yok toleransı). clock.py 09:55→10:00 düzeltildi. 8 test.
+- [x] F5A-Z kapanış — `PHASE5A_REVIEW.md` (aşama tablosu, B1-B7 kapsama, kuru-test
+      sonuçları, F5-B kullanıcı-aksiyon listesi), tam süit 456, golden bayt-bayt, push.
+**F5-A TAMAMLANDI — kullanıcı/baş danışman değerlendirmesi bekliyor. F5-B onayı AYRI.**
 
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
