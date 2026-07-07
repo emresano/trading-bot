@@ -25,8 +25,17 @@ def check_quality(
     jump_threshold_pct: float = 0.20,
     ohlc_rtol: float = 0.005,
     ohlc_atol: float = 1e-6,
+    calendar_id: Optional[str] = None,
 ) -> QualityResult:
-    """Bölüm 7.2'deki 5 kontrolü sırayla uygular. Geçemeyen sembol o turda işlem görmez."""
+    """Bölüm 7.2'deki 5 kontrolü sırayla uygular. Geçemeyen sembol o turda işlem görmez.
+
+    `calendar_id` (EXPANSION.md Bölüm 5, ikinci doğrulama katmanı): verilirse
+    (örn. "XIST"/"XNYS"), bar zaman damgalarının etiketlediği tarih o piyasada
+    işlem günü DEĞİLSE WARN düşer ("tarih takvimde işlem günü değil → şüpheli
+    bar"). Bu, v7 hayalet-bar filtresini (data/cleaning.py, phantom/volume=0
+    bar'ları yakalar) TAMAMLAYAN bir katmandır — onun yerine geçmez; farklı bir
+    hata sınıfını (kapalı günde damgalanmış bar) yakalar. Varsayılan None →
+    davranış değişmez (mevcut çağıranlar ve golden etkilenmez)."""
     missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing_cols:
         return QualityResult(False, errors=[f"eksik kolon(lar): {missing_cols}"])
@@ -93,6 +102,18 @@ def check_quality(
                 False,
                 errors=[f"son bar zamanı çok eski: {last_ts} (şimdi: {reference_now})"],
                 warnings=warnings,
+            )
+
+    # 6. (opt-in) Takvim ikinci-doğrulama katmanı — kapalı günde damgalanmış bar (Bölüm 5)
+    if calendar_id is not None:
+        from core.calendars import get_calendar
+        cal = get_calendar(calendar_id)
+        non_session = [ts for ts in working.index if not cal.is_trading_day(ts.date())]
+        if non_session:
+            warnings.append(
+                f"{calendar_id} takviminde işlem günü OLMAYAN tarihlerde bar var "
+                f"(şüpheli, hayalet-bar filtresini tamamlayan katman): "
+                f"{[str(ts.date()) for ts in non_session[:5]]}"
             )
 
     return QualityResult(True, errors=[], warnings=warnings, cleaned_df=working)

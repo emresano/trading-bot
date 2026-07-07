@@ -30,9 +30,15 @@ def to_istanbul(dt: datetime) -> datetime:
 
 
 def is_trading_day(dt: datetime) -> bool:
-    """Yalnızca hafta içi kontrolü. Resmi tatil takvimi MVP kapsamı dışında."""
+    """BIST (XIST) işlem günü mü — resmî tatil + hafta sonu farkındalıklı.
+
+    EXPANSION.md Bölüm 5: bu fonksiyonun API'si KORUNUR, içi
+    core.calendars.MarketCalendar("XIST")'e delege eder (exchange_calendars ile
+    resmî tatilleri de dikkate alır — eski yalnızca-hafta-içi davranışının
+    üstüne). Istanbul takvim gününe göre değerlendirilir."""
+    from core.calendars import get_calendar
     local = to_istanbul(dt)
-    return local.weekday() < 5  # 0=Pazartesi ... 4=Cuma
+    return get_calendar("XIST").is_trading_day(local.date())
 
 
 def is_bist_session(dt: datetime) -> bool:
