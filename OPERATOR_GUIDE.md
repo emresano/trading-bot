@@ -16,9 +16,14 @@ cd /Users/sano/trading-bot
 # 1) (opsiyonel) secrets — Telegram bildirimi istiyorsan:
 cp config/secrets.env.example config/secrets.env    # TELEGRAM_TOKEN + TELEGRAM_CHAT_ID doldur
 chmod 600 config/secrets.env
-# 2) Canlı depoyu snapshot'tan bootstrap et (bir kez; ~20 yıl günlük tarihçe):
+# ÖNEMLİ: doldurulacak dosya BUDUR — repo kökünde bir secrets.env DEĞİL. Kod yalnızca
+# `config/secrets.env`'i okur (main.py, safety/heartbeat.py, tools/evds_compare.py hepsi
+# bu yolu hard-code eder); başka bir konuma yazılan değerler SESSİZCE görülmez.
+# 2) Doğrula (değer YAZDIRILMAZ — yalnız durum + maskeli test mesajı):
+.venv/bin/python main.py --config config/regime_core.yaml --test-telegram
+# 3) Canlı depoyu snapshot'tan bootstrap et (bir kez; ~20 yıl günlük tarihçe):
 .venv/bin/python main.py --config config/regime_core.yaml --bootstrap
-# 3) İlk veri çekimi + gözlem döngüsü (elle doğrulama):
+# 4) İlk veri çekimi + gözlem döngüsü (elle doğrulama):
 .venv/bin/python main.py --config config/regime_core.yaml --refresh --cycle
 ```
 
@@ -138,8 +143,33 @@ Yalnız izinli `chat_id`'den kabul edilir. `/status`, `/report` (read-only);
 `/pause CONFIRM`, `/resume CONFIRM`, `/kill CONFIRM` (çift onay). **'real'/gerçek-para
 komutu YOKTUR** — router açıkça reddeder.
 
-> F5-B1'de Telegram **giden** bildirim iskeleti hazırdır; gerçek HTTP gönderim +
-> gelen-komut long-poll alıcısı bir sonraki turda bağlanır (token'sız log-only çalışır).
+> F5-B2a'da Telegram **giden** bildirim gerçek Bot API HTTP ile çalışır (timeout + 3
+> deneme + üstel bekleme). Gelen-komut long-poll alıcısı henüz bağlı DEĞİL (F5-B2).
+
+### 5a. `--test-telegram` — bağlantı doğrulama (F5-B2a.1)
+
+```bash
+.venv/bin/python main.py --config config/regime_core.yaml --test-telegram
+```
+
+Ne yapar: config'i yükler, notifier'ın gerçek çalışma durumunu raporlar
+(`TELEGRAM durumu: ACTIVE (...)` veya `LOG-ONLY (neden)`), **ACTIVE**se maskeli bir
+test mesajı gönderir ve telefonda görebilmen için gönderim sonucunu (BAŞARILI/BAŞARISIZ)
+basar. Exit code: `0`=ACTIVE+gönderim başarılı, `1`=LOG-ONLY veya gönderim başarısız.
+**Token/chat_id DEĞERİ hiçbir çıktıya yazılmaz.**
+
+### 5b. Sessiz-düşüş sertleştirmesi (F5-B2a.1)
+
+Daha önce `telegram.enabled: true` olduğu halde `config/secrets.env`'de token/chat_id
+okunamazsa bot bunu hiç belirtmeden LOG-ONLY'ye düşüyordu (config-niyet ↔ çalışma-durumu
+uyuşmazlığı sessizdi). Artık:
+- Başlangıçta belirgin `WARN TELEGRAM: telegram.enabled=true ama çalışma-durumu
+  LOG-ONLY: <neden>` journal'a düşer.
+- Her EOD özetinde ve `runtime/paper/heartbeat_status.json`'da kalıcı bir satır var:
+  `TELEGRAM: ACTIVE` veya `TELEGRAM: LOG-ONLY (<neden>)`. Bu satır her döngüde
+  yenilenir — bir gün ACTIVE'ken ertesi gün sessizce LOG-ONLY'ye düşerse fark edilir.
+- En sık neden: token/chat_id **yanlış dosyaya** yazılmış (§0'daki uyarı) — kod yalnız
+  `config/secrets.env`'i okur.
 
 ---
 

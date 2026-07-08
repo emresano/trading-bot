@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from notify.telegram_bot import (
-    TelegramNotifier, TelegramConfig, CommandRouter, make_http_sender,
+    TelegramNotifier, TelegramConfig, CommandRouter, make_http_sender, notifier_status,
 )
 from notify.eod_summary import build_eod_summary
 from safety.heartbeat import write_heartbeat, heartbeat_age_sec, Watchdog
@@ -98,6 +98,33 @@ def test_notifier_no_token_stays_log_only(monkeypatch):
     assert n.sent == ["x"]
 
 
+# ------------------------------------------------------------------ notifier_status (F5-B2a.1)
+def test_notifier_status_config_disabled():
+    state, reason = notifier_status(False, token_present=True, chat_id="42")
+    assert state == "LOG-ONLY" and "kasıtlı kapalı" in reason
+
+
+def test_notifier_status_enabled_but_no_token_is_silent_drop():
+    """telegram.enabled=true AMA token okunamadı → LOG-ONLY + sebep belirgin (sessiz değil)."""
+    state, reason = notifier_status(True, token_present=False, chat_id="42")
+    assert state == "LOG-ONLY" and "TELEGRAM_TOKEN" in reason
+
+
+def test_notifier_status_enabled_but_no_chat_id():
+    state, reason = notifier_status(True, token_present=True, chat_id=None)
+    assert state == "LOG-ONLY" and "TELEGRAM_CHAT_ID" in reason
+
+
+def test_notifier_status_enabled_but_neither():
+    state, reason = notifier_status(True, token_present=False, chat_id=None)
+    assert state == "LOG-ONLY" and "TELEGRAM_TOKEN" in reason and "TELEGRAM_CHAT_ID" in reason
+
+
+def test_notifier_status_active():
+    state, reason = notifier_status(True, token_present=True, chat_id="42")
+    assert state == "ACTIVE"
+
+
 # ------------------------------------------------------------------ komut router
 def _router(**kw):
     return CommandRouter(allowed_chat_id="42", **kw)
@@ -185,3 +212,16 @@ def test_eod_summary_contents():
                           modeled_interest_total=1234, next_calendar_note="yarım gün")
     assert "NAKİT" in s and "101,000" in s and "+250" in s
     assert "Modellenmiş faiz" in s and "yarım gün" in s
+
+
+def test_eod_summary_telegram_status_active():
+    s = build_eod_summary(date="2024-06-03", equity=101_000, cash=101_000, day_pnl=250,
+                          in_position=False, telegram_status=("ACTIVE", "token+chat_id mevcut"))
+    assert "TELEGRAM: ACTIVE" in s
+
+
+def test_eod_summary_telegram_status_log_only_shows_reason():
+    s = build_eod_summary(date="2024-06-03", equity=101_000, cash=101_000, day_pnl=250,
+                          in_position=False,
+                          telegram_status=("LOG-ONLY", "TELEGRAM_TOKEN okunamadı (config/secrets.env kontrol edin)"))
+    assert "TELEGRAM: LOG-ONLY" in s and "TELEGRAM_TOKEN okunamadı" in s

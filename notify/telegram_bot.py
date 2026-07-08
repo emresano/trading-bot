@@ -75,6 +75,24 @@ def make_http_sender(token: str, chat_id: str, *, timeout: float = 10.0, retries
     return _send
 
 
+def notifier_status(enabled_cfg: bool, token_present: bool,
+                    chat_id: Optional[str]) -> tuple[str, str]:
+    """Konfig-niyet (`telegram.enabled`) ile çalışma-durumu arasındaki olası
+    uyuşmazlığı TEK bir yerde çözer (F5-B2a.1 — sessiz düşüş sertleştirme).
+    Döner: (state, reason) — state ∈ {"ACTIVE", "LOG-ONLY"}. Değer İÇERMEZ,
+    yalnız var/yok + config niyeti."""
+    if not enabled_cfg:
+        return "LOG-ONLY", "telegram.enabled=false (config kasıtlı kapalı)"
+    if not token_present and not chat_id:
+        return ("LOG-ONLY", "TELEGRAM_TOKEN ve TELEGRAM_CHAT_ID okunamadı "
+                            "(config/secrets.env kontrol edin)")
+    if not token_present:
+        return "LOG-ONLY", "TELEGRAM_TOKEN okunamadı (config/secrets.env kontrol edin)"
+    if not chat_id:
+        return "LOG-ONLY", "TELEGRAM_CHAT_ID okunamadı (config/secrets.env kontrol edin)"
+    return "ACTIVE", "token+chat_id mevcut"
+
+
 class TelegramNotifier:
     """Giden bildirim. `sender(text)` enjekte edilebilir (test); yoksa+enabled+token
     varsa gerçek Bot API HTTP göndericisi kurulur. enabled=False → no-op (log-only).

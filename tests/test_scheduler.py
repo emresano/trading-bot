@@ -347,4 +347,40 @@ def test_eod_summary_sent_with_interest_and_staleness(tmp_path: Path, monkeypatc
     sched.run_cycle(BDAYS[-1].date())
     eod = [m for m in sent if "EOD Özet" in m]
     assert eod, "EOD özeti Telegram'a gönderilmedi"
+    assert any("TELEGRAM: ACTIVE" in m for m in eod)
+
+
+def test_silent_drop_hardening_enabled_but_no_token(tmp_path: Path, monkeypatch):
+    """F5-B2a.1: telegram.enabled=true AMA TELEGRAM_TOKEN/CHAT_ID okunamadı → bir daha
+    SESSİZ kalmaz: (1) başlangıçta belirgin WARN journal'a düşer, (2) heartbeat_status.json
+    kalıcı 'TELEGRAM: LOG-ONLY (neden)' satırı taşır, (3) EOD özetinde de aynı satır var."""
+    monkeypatch.delenv("TELEGRAM_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    sched, sent = _make(tmp_path, go_live=None, telegram_enabled=True)
+    assert sched.telegram_status[0] == "LOG-ONLY"
+    warns = [r for r in sched.journal.read_all()
+            if r.get("category") == "TELEGRAM" and r.get("level") == "WARN"]
+    assert any("LOG-ONLY" in r.get("message", "") for r in warns)
+
+    sched.startup()
+    sched.run_cycle(BDAYS[-1].date())
+
+    import json
+    status = json.loads((sched.runtime / "heartbeat_status.json").read_text())
+    assert status["telegram"]["state"] == "LOG-ONLY"
+    assert "TELEGRAM_TOKEN" in status["telegram"]["reason"]
+    assert sent == [], "sender enjekte edilmiş olsa da enabled=False iken çağrılmamalı"
+    sched.close()
+
+
+def test_silent_drop_hardening_active_state_no_warn(tmp_path: Path, monkeypatch):
+    """ACTIVE durumda mismatch WARN'ı düşmez; yalnız durum satırı taşınır."""
+    monkeypatch.setenv("TELEGRAM_TOKEN", "TESTTOK")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "1")
+    sched, sent = _make(tmp_path, go_live=None, telegram_enabled=True)
+    assert sched.telegram_status == ("ACTIVE", "token+chat_id mevcut")
+    warns = [r for r in sched.journal.read_all()
+            if r.get("category") == "TELEGRAM" and r.get("level") == "WARN"]
+    assert warns == []
+    sched.close()
     sched.close()

@@ -39,7 +39,7 @@ from execution.paper_broker import PaperBroker
 from execution.regime_core_runner import RegimeCoreRunner
 from journal.decision_journal import DecisionJournal
 from notify.eod_summary import build_eod_summary
-from notify.telegram_bot import TelegramConfig, TelegramNotifier
+from notify.telegram_bot import TelegramConfig, TelegramNotifier, notifier_status
 from safety.heartbeat import write_heartbeat
 from safety.kill_switch import KillSwitchManager, SwitchConfig
 from safety.reconciliation import LocalLedger, startup_reconcile
@@ -118,12 +118,20 @@ class PaperScheduler:
 
         # telegram (config-gated, token'sız log-only)
         tg = cfg.get("telegram", {})
+        enabled_cfg = bool(tg.get("enabled", False))
         token_present = bool(os.environ.get("TELEGRAM_TOKEN"))
-        tconf = TelegramConfig(enabled=bool(tg.get("enabled", False)) and token_present,
-                               chat_id=os.environ.get("TELEGRAM_CHAT_ID"),
-                               token_present=token_present)
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+        tconf = TelegramConfig(enabled=enabled_cfg and token_present,
+                               chat_id=chat_id, token_present=token_present)
         self.notifier = TelegramNotifier(tconf, sender=notifier_sender, known_secrets=known_secrets,
                                          logger=lambda m: self._log("WARN", "TELEGRAM", m))
+        # F5-B2a.1: konfig-niyet (telegram.enabled=true) ile çalışma-durumu (token/chat_id
+        # okunabilirliği) arasındaki uyuşmazlık bir daha SESSİZ kalmasın — belirgin WARN +
+        # kalıcı durum satırı (EOD + heartbeat_status.json, bkz. aşağı).
+        self.telegram_status = notifier_status(enabled_cfg, token_present, chat_id)
+        if enabled_cfg and self.telegram_status[0] != "ACTIVE":
+            self._log("WARN", "TELEGRAM",
+                      f"telegram.enabled=true ama çalışma-durumu LOG-ONLY: {self.telegram_status[1]}")
 
         # breaker + kill-switch
         safety = cfg.get("safety", {})
@@ -186,10 +194,12 @@ class PaperScheduler:
     def _write_heartbeat_status(self, as_of, res) -> None:
         """Heartbeat companion (K1): faiz değeri + kaynak tarihi + bayatlık. Watchdog'un
         okuduğu `heartbeat` dosyası SADE timestamp kalır (format değişmez); bu ayrı dosya."""
+        state, reason = self.telegram_status
         status = {
             "ts": _utcnow().isoformat(), "as_of": str(as_of), "mode": res.mode,
             "equity": res.equity, "cash": res.cash, "regime_on": res.regime_on,
             "cash_rate": res.cash_rate_status or None,
+            "telegram": {"state": state, "reason": reason},
         }
         (self.runtime / "heartbeat_status.json").write_text(json.dumps(status, indent=2, default=str))
 
@@ -410,7 +420,8 @@ class PaperScheduler:
             in_position=bool(self.broker.quantities()), breaker_state="OK",
             frozen_switches=self.killswitch.frozen_switches(),
             modeled_interest_total=res.modeled_interest_total, next_calendar_note=next_note,
-            cash_rate_status=res.cash_rate_status or None)
+            cash_rate_status=res.cash_rate_status or None,
+            telegram_status=self.telegram_status)
         if self.mode == "observe":
             res.eod_summary = (f"[GÖZLEM — paper hesabı başlatılmadı, işlem yok] "
                                f"Rejim değerlendirmesi: {'ON' if res.regime_on else 'OFF'}\n"
@@ -556,6 +567,32 @@ def _load_secrets() -> tuple:
     return tuple(v for v in (os.environ.get(k) for k in keys) if v)
 
 
+def _cmd_test_telegram(config_path: str, notifier: Optional[TelegramNotifier] = None) -> int:
+    """F5-B2a.1: konfigürasyonu yükler, notifier durumunu raporlar (ACTIVE/LOG-ONLY
+    + neden) ve ACTİFse maskeli bir test mesajı gönderir. Token/chat_id DEĞERİ hiçbir
+    biçimde yazdırılmaz — yalnızca durum + maskeli gönderilen metin. `notifier` yalnız
+    testte enjekte edilir (gerçek HTTP YOK); üretimde None → gerçek TelegramNotifier kurulur."""
+    cfg = load_config(config_path)
+    secrets = _load_secrets()
+    tg = cfg.get("telegram", {})
+    enabled_cfg = bool(tg.get("enabled", False))
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    state, reason = notifier_status(enabled_cfg, bool(token), chat_id)
+    print(f"TELEGRAM durumu: {state} ({reason})")
+    if state != "ACTIVE":
+        print("test mesajı gönderilmedi (LOG-ONLY).")
+        return 1
+    if notifier is None:
+        tconf = TelegramConfig(enabled=True, chat_id=chat_id, token_present=True)
+        notifier = TelegramNotifier(tconf, known_secrets=secrets,
+                                    logger=lambda m: print(f"WARN TELEGRAM: {m}"))
+    ok = notifier.send(f"[test-telegram] BIST trading-bot bağlantı testi — {_utcnow().isoformat()}")
+    masked = notifier.sent[-1] if notifier.sent else ""
+    print(f"gönderim sonucu: {'BAŞARILI' if ok else 'BAŞARISIZ'}  mesaj(maskeli)={masked}")
+    return 0 if ok else 1
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Gölge paper scheduler (F5-B1)")
     ap.add_argument("--config", default="config/regime_core.yaml")
@@ -564,9 +601,15 @@ def main() -> None:
     ap.add_argument("--cycle", action="store_true", help="bir günlük döngü koş")
     ap.add_argument("--resync", action="store_true",
                     help="K4 operatör: tam tarihçe yeniden çek + yedekle + parite (veri kayması sonrası)")
+    ap.add_argument("--test-telegram", action="store_true",
+                    help="F5-B2a.1: notifier durumunu raporla (ACTIVE/LOG-ONLY+neden); "
+                         "ACTİFse maskeli test mesajı gönder; exit code sonucu yansıtır")
     ap.add_argument("--as-of", default=None, help="döngü günü (YYYY-MM-DD; vars. bugün)")
     ap.add_argument("--runtime", default=None, help="runtime kökü (vars. config paper.runtime_dir)")
     args = ap.parse_args()
+
+    if args.test_telegram:
+        raise SystemExit(_cmd_test_telegram(args.config))
 
     cfg = load_config(args.config)
     secrets = _load_secrets()

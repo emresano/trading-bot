@@ -15,7 +15,8 @@ def build_eod_summary(*, date, equity: float, cash: float, day_pnl: float,
                       frozen_switches: Optional[list[str]] = None,
                       modeled_interest_total: float = 0.0,
                       next_calendar_note: str = "",
-                      cash_rate_status: Optional[dict] = None) -> str:
+                      cash_rate_status: Optional[dict] = None,
+                      telegram_status: Optional[tuple[str, str]] = None) -> str:
     frozen = frozen_switches or []
     regime = "BASKET (rejim ON)" if in_position else "NAKİT (rejim OFF)"
     lines = [
@@ -35,6 +36,9 @@ def build_eod_summary(*, date, equity: float, cash: float, day_pnl: float,
         f"Breaker: {breaker_state}",
         f"Aktif FREEZE: {', '.join(frozen) if frozen else 'yok'}",
     ]
+    if telegram_status:  # F5-B2a.1: konfig-niyet ↔ çalışma-durumu uyuşmazlığı hiç sessiz kalmasın
+        state, reason = telegram_status
+        lines.append(f"TELEGRAM: {state}" if state == "ACTIVE" else f"TELEGRAM: {state} ({reason})")
     if next_calendar_note:
         lines.append(f"Yarın: {next_calendar_note}")
     return "\n".join(lines)
