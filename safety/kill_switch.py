@@ -38,8 +38,8 @@ def _utcnow_iso() -> str:
 class SwitchConfig:
     alarm_drawdown_pct: float = 0.25
     freeze_drawdown_pct: float = 0.40
-    daily_loss_limit_pct: float = 0.08
-    consecutive_losses_freeze: int = 4
+    daily_loss_limit_pct: float = 0.12    # K2 mutabakatı: tarihsel worst gün -11.6% altı
+    consecutive_losses_freeze: int = 7    # K2 mutabakat formülü: tarihsel maks 5 + 2
     data_stale_sec: int = 172800
     data_max_price_jump_pct: float = 0.20
     api_error_freeze_count: int = 5
@@ -50,8 +50,8 @@ class SwitchConfig:
         return cls(
             alarm_drawdown_pct=safety.get("alarm_drawdown_pct", 0.25),
             freeze_drawdown_pct=safety.get("freeze_drawdown_pct", 0.40),
-            daily_loss_limit_pct=safety.get("daily_loss_limit_pct", 0.08),
-            consecutive_losses_freeze=safety.get("consecutive_losses_freeze", 4),
+            daily_loss_limit_pct=safety.get("daily_loss_limit_pct", 0.12),
+            consecutive_losses_freeze=safety.get("consecutive_losses_freeze", 7),
             data_stale_sec=safety.get("data_stale_sec", 172800),
             data_max_price_jump_pct=safety.get("data_max_price_jump_pct", 0.20),
             api_error_freeze_count=safety.get("api_error_freeze_count", 5),
