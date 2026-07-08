@@ -120,23 +120,55 @@ def test_parity_not_applicable_in_observe(tmp_path: Path):
     sched.close()
 
 
-def test_provisional_bar_flagged_and_execution_deferred(tmp_path: Path):
-    """as_of barı henüz kapanmamışsa (seans-içi 'now') → signal_eval provisional=True."""
-    from datetime import datetime, timezone
-    store = LiveHistoryStore(tmp_path / "h.sqlite")
+def _sched_with_clock(tmp_path, now_dt, go_live=None, subdir="rt"):
+    store = LiveHistoryStore(tmp_path / f"{subdir}.sqlite")
     _seed_store(store, ["THYAO", "GARAN"], [100.0 + i for i in range(12)])
     feed = LiveDataFeed(store, ["THYAO", "GARAN"], fetch_raw_fn=lambda y, s: pd.DataFrame())
-    cfg = _cfg(None)
-    cfg["safety"]["freeze_dir"] = str(tmp_path / "freeze")
-    # 'now' = son bar gününün seans-içi (12:00 Istanbul = 09:00 UTC) → bar henüz açık
+    cfg = _cfg(go_live)
+    cfg["safety"]["freeze_dir"] = str(tmp_path / f"freeze_{subdir}")
+    return PaperScheduler(cfg, tmp_path / subdir, feed=feed,
+                          notifier_sender=[].append, now_fn=lambda: now_dt)
+
+
+def test_provisional_intrasession_flags_true_no_trade(tmp_path: Path):
+    """K5: seans-içi 'now' (kapanış öncesi) → provisional=True + observe'da işlem yok."""
+    from datetime import datetime, timezone
     as_of = BDAYS[-1].date()
-    now_intraday = datetime(as_of.year, as_of.month, as_of.day, 9, 0, tzinfo=timezone.utc)
-    sched = PaperScheduler(cfg, tmp_path / "rt", feed=feed, now_fn=lambda: now_intraday)
+    intraday = datetime(as_of.year, as_of.month, as_of.day, 9, 0, tzinfo=timezone.utc)  # 12:00 Istanbul
+    sched = _sched_with_clock(tmp_path, intraday, go_live=None, subdir="a")
     res = sched.run_cycle(as_of)
-    rows = sched.journal.read_all()
-    sev = [r for r in rows if r["type"] == "signal_eval"]
+    sev = [r for r in sched.journal.read_all() if r["type"] == "signal_eval"]
     assert sev and sev[-1]["provisional"] is True
     assert any("PROVISIONAL" in n or "KAPANMADI" in n for n in res.notes)
+    assert sched.broker.quantities() == {}    # işlem yok
+    sched.close()
+
+
+def test_provisional_postclose_flags_false(tmp_path: Path):
+    """K5 diğer yön: kapanış+grace SONRASI 'now' → provisional=False (bar final)."""
+    from datetime import datetime, timezone
+    as_of = BDAYS[-1].date()
+    # 18:00 kapanış + 3600s grace = 19:00 Istanbul = 16:00 UTC; 20:00 UTC → final
+    post_close = datetime(as_of.year, as_of.month, as_of.day, 20, 0, tzinfo=timezone.utc)
+    sched = _sched_with_clock(tmp_path, post_close, go_live=None, subdir="b")
+    res = sched.run_cycle(as_of)
+    sev = [r for r in sched.journal.read_all() if r["type"] == "signal_eval"]
+    assert sev and sev[-1]["provisional"] is False
+    assert not any("PROVISIONAL" in n for n in res.notes)
+    sched.close()
+
+
+def test_provisional_active_intrasession_defers_execution(tmp_path: Path):
+    """K5: active modda seans-içi → yürütme son yürütülebilir güne sınırlı (bugün açık)."""
+    from datetime import datetime, timezone
+    as_of = BDAYS[-1].date()
+    intraday = datetime(as_of.year, as_of.month, as_of.day, 9, 0, tzinfo=timezone.utc)
+    sched = _sched_with_clock(tmp_path, intraday, go_live=BDAYS[4].date(), subdir="c")
+    sched.startup()
+    sched.run_cycle(as_of)
+    # yürütme bugünün (açık) barına DAYANMAZ — son işlenen karar günü < as_of olmalı
+    last_proc, *_ = sched.runner._state()
+    assert last_proc is not None and last_proc < pd.Timestamp(as_of, tz="UTC")
     sched.close()
 
 
