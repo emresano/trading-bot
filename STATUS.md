@@ -1,16 +1,17 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T18:40:00+03:00 (Europe/Istanbul)
-Şu an (EXPANSION hattı): **D2US-S1 (KESİTSEL MOMENTUM AİLESİ tasarım+spike turu) AÇILDI**
-(bkz. KALICI KAYIT 17). D1-US KESİN RED (E4b, son-bakış kuralı) baş danışmanca onaylandı;
-yeni US-only, otonomi hedefli bir hat olarak **D2-US (12-1 kesitsel momentum + FIP + mutlak-
-momentum kapısı + vol-hedefleme)** açıldı. Bu tur: US2 evreni (~50 sembol) dondurma →
-benchmark+kriter MÜHÜRLEME (koşumdan ÖNCE) → tasarım sabitleri → spike koşumu → D2_US_S1.md.
-Offline araştırma; `mode: paper` + TÜM canlı bot modülleri + S1/S1b/E4 araçları
-DOKUNULMAZ; her madde ayrı commit; v7.1-golden her commit 3/3. Grid/varyant SEÇİMİ YASAK —
-tasarım TEK paket olarak mühürlenir. HÜKÜM YOK; kabul kararı kullanıcının/baş danışmanın.
-Faz 6/real/launchd/go_live'a adım YOK. (E4b kapanışı: KAYIT 16. F5 paper hattı ayrı.)
+Son güncelleme: 2026-07-08T20:10:00+03:00 (Europe/Istanbul)
+Şu an (EXPANSION hattı): **D2US-S1 (KESİTSEL MOMENTUM AİLESİ tasarım+spike) TAMAMLANDI —
+kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `D2_US_S1.md` + `D2US_CRITERIA.md`
++ KALICI KAYIT 18). Yeni US-only aile **D2-US (12-1 kesitsel momentum + FIP + mutlak-
+momentum kapısı + vol-hedefleme)** koşumdan ÖNCE TEK paket mühürlendi; MEKANİK doldurma
+(referans=sepet): **mühürlü tablo 1/4** (yalnız 3b tam-dönem maxDD; Sharpe 0.725<0.804,
+CAGR 10.87%<13.84%, OOS Sharpe 0.770<0.831) → **önceden mühürlenen kurala göre D2-US
+US-referansta kabul adayı DEĞİL** (HÜKÜM değil — karar kullanıcının/baş danışmanın).
+Offline; `mode: paper` + TÜM canlı bot modülleri + S1/S1b/E4 araçları DOKUNULMADI;
+grid/varyant seçimi YOK; v7.1-golden her commit 3/3. Faz 6/real/launchd/go_live'a adım
+YOK. (E4b kapanışı: KAYIT 16. F5 paper hattı ayrı.)
 
 --- Önceki oturum (F5 paper hattı, bu turda DOKUNULMADI) ---
 Mikro-düzeltme (yalnız EOD gösterimi): `notify/eod_summary.py`'de "Rejim" (compute_regime_
@@ -519,6 +520,40 @@ Sıra (her biri ayrı commit): (0) bu kayıt → (1) US2 evreni ~50 sembol dondu
 DATA_AUDIT_US2.md + survivorship → (2) benchmark (US2 eşit-ağırlık sepet + SPY bilgi) +
 D2US_CRITERIA.md MÜHÜR → (3) tasarım sabitleri (aynı mühür commit'i) → (4) spike koşumu +
 mekanik tablo + crash/turnover/ablasyon/komşuluk → (5) D2_US_S1.md + kapanış. **DUR.**
+
+## KALICI KAYIT 18 — D2US-S1 (kesitsel momentum spike) TAMAMLANDI (2026-07-08)
+D2-US (kesitsel momentum) ailesinin tek-tur değerlendirme spike'ı tamamlandı (bkz.
+`D2_US_S1.md`, `D2US_CRITERIA.md`, `DATA_AUDIT_US2.md`). Tasarım koşumdan ÖNCE TEK
+paket olarak mühürlendi (E4 §4 kilidi emsali); grid/varyant seçimi YAPILMADI.
+
+**Mühürleme (koşumdan ÖNCE, ayrı commit `c081b19`):** referans = eşit-ağırlık US2
+sepeti al-tut (maliyetsiz; SPY yalnız bilgi, SPY'a geçiş KALICI YASAK). Mühürlü 4
+kriter: (1) Sharpe>sepet 0.8035; (2) CAGR>sepet 0.13836 (getiri-arayan VARLIK şartı,
+D1/E4'te yoktu); (3a) OOS aylık-Sharpe>sepet 0.8310; (3b) tam-dönem |maxDD|≤sepet
+45.54%. Kural: 1+2+3a+3b TAMAMI→aday; biri kalırsa red, dar-fark YOK.
+
+**MEKANİK SONUÇ (referans=sepet):** D2-US ana: CAGR 10.87%, Sharpe 0.7254, maxDD
+-32.61%, 246 rebalans; OOS aylık-Sharpe 0.7697, OOS maxDD -25.20% (39 pencere); MC
+dd_p5 -36.1%. **MÜHÜRLÜ TABLO: (1) FAIL (0.725<0.804); (2) FAIL (10.87%<13.84%);
+(3a) FAIL (0.770<0.831); (3b) PASS (32.6%≤45.5%) → 1/4.** → önceden mühürlenen
+kurala göre **D2-US US-referansta kabul adayı DEĞİL** (HÜKÜM değil; karar kullanıcının).
+
+**Zorunlu analizler:** (a) crash — 2009 rebound strat -0.8% vs sepet +51% (abs-kapı
+~8.9/10 nakit); 2020 rebound strat +26.6% vs sepet +68.7% (vol maruziyet ~0.42) →
+savunma katmanları toparlanmayı kaçırdı. (b) turnover ~588%/yıl ama maliyet sürüklemesi
+yalnız ~33bps/yıl (zayıflık maliyet kaynaklı DEĞİL). (c) ablasyon (yalın 0.60→+FIP 0.74
+→+kapı 0.76→+vol 0.73) BİLGİ-only — en iyi varyant (V2, 0.76) BİLE kriter 1'i geçmiyor
+(karar tek katmana bağlı değil). (d) komşuluk uçurumsuz, mühürlü nokta zirve değil
+(overfitting-karşıtı). Dürüst çekince: dar large-cap evreninde momentum edge'i zayıf +
+survivorship (sepet gerçek-üstü) — sonuç bir ALT sınır.
+
+**İzolasyon:** `mode: paper` + canlı bot modülleri + S1/S1b/E4 araçları
+(backtest/regime_core*.py, tools/run_regime_core*.py, tools/e4_common.py,
+config/regime_core*.yaml) DOKUNULMADI. Yeni BAĞIMSIZ: `backtest/xsec_momentum.py`,
+`tools/{build_us2_snapshot,run_xsec_momentum_us2}.py`, `config/momentum_us2.yaml`,
+`data/snapshots/us2/2026-07-08/`. v7.1-golden her commit 3/3; tam süit **530 passed**
+(522+8). Faz 6/real/launchd/go_live'a adım YOK; iki durma noktası kullanıcıda.
+**Kabul kararı kullanıcının/baş danışmanın; otomatik geçiş YOK.**
 
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
