@@ -1,16 +1,17 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T22:15:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-08T23:30:00+03:00 (Europe/Istanbul)
 Şu an (EXPANSION hattı): **D4-US (varlık-sınıfı ETF dual-momentum ailesi) tasarım+spike
-turu AÇILDI (baş danışman kararı, KALICI KAYIT 20).** US3 tek-hisse point-in-time yolu
-ERTELENDİ (DATA_FEASIBILITY_US3: salt ücretsiz kaynaklarla tam US evreni kurulamıyor;
-en ucuz güvenilir ücretli yol EODHD ~$200-300/yıl — satın alma ÖNCESİ paket-kapsam
-doğrulaması zorunlu, kuyruk #21). D4-US, D2 Ders-2'nin (dar mega-cap evrende kesitsel
-alfa negatif; KALICI KAYIT 19) evren-SINIFI değişikliğiyle cevabı: 10 varlık-sınıfı
-ETF'i (SPY IWM EFA EEM VNQ TLT IEF LQD GLD DBC), survivorship'siz + yatırılabilir
-dürüst sepet referansı; Ders-1 uygulandı (vol-hedefleme YOK). **HÜKÜM YOK — kabul/red
-kullanıcının/baş danışmanın; hiçbir satın alma/kayıt/API anahtarı edinme YAPILMADI.**
+turu TAMAMLANDI (KALICI KAYIT 20 açılış + 21 kapanış).** MEKANİK SONUÇ (mühürlü 4-kriter,
+referans=eşit-ağırlık 10-ETF sepeti): **1/4 (yalnız 3b maxDD)** — CAGR 6.667% (sepet
+6.696%, FAIL 0.03pp), Sharpe 0.546 (<0.616 FAIL), OOS Sharpe 0.399 (<0.580 FAIL), maxDD
+-25.72% (≤34.53% PASS). Önceden mühürlenen kurala göre **D4-US US-referansta kabul adayı
+DEĞİL** (HÜKÜM değil — karar kullanıcının/baş danışmanın). Aile GERÇEK savunmacı rotasyon
+sergiledi (GFC -8% vs sepet -18.5%; 2022 -4.7% vs -17% via emtia) ama diversifiye sepeti
+risk-ayarlı GEÇMEDİ. US3 tek-hisse yolu ERTELENDİ (EODHD kapsam doğrulaması → kuyruk #21).
+Üç aile (D1/D2/D4-US) da mekanik 1/4; D4-US referansa EN YAKIN + EN SAVUNMACI (bilgi).
+**Hiçbir satın alma/kayıt/API anahtarı edinme YAPILMADI; iki durma noktası kullanıcıda.**
 
 Ayrıca bu turda **K1.5 mekanik teyidi 1/2** kaydedildi (2026-07-08 akşam koşusu:
 DATA_DRIFT yok, provisional yok, TELEGRAM ACTIVE, EOD Rejim/Pozisyon ayrı+tutarlı —
@@ -633,6 +634,54 @@ eşit-ağırlık sepet al-tut + SPY bilgi) + D4US_CRITERIA.md MÜHÜR + tasarım
 backtest/dual_momentum_etf.py modülü) + mekanik tablo + crash/turnover/ablasyon/
 komşuluk → (5) D4_US_S1.md + kapanış. **DUR.**
 
+## KALICI KAYIT 21 — D4US-S1 (varlık-sınıfı ETF dual-momentum spike) TAMAMLANDI (2026-07-08)
+D4-US (varlık-sınıfı ETF dual-momentum) ailesinin tek-tur değerlendirme spike'ı tamamlandı
+(bkz. `D4_US_S1.md`, `D4US_CRITERIA.md`, `DATA_AUDIT_ETF.md`). Tasarım koşumdan ÖNCE TEK
+paket olarak mühürlendi (E4 §4 / D2US §5 kilidi emsali); grid/varyant seçimi YAPILMADI.
+
+**Mühürleme (koşumdan ÖNCE, ayrı commit `caa21f5` — strateji kodu HENÜZ yokken):** referans
+= eşit-ağırlık 10-ETF sepeti al-tut (maliyetsiz, total-return; SPY yalnız bilgi, SPY'a geçiş
+KALICI YASAK). Mühürlü 4 kriter: (1) Sharpe>sepet 0.6164; (2) CAGR>sepet 0.066957
+(getiri-arayan VARLIK şartı); (3a) OOS aylık-Sharpe>sepet 0.5796; (3b) tam-dönem
+|maxDD|≤sepet 34.53%. Kural: 1+2+3a+3b TAMAMI→aday; biri kalırsa red, dar-fark YOK,
+üçüncü-bakış YOK (ölçüm bu turda TAM: maliyet+nakit+OOS+MC dahil; E4b-tarzı ikinci
+ölçüm-bakışı bu ailede YOK).
+
+**Evren (10 ETF, SABİT, kimlik longName ile doğrulandı 10/10):** SPY IWM EFA EEM VNQ TLT
+IEF LQD GLD DBC; TOTAL-RETURN (auto_adjust; tahvil ETF'lerinde fiyat-only ciddi hata);
+kompozit t0=2006-02-06 (DBC bağlar), 5136 gün, 0 hayalet/0 ffill/0 sıçrama. Survivorship
+YAPISAL olarak küçük (varlık sınıfı iflas etmez → dürüst/yatırılabilir sepet çıtası; bilinen
+sorun #13 bu evren-sınıfında büyük ölçüde kapanır). aux DGS3MO (2005-01-03) evren t0-12ay
+(2005-02-06) öncesine uzanıyor ✓ (AYNEN reuse).
+
+**MEKANİK SONUÇ (referans=sepet):** D4-US ana: CAGR 6.667%, Sharpe 0.5462, maxDD -25.72%,
+233 rebalans, nihai equity 373,449; OOS aylık-Sharpe 0.3987 (36 pencere, 216 ay); MC dd_p5
+-38.67%. **MÜHÜRLÜ TABLO: (1) FAIL (0.546<0.616); (2) FAIL (6.667%<6.696%, 0.03pp); (3a)
+FAIL (0.399<0.580); (3b) PASS (25.7%≤34.5%) → 1/4.** → önceden mühürlenen kurala göre
+**D4-US US-referansta kabul adayı DEĞİL** (HÜKÜM değil; karar kullanıcının).
+
+**Zorunlu analizler:** (a) kriz — GERÇEK savunmacı rotasyon (D2'nin AKSİNE): GFC -8.0% vs
+sepet -18.5% (GLD/TLT/IEF/DBC güvenli-liman rotasyonu), COVID +5.0% vs +2.5%, 2022 -4.7%
+vs -17.0% (DBC/emtia rotasyonu — dual-momentum tezi ÇALIŞIYOR); bedel 2009 rebound gecikmesi
+(+11% vs +34%). (b) turnover 4.84×/yıl, maliyet ~26bps/yıl (zayıflık maliyet kaynaklı DEĞİL).
+(c) ablasyon V0 yalın 0.565→V1 +kapı 0.546 (kapı hafif zararlı; kapısız V0 BİLE kriter 1'i
+geçmiyor → karar tek katmana bağlı değil). (d) komşuluk uçurumsuz + mühürlü nokta ZİRVE
+DEĞİL (formation-6=0.671, top-4=0.593 daha iyi → overfitting-karşıtı); yapısal örüntü:
+top-N↑→Sharpe↑ (diversifiye evrende KONSANTRASYON çeşitlendirmeyi kaybettiriyor). Dürüst
+çekince: diversifiye varlık-sınıfı sepetini risk-ayarlı geçmek zor + varlık-sınıfı
+momentumunun 2015-sonrası zayıflaması. **Üç aile (D1/D2/D4-US) da mekanik 1/4; D4-US
+referansa EN YAKIN + EN SAVUNMACI** (bilgilendirici, kabul değil).
+
+**İzolasyon:** `mode: paper` + canlı bot modülleri + S1/S1b/E4/D2US araçları
+(backtest/regime_core*.py, backtest/xsec_momentum.py, tools/run_regime_core*.py,
+tools/e4_common.py, tools/run_xsec_momentum_us2.py, config/regime_core*.yaml,
+config/momentum_us2.yaml) DOKUNULMADI. Yeni BAĞIMSIZ: backtest/dual_momentum_etf.py,
+tools/{build_etf_snapshot,run_dual_momentum_etf}.py, config/dual_momentum_etf.yaml,
+data/snapshots/etf_us/2026-07-08/. e4_common/run_regime_core fonksiyonları YALNIZ import
+edilerek reuse (drift imkânsız). v7.1-golden her commit 3/3; tam süit **541 passed** (530+11).
+Faz 6/real/launchd/go_live'a adım YOK; iki durma noktası kullanıcıda. **Kabul kararı
+kullanıcının/baş danışmanın; otomatik geçiş YOK.**
+
 ## K1.5 Mekanik Teyit — 1/2 (2026-07-08)
 2026-07-08 akşam koşusu denetlendi (not: launchd servisleri bu makinede henüz kurulu
 DEĞİL — `launchctl list` boş, `runtime/paper/logs/` yok; "akşam koşusu" = günün son
@@ -667,12 +716,15 @@ farklı bir güne ait bağımsız bir gözlem gerekir; kod değişikliği YAPILM
   eki), tam süit 378 passed, git push. Tag: `regime-core-d1-prod`.
 
 ## Sırada
-- **[YENİ, EXPANSION/US hattı] D4-US turu AÇIK (KALICI KAYIT 20):** baş danışman US3
-  tek-hisse point-in-time yolunu ERTELEDİ (satın-alma öncesi EODHD paket-kapsam
-  doğrulaması zorunlu → kuyruk #21) ve yerine D4-US'i (varlık-sınıfı ETF dual-momentum:
-  SPY IWM EFA EEM VNQ TLT IEF LQD GLD DBC) açtı. Bu turda D4US-S1 (tasarım+mühür+spike,
-  D2US-S1 şablonu) yürütülüyor; kabul/red kullanıcının/baş danışmanın. `mode: paper` +
-  canlı bot modülleri + S1/S1b/E4/D2US araçları DOKUNULMAZ; grid/varyant seçimi YOK.
+- **[YENİ, EXPANSION/US hattı] D4-US turu TAMAMLANDI, KARAR kullanıcıda (KALICI KAYIT
+  20+21):** D4US-S1 (varlık-sınıfı ETF dual-momentum, D2US-S1 şablonu) mühürlü tabloda
+  **1/4** (yalnız 3b maxDD) → önceden mühürlenen kurala göre US-referansta kabul adayı
+  DEĞİL (HÜKÜM değil). **Karar bekleniyor:** kabul/red/farklı-tasarım iterasyonu
+  kullanıcının/baş danışmanın (bkz. `D4_US_S1.md` §11). Aile en savunmacı/referansa en
+  yakın olanıydı ama diversifiye sepeti risk-ayarlı geçmedi.
+- **[EXPANSION/US3 kuyruğu #21] US3 tek-hisse point-in-time yolu ERTELENDİ:** yeniden
+  açılırsa satın-alma ÖNCESİ EODHD paket-kapsam doğrulaması zorunlu (bkz. sorun/blok #21,
+  `DATA_FEASIBILITY_US3.md`). Hiçbir satın alma/kayıt YAPILMADI.
 - **[K1.5] ikinci temiz koşu (2/2) bekleniyor** — farklı bir güne ait bağımsız bir
   gözlemle tamamlanacak (bkz. "K1.5 Mekanik Teyit" bölümü).
 
