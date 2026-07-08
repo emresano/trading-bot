@@ -415,17 +415,21 @@ class PaperScheduler:
         write_heartbeat(self.runtime / "heartbeat")
         self._write_heartbeat_status(as_of, res)
         next_note = self._next_calendar_note(as_of)
+        # F5-B2a.1 mikro-düzeltme: "Rejim" (regime_on — compute_regime_signal) ve
+        # "Pozisyon" (in_position — broker'da sepet var mı) AYRI satırlar; observe modda
+        # pozisyon HER ZAMAN NAKİT'tir (hesap başlatılmadı) ama rejim ON olabilir — eskiden
+        # tek satır in_position'dan türetildiği için observe'da rejim ON iken bile "NAKİT
+        # (rejim OFF)" basılıyor, üstteki [GÖZLEM] başlığıyla çelişiyordu.
         res.eod_summary = build_eod_summary(
             date=as_of, equity=res.equity, cash=res.cash, day_pnl=res.day_pnl,
-            in_position=bool(self.broker.quantities()), breaker_state="OK",
+            in_position=bool(self.broker.quantities()), regime_on=res.regime_on,
+            observe_mode=(self.mode == "observe"), breaker_state="OK",
             frozen_switches=self.killswitch.frozen_switches(),
             modeled_interest_total=res.modeled_interest_total, next_calendar_note=next_note,
             cash_rate_status=res.cash_rate_status or None,
             telegram_status=self.telegram_status)
         if self.mode == "observe":
-            res.eod_summary = (f"[GÖZLEM — paper hesabı başlatılmadı, işlem yok] "
-                               f"Rejim değerlendirmesi: {'ON' if res.regime_on else 'OFF'}\n"
-                               + res.eod_summary)
+            res.eod_summary = "[GÖZLEM — paper hesabı başlatılmadı, işlem yok]\n" + res.eod_summary
         self.notifier.send(res.eod_summary)
 
         st["last_equity"] = res.equity

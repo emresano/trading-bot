@@ -1,7 +1,14 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T16:00:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-08T16:25:00+03:00 (Europe/Istanbul)
+Mikro-düzeltme (yalnız EOD gösterimi): `notify/eod_summary.py`'de "Rejim" (compute_regime_
+signal çıktısı) ve "Pozisyon" (broker'da sepet var mı) tek, yanlış birleştirilmiş satırda
+karışıyordu — observe modda pozisyon HER ZAMAN NAKİT olduğu için rejim ON iken bile "NAKİT
+(rejim OFF)" basılıp üstteki [GÖZLEM] başlığıyla çelişiyordu. Artık iki AYRI satır: "Rejim:
+ON/OFF" + "Pozisyon: NAKİT/SEPETTE (observe — hesap başlatılmadı)". `strategy/regime_core.py`
+DOKUNULMADI; 4 yeni test; tam süit 511 passed, golden 3/3.
+
 Operatör aksiyonu (kod değişikliği YOK): ilk gerçek DATA_DRIFT vakası (2026-07-07, 3 bar —
 ASELS/EREGL/TUPRS, temettü/split izi YOK) `--resync` ile giderildi (4 sembol 1'er bar,
 kompozit parite ≈0); doğrulama cycle'ı DATA_DRIFT'siz + EOD Telegram'a gitti. Detay:

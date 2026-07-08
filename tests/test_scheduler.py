@@ -59,6 +59,9 @@ def test_observe_mode_logs_signal_no_trade(tmp_path: Path):
     assert res.regime_on is True                 # yükselen seri → rejim ON
     assert res.action == "OBSERVE_REGIME_ON"
     assert sched.broker.quantities() == {}       # OBSERVE: işlem yok
+    # F5-B2a.1 mikro-düzeltme: rejim ON + pozisyon NAKİT (observe) ÇELİŞMEZ — iki AYRI satır
+    assert "Rejim: ON" in res.eod_summary
+    assert "Pozisyon: NAKİT (observe — hesap başlatılmadı)" in res.eod_summary
     # journal'da signal_eval kaydı var
     rows = sched.journal.read_all()
     assert any(r["type"] == "signal_eval" for r in rows)

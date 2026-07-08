@@ -225,3 +225,40 @@ def test_eod_summary_telegram_status_log_only_shows_reason():
                           in_position=False,
                           telegram_status=("LOG-ONLY", "TELEGRAM_TOKEN okunamadı (config/secrets.env kontrol edin)"))
     assert "TELEGRAM: LOG-ONLY" in s and "TELEGRAM_TOKEN okunamadı" in s
+
+
+# ---------------------------------------------------------- Rejim ↔ Pozisyon ayrımı (F5-B2a.1)
+def test_eod_summary_regime_on_position_cash_observe():
+    """Observe modda: rejim ON olabilir ama hesap başlatılmadığı için pozisyon HER ZAMAN
+    NAKİT'tir — bu iki AYRI satır olmalı, birbiriyle çelişmemeli (eski bug: tek satır
+    in_position'dan türetiliyordu → observe'da rejim ON iken bile 'NAKİT (rejim OFF)')."""
+    s = build_eod_summary(date="2026-07-08", equity=100_000, cash=100_000, day_pnl=0,
+                          in_position=False, regime_on=True, observe_mode=True)
+    assert "Rejim: ON" in s
+    assert "Pozisyon: NAKİT (observe — hesap başlatılmadı)" in s
+    assert "Rejim: OFF" not in s and "SEPETTE" not in s
+
+
+def test_eod_summary_regime_off_position_cash():
+    s = build_eod_summary(date="2026-07-08", equity=100_000, cash=100_000, day_pnl=0,
+                          in_position=False, regime_on=False)
+    assert "Rejim: OFF" in s
+    assert "Pozisyon: NAKİT" in s and "(observe" not in s
+    assert "Rejim: ON" not in s and "SEPETTE" not in s
+
+
+def test_eod_summary_regime_on_position_basket_active():
+    s = build_eod_summary(date="2026-07-08", equity=100_000, cash=20_000, day_pnl=500,
+                          in_position=True, regime_on=True, observe_mode=False)
+    assert "Rejim: ON" in s
+    assert "Pozisyon: SEPETTE" in s and "(observe" not in s
+    assert "NAKİT" not in s
+
+
+def test_eod_summary_no_regime_line_when_regime_on_omitted():
+    """Geriye uyumluluk: regime_on verilmezse 'Rejim:' satırı hiç basılmaz (eski
+    çağıranlar/testler kırılmaz)."""
+    s = build_eod_summary(date="2026-07-08", equity=100_000, cash=100_000, day_pnl=0,
+                          in_position=False)
+    assert "Rejim:" not in s
+    assert "Pozisyon: NAKİT" in s

@@ -11,17 +11,26 @@ from typing import Optional
 
 
 def build_eod_summary(*, date, equity: float, cash: float, day_pnl: float,
-                      in_position: bool, breaker_state: str = "OK",
+                      in_position: bool, regime_on: Optional[bool] = None,
+                      observe_mode: bool = False, breaker_state: str = "OK",
                       frozen_switches: Optional[list[str]] = None,
                       modeled_interest_total: float = 0.0,
                       next_calendar_note: str = "",
                       cash_rate_status: Optional[dict] = None,
                       telegram_status: Optional[tuple[str, str]] = None) -> str:
     frozen = frozen_switches or []
-    regime = "BASKET (rejim ON)" if in_position else "NAKİT (rejim OFF)"
-    lines = [
-        f"📊 EOD Özet — {date}",
-        f"Rejim: {regime}",
+    # F5-B2a.1 mikro-düzeltme: "rejim" (compute_regime_signal çıktısı) ve "pozisyon"
+    # (broker'da sepet tutuluyor mu) BAĞIMSIZ kavramlar — özellikle observe modda
+    # pozisyon HER ZAMAN NAKİT'tir (hesap başlatılmadı) ama rejim ON olabilir. Eskiden
+    # tek satırda `in_position`'dan türetilen "rejim" metni bu iki durumu karıştırıyordu.
+    pos_text = "SEPETTE" if in_position else "NAKİT"
+    if observe_mode:
+        pos_text += " (observe — hesap başlatılmadı)"
+    lines = [f"📊 EOD Özet — {date}"]
+    if regime_on is not None:
+        lines.append(f"Rejim: {'ON' if regime_on else 'OFF'}")
+    lines += [
+        f"Pozisyon: {pos_text}",
         f"Equity: {equity:,.0f} TRY  (nakit: {cash:,.0f})",
         f"Günün P&L: {day_pnl:+,.0f} TRY",
         f"Modellenmiş faiz (kümülatif): {modeled_interest_total:,.0f} TRY",
