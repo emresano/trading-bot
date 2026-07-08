@@ -1,0 +1,83 @@
+{
+  "created_at_utc": "2026-07-08T19:13:56.528215+00:00",
+  "market_id": "etf_us",
+  "scope": "D4US-S1 ETF evreni (10 varlık-sınıfı ETF: SPY IWM EFA EEM VNQ TLT IEF LQD GLD DBC) — SABİT, ikame YASAK. TOTAL-RETURN (auto_adjust=True; tahvil ETF'lerinde fiyat-only ciddi hata). Kompozit başlangıç = en geç başlayan ETF (DBC ~2006). Kimlik longName ile doğrulandı (identity.json). Varlık-sınıfı dual-momentum ailesinin (D4-US) araştırma evreni; canlı bot bu snapshot'ı OKUMAZ.",
+  "adapter_id": "yf_us",
+  "source": "yfinance",
+  "correction_policy": "auto_adjust=True (yfinance) — kurumsal işlemler (split/temettü) düzeltilir",
+  "library_version": "0.2.66",
+  "volume_kind": "shares",
+  "start_date_filter": "2005-01-01",
+  "files": {
+    "SPY": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "b05924d883032c6966bffc7eb7e4c389fa593783efb722d2bcaed9e159c4aa99",
+      "bytes": 290060
+    },
+    "IWM": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "26fc0beddafd1483b83d46f05713fee349166190f8d37a308d9095a221b6b307",
+      "bytes": 289320
+    },
+    "EFA": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "118d3501f35ec5a6b6cd460985074bbed76c9ea1867917ad507f9621d660896d",
+      "bytes": 286391
+    },
+    "EEM": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "c091d2acf91093d2e4520d31ebb616a15fd9afc6e6ce376081d5d2a12d6ad0ca",
+      "bytes": 287603
+    },
+    "VNQ": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "310db85c60ec11beb8fc04c0ef74647577d9b633175615dca1e8b5099d1b1de1",
+      "bytes": 282780
+    },
+    "TLT": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "9468c714edc75f5cb5ef18c0d3b363667311d55653f97ce570d45b41dda759fa",
+      "bytes": 286405
+    },
+    "IEF": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "bac6640ecca76c3512998b135330646462ce75e534e00e20baa045d3e5e1513c",
+      "bytes": 281878
+    },
+    "LQD": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "aa730f49bea1ac39048cee1b783fae176044a4b338a4d4862f1ab7590244c5ba",
+      "bytes": 283330
+    },
+    "GLD": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "54dd7e0d339ab7db118bc977571609fea5c042cad71ec2775305c71139c1b502",
+      "bytes": 228425
+    },
+    "DBC": {
+      "rows": 5136,
+      "start": "2006-02-06 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "f2c5a33210e270bc5254e2c4b123eb9a6f76668b286390b8f5ca9a6e4b58b27b",
+      "bytes": 255517
+    }
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "SPY": {
+    "asset_class": "US Large-Cap Hisse",
+    "expected_keywords": [
+      "s&p 500"
+    ],
+    "long_name": "State Street SPDR S&P 500 ETF Trust",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  },
+  "IWM": {
+    "asset_class": "US Small-Cap Hisse",
+    "expected_keywords": [
+      "russell 2000"
+    ],
+    "long_name": "iShares Russell 2000 ETF",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  },
+  "EFA": {
+    "asset_class": "Gelişmiş Uluslararası Hisse",
+    "expected_keywords": [
+      "eafe"
+    ],
+    "long_name": "iShares MSCI EAFE ETF",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  },
+  "EEM": {
+    "asset_class": "Gelişen Piyasa Hissesi",
+    "expected_keywords": [
+      "emerging markets"
+    ],
+    "long_name": "iShares MSCI Emerging Markets ETF",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  },
+  "VNQ": {
+    "asset_class": "US GYO (Gayrimenkul)",
+    "expected_keywords": [
+      "real estate"
+    ],
+    "long_name": "Vanguard Real Estate Index Fund ETF Shares",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  },
+  "TLT": {
+    "asset_class": "US 20+ Yıl Hazine Tahvili",
+    "expected_keywords": [
+      "20+ year treasury"
+    ],
+    "long_name": "iShares 20+ Year Treasury Bond ETF",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  },
+  "IEF": {
+    "asset_class": "US 7-10 Yıl Hazine Tahvili",
+    "expected_keywords": [
+      "7-10 year treasury"
+    ],
+    "long_name": "iShares 7-10 Year Treasury Bond ETF",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  },
+  "LQD": {
+    "asset_class": "US Yatırım-Yapılabilir Kredi",
+    "expected_keywords": [
+      "investment grade corporate"
+    ],
+    "long_name": "iShares iBoxx $ Investment Grade Corporate Bond ETF",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  },
+  "GLD": {
+    "asset_class": "Altın",
+    "expected_keywords": [
+      "gold"
+    ],
+    "long_name": "SPDR Gold Shares",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  },
+  "DBC": {
+    "asset_class": "Geniş Emtia",
+    "expected_keywords": [
+      "commodity"
+    ],
+    "long_name": "Invesco DB Commodity Index Tracking Fund",
+    "quote_type": "ETF",
+    "keyword_ok": true,
+    "quote_type_ok": true,
+    "pass": true
+  }
+}
