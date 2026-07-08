@@ -52,3 +52,49 @@ Real paraya geçmeden önce TCMB'nin resmî kaynağıyla (EVDS API) doğrulanmal
    ölçümü o zaman yeniden üretilir (mühürlü kriterler yeniden kontrol edilir).
 
 **Reçete:** `tools/evds_compare.py` (yeniden koşulabilir), `runtime/f5b1/evds_comparison.json`.
+
+---
+
+## F5-B2a — GERÇEK EVDS CSV KIYASI KOŞULDU (2026-07-08)
+
+Kullanıcı `runtime/manual/evds_export.csv` sağladı (seri **TP_BISTTLREF_ORAN** = TLREF,
+BIST TL Gecelik Referans Faizi; 1860 günlük satır, 2018-12 … ). `evds_compare --csv` ile
+aylık hizalandı. **Snapshot DEĞİŞMEDİ — yalnız rapor.** (`runtime/f5b1/evds_comparison.json`
++ `evds_compare_csv.csv`.)
+
+**Araç düzeltmesi (bu tur):** otomatik `value_col` seçimi export'un sondaki virgülünden
+doğan boş `Unnamed: 2` kolonunu alıp **sessizce 0 satır** okuyordu → en az bir sayısal
+değeri olan son kolon seçilecek şekilde sertleştirildi (operatör artık `--value-col`
+vermek zorunda değil). +1 test.
+
+### Bulgular
+| Ölçüt | Değer |
+|---|---|
+| Örtüşen ay | 79 |
+| Ortalama mutlak fark | **2.13 puan** |
+| En büyük fark | **6.00 puan @ 2020-10** (bir başka faiz-geçiş ayı) |
+| 2023 boşluk ayları (baseline NaN) | 9 |
+| 2023 ayları EVDS'de dolu mu | **12/12 — TAMAMEN DOLU** |
+
+1. **Genel fark:** EVDS TLREF, baseline'dan (FRED interbank call money) **sistematik olarak
+   ~2-6 puan YÜKSEK** — rastgele değil, yön hep aynı → **seri-TANIM farkı** (secured TLREF vs
+   OECD interbank call money) + geçiş aylarında zamanlama farkı. İki seri AYNI enstrüman
+   DEĞİLDİR; birebir ikame edilemezler.
+
+2. **2023 boşluğu EVDS'de tam dolu:** baseline'ın forward-fill'lediği 9 ay EVDS'de gerçek
+   değerlerle mevcut ve fark DRAMATİK: 2023-11 baseline ff **23.5** vs EVDS **41.45**;
+   2023-12 baseline ff 23.5 vs EVDS **43.63**. Bu, faiz YÜKSELİŞ döngüsünde bayat/ff'in
+   gerçeğin çok altında kaldığını doğrular (m4 tespitiyle tutarlı: yükselişte muhafazakâr).
+
+3. **2022-10 %9.0 anomalisi teyit edildi:** baseline 2022-09→10→11 = 10.5→**9.0**→7.5 (düşüş);
+   EVDS aynı aylarda 11.38→11.46→10.04. Baseline'daki **9.0 dip'i EVDS'de YOK** — bu, baseline
+   serisinin tanımsal/veri artefaktı olduğuna işaret eder (o dönem para-piyasası faizi ~11%'e
+   yakın seyrediyordu).
+
+### Sonuç / karar (değişmez)
+Fark hem seviye (~2 puan taban) hem de kritik 2023 boşluğunda anlamlıdır — ancak bu **seri-tanım
+farkı** olduğu için EVDS TLREF'i doğrudan TRY_ON_RATE yerine koymak **basit bir yama değildir**;
+tam seri yeniden-inşası + S1b mühürlü kriterlerinin yeniden üretilmesi gerektiren **ayrı, onaylı
+bir tur** ister (yukarıda madde 3). Bu turda snapshot'a, mühürlü parametrelere, S1b ölçümüne
+DOKUNULMADI. Real-öncesi kuyruk #18 açık kalır (artık "veri yok" değil, "tanım-uyumlu seri +
+yeniden ölçüm turu" bekliyor).

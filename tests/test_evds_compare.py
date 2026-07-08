@@ -30,6 +30,17 @@ def test_load_evds_csv_year_month_and_comma_decimal(tmp_path: Path):
     assert str(s.index[0].date()) == "2024-01-01"
 
 
+def test_load_evds_csv_skips_trailing_empty_column(tmp_path: Path):
+    """Gerçek EVDS export'unda sondaki virgül boş 'Unnamed: 2' kolonu üretir; otomatik
+    value_col seçimi bunu ATLAMALI (aksi halde sessizce 0 satır okunurdu)."""
+    p = tmp_path / "evds_trailing.csv"
+    p.write_text("Tarih,TP_BISTTLREF_ORAN,Unnamed: 2\n"
+                 "28-12-2018,23.8738,\n31-12-2018,25.1258,\n02-01-2019,23.0117,\n")
+    s = load_evds_csv(p)   # value_col verilmedi → boş kolon atlanmalı
+    assert len(s) == 3
+    assert abs(s.iloc[0] - 23.8738) < 1e-6
+
+
 def test_compare_to_baseline_structure(tmp_path: Path):
     # gerçek TRY_ON_RATE snapshot'ıyla karşılaştır (varsa)
     if not Path("data/snapshots/aux/2026-07-07/TRY_ON_RATE.parquet").exists():

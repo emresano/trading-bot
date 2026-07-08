@@ -90,7 +90,14 @@ def load_evds_csv(path: Path | str, date_col: Optional[str] = None,
                          if c.lower() in ("tarih", "date", "observation_date")), df.columns[0])
     if value_col is None:
         cands = [c for c in df.columns if c != date_col]
-        value_col = cands[-1] if cands else df.columns[-1]
+        # Sondaki virgülden doğan boş 'Unnamed: N' kolonları sessizce 0-satır kıyas
+        # üretiyordu (operatör tuzağı) → en az bir SAYISAL değeri olan son kolonu seç.
+        def _has_numeric(c) -> bool:
+            return pd.to_numeric(df[c].astype(str).str.replace(",", ".", regex=False),
+                                 errors="coerce").notna().any()
+        numeric_cands = [c for c in cands if _has_numeric(c)]
+        value_col = (numeric_cands[-1] if numeric_cands
+                     else (cands[-1] if cands else df.columns[-1]))
     idx = _parse_evds_dates(df[date_col])
     vals = pd.to_numeric(df[value_col].astype(str).str.replace(",", ".", regex=False),
                          errors="coerce")
