@@ -82,12 +82,16 @@ benchmark:
   index_symbol: "SPY"
   snapshot: "data/snapshots/us_bench/2026-07-08/SPY.parquet"
 
-# Nakit bacağı (madde 1 KARARI): US aux faiz serisi (FED effective / T-bill)
-# data/snapshots/aux'ta MEVCUT DEĞİL → nakit getirisi %0 (MUHAFAZAKÂR).
-# %0, rejim KAPALI dönemlerde nakde hiçbir tahakkuk uygulanmaması demektir;
-# stratejinin mutlak getirisini HAFİFE ALIR (gerçek US kısa faizi 2005-2026'da
-# >0 idi) → bir "geçiş"i ŞİŞİREMEZ; sepet her zaman yatırımda olduğundan
-# Sharpe-vs-sepet kıyasında strateji ALEYHİNE muhafazakâr bir varsayımdır.
-# Gerçek US T-bill/para-piyasası serisi kuyruğa alındı (TRY EVDS emsali).
+# Nakit bacağı.
+#  * E4 (ilk bakış): %0 (MUHAFAZAKÂR) — o turda mevcut bir US aux faiz serisi yoktu.
+#    E4 sürücüsü (tools/run_regime_core_us.py) cash_rate=None'ı SABİT geçer → aşağıdaki
+#    bloktan BAĞIMSIZ olarak her zaman %0 koşar (E4 reprodüksiyonu bozulmaz).
+#  * E4b (ikinci ve SON bakış): US kısa faizi (DGS3MO 3-aylık T-bill) tahakkuku.
+#    E4b sürücüsü (tools/run_regime_core_us_e4b.py) hem %0 hem faizli koşar (ayrıştırma).
+# Tahakkuk = TRY (S1b) emsaliyle AYNI yapı: r_net = max(rate - haircut, 0), ACT/365.
+# Haircut 50bp MUHAFAZAKÂR gerekçe: bkz. data/snapshots/aux_us/.../manifest.json
+# (para-piyasası fonu gider oranı + sürtünme; T-bill politika oranının altı).
 cash_yield:
-  enabled: false          # %0 — madde 1 kararı; sürücü cash_rate=None geçer
+  enabled: true
+  aux_snapshot: "data/snapshots/aux_us/2026-07-08/DGS3MO.parquet"
+  haircut_bps: 50         # E4b sürücüsü BUNU okur (BIST'teki gibi yalnız belge DEĞİL)

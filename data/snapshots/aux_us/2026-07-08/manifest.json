@@ -1,0 +1,33 @@
+{
+  "created_at_utc": "2026-07-08T14:46:49.051906+00:00",
+  "market_id": "us_aux",
+  "scope": "EXPANSION E4b — US 3-aylık T-bill kısa faizi; YALNIZCA cash-yield modeline girer, HİÇBİR sinyal/gate hesabına girmez (S1b TRY_ON_RATE emsali).",
+  "series_id": "DGS3MO",
+  "cadence": "daily",
+  "source": "FRED (St. Louis Fed), herkese açık kimlik-doğrulamasız CSV",
+  "fred_url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS3MO&cosd=2005-01-01",
+  "series_meaning": "3-Month Treasury Constant Maturity Rate (günlük, %)",
+  "haircut_bps": 50,
+  "haircut_rationale": "50bp kırpma MUHAFAZAKÂR: perakende bir nakit-sweep/para-piyasası fonu, 3-aylık T-bill politika oranının ALTINDA getiri sağlar — fon gider oranı (~15-40bp), bid/ask + sürtünme ve vergi-öncesi net fark için kaba bir tampon. TRY (200bp) emsaliyle AYNI yapı, US için daha dar (USD faizi/spread'i daha küçük). Kırpma altında r_net=max(rate-0.005,0), ACT/365.",
+  "start_date_filter": "2005-01-01",
+  "rows_total_fetched": 5611,
+  "rows_valid": 5380,
+  "rows_dropped_dot_holiday": 231,
+  "value_range_pct": [
+    0.0,
+    5.63
+  ],
+  "first_obs": "2005-01-03 00:00:00+00:00",
+  "last_obs": "2026-07-06 00:00:00+00:00",
+  "gap_report": {
+    "max_gap_days": 4,
+    "n_gaps_gt_7d": 0,
+    "long_gaps_gt_7d": []
+  },
+  "file": {
+    "name": "DGS3MO.parquet",
+    "rows": 5380,
+    "sha256": "d8c9ebe6d6677a32e59f6534b897bb7f8c7e34b8d042bccbed16d188b8ba9e10",
+    "bytes": 59592
+  }
+}
