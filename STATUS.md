@@ -1,17 +1,27 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T20:10:00+03:00 (Europe/Istanbul)
-Şu an (EXPANSION hattı): **D2US-S1 (KESİTSEL MOMENTUM AİLESİ tasarım+spike) TAMAMLANDI —
-kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `D2_US_S1.md` + `D2US_CRITERIA.md`
-+ KALICI KAYIT 18). Yeni US-only aile **D2-US (12-1 kesitsel momentum + FIP + mutlak-
-momentum kapısı + vol-hedefleme)** koşumdan ÖNCE TEK paket mühürlendi; MEKANİK doldurma
-(referans=sepet): **mühürlü tablo 1/4** (yalnız 3b tam-dönem maxDD; Sharpe 0.725<0.804,
-CAGR 10.87%<13.84%, OOS Sharpe 0.770<0.831) → **önceden mühürlenen kurala göre D2-US
-US-referansta kabul adayı DEĞİL** (HÜKÜM değil — karar kullanıcının/baş danışmanın).
-Offline; `mode: paper` + TÜM canlı bot modülleri + S1/S1b/E4 araçları DOKUNULMADI;
-grid/varyant seçimi YOK; v7.1-golden her commit 3/3. Faz 6/real/launchd/go_live'a adım
-YOK. (E4b kapanışı: KAYIT 16. F5 paper hattı ayrı.)
+Son güncelleme: 2026-07-08T21:35:00+03:00 (Europe/Istanbul)
+Şu an (EXPANSION hattı): **D2-US KESİN OLARAK REDDEDİLDİ (baş danışman kaydı, KALICI
+KAYIT 19) — D2 ailesi US2 tarihçesinde KAPALI, üçüncü bakış yok.** Sıradaki adım **US3
+point-in-time evren VERİ FİZİBİLİTESİ** araştırıldı (bkz. `DATA_FEASIBILITY_US3.md`):
+salt ücretsiz kaynaklarla (2005+/~200+ isim/delisted-dahil/point-in-time) tam bir US
+evreni KURULAMIYOR — point-in-time endeks üyeliği ücretsiz+iyi durumda (`fja05680/sp500`,
+MIT, 1996-2026) ama defunct-ticker FİYAT verisi ücretsiz kaynaklarda (yfinance, Stooq,
+Tiingo) sistematik eksik/güvenilmez (bazı devralınan ticker'lar sessizce başka bir
+şirketin verisini döndürüyor — MER→Meren Energy, WB→Weibo). En ucuz güvenilir ücretli
+yol EODHD (~$200-300/yıl); Norgate (~$630-790/yıl) kapsamı en net dokümante edilen ama
+lisansı algoritmik kullanım açısından belirsiz ifadeler içeriyor. **HÜKÜM YOK — kaynak
+seçimi/satın alma kararı kullanıcının/baş danışmanın; hiçbir satın alma/kayıt/API
+anahtarı edinme YAPILMADI.**
+
+Ayrıca bu turda **K1.5 mekanik teyidi 1/2** kaydedildi (2026-07-08 akşam koşusu:
+DATA_DRIFT yok, provisional yok, TELEGRAM ACTIVE, EOD Rejim/Pozisyon ayrı+tutarlı —
+dördü de PASS; bkz. yukarı "K1.5 Mekanik Teyit" bölümü). Offline/kayıt turu; `mode: paper`
++ TÜM canlı bot modülleri + S1/S1b/E4/D2US araçları DOKUNULMADI; grid/varyant seçimi YOK;
+v7.1-golden her commit 3/3; tam süit **530 passed** (değişmedi — bu tur kod davranışı
+değiştirmedi). Faz 6/real/launchd/go_live'a adım YOK. (Önceki: D2US-S1 spike KAYIT 18,
+D1-US kesin red KAYIT 16, E4/E4b KAYIT 15/16. F5 paper hattı ayrı.)
 
 --- Önceki oturum (F5 paper hattı, bu turda DOKUNULMADI) ---
 Mikro-düzeltme (yalnız EOD gösterimi): `notify/eod_summary.py`'de "Rejim" (compute_regime_
@@ -604,6 +614,15 @@ farklı bir güne ait bağımsız bir gözlem gerekir; kod değişikliği YAPILM
   eki), tam süit 378 passed, git push. Tag: `regime-core-d1-prod`.
 
 ## Sırada
+- **[YENİ, EXPANSION/US hattı] US3 evren kararı kullanıcıda:** D2-US kesin red (KALICI
+  KAYIT 19) sonrası veri fizibilitesi araştırıldı (`DATA_FEASIBILITY_US3.md`) — salt
+  ücretsiz kaynaklarla tam bir point-in-time/delisted-dahil US evreni kurulamıyor;
+  en ucuz güvenilir ücretli yol EODHD (~$200-300/yıl). **Karar bekleniyor:** ücretli
+  kaynağa mı geçilecek yoksa hat burada mı duracak — kod/tasarım işi bu karar
+  gelmeden BAŞLAMAZ.
+- **[K1.5] ikinci temiz koşu (2/2) bekleniyor** — farklı bir güne ait bağımsız bir
+  gözlemle tamamlanacak (bkz. "K1.5 Mekanik Teyit" bölümü).
+
 **F5-B1 (gölge paper) KOD İŞİ TAMAMLANDI** — kullanıcı/baş danışman değerlendirmesi
 bekliyor (`PHASE5B1_REVIEW.md`, KALICI KAYIT 10). Otomatik GEÇİŞ YOK. Sıradaki adımlar
 kullanıcı kararına bağlı:
