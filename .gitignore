@@ -1,7 +1,12 @@
 .venv/
 __pycache__/
 *.pyc
-config/secrets.env
+# secrets — genel desen (F5-B2a.1, STATUS #9 kapanışı): yalnızca config/secrets.env
+# DEĞİL, hiçbir yoldaki secrets.env / *.env dosyası da asla commitlenmesin.
+secrets.env
+*.env
+!config/secrets.env.example
+runtime/manual/
 data/historical/*.parquet
 *.sqlite
 runtime/*
