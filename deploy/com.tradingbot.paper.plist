@@ -11,9 +11,17 @@
     2) cp deploy/com.tradingbot.paper.plist ~/Library/LaunchAgents/
     3) launchctl load ~/Library/LaunchAgents/com.tradingbot.paper.plist
 
-  NOT: Yol/kullanıcı-adı Mac Mini'ye göre; gerekiyorsa düzenle. Saat SİSTEM yerel
-  saatidir — Mac Istanbul saatinde varsayılıyor (aksi halde Hour'u ayarla).
-  'real'e geçiş YOK — bu servis yalnızca paper (Durma Noktası 2).
+  ZAMANLAMA GEREKÇESİ (K5 grace uyumu): BIST sürekli kapanış 18:00 Istanbul; K5
+  bar-finallik grace = 3600s (bar_close_grace_sec) → bar 19:00'da FİNAL olur.
+  Sinyal yalnız FİNAL bardan hesaplanır; erken koşarsa cycle provisional görür ve
+  observe'da işlem yapmaz / active'de yürütmeyi son final güne erteler (zarar yok,
+  ama o gün atlanır). Bu yüzden iş 19:30'da koşar → 19:05 alt-sınırına 25 dk marj.
+  Türkiye kalıcı UTC+3 (DST YOK), dolayısıyla 19:30 yerel yıl boyu sabit güvenli.
+
+  NOT: Yol/kullanıcı-adı Mac Mini'ye göre; gerekiyorsa düzenle. StartCalendarInterval
+  SİSTEM yerel saatini kullanır — Mac Istanbul (UTC+3) saatinde varsayılıyor; farklı
+  tz'de Hour'u >=19:05 Istanbul karşılığına ayarla (kod tarafı to_istanbul ile tz-güvenli,
+  yalnız TETİKLEME saati sisteme bağlı). 'real'e geçiş YOK — yalnızca paper (Durma Noktası 2).
 -->
 <plist version="1.0">
 <dict>
@@ -33,7 +41,8 @@
     <key>WorkingDirectory</key>
     <string>/Users/sano/trading-bot</string>
 
-    <!-- Her iş günü 19:30 yerel (kapanış 18:00 + ~1.5s grace). Cumartesi/Pazar hariç. -->
+    <!-- Her iş günü 19:30 yerel = kapanış 18:00 + 1h grace (19:00 final) + 30dk marj.
+         Cumartesi/Pazar hariç; BIST tatilleri scheduler'da bist_calendar ile atlanır. -->
     <key>StartCalendarInterval</key>
     <array>
         <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>30</integer></dict>

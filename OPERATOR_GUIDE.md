@@ -70,6 +70,29 @@ launchctl list | grep tradingbot
 
 > Mac saati **Istanbul** varsayılıyor. Farklıysa plist'teki `Hour` alanını ayarla.
 
+### 2a. Beklenen günlük zaman çizelgesi (K5 grace uyumu)
+
+| Saat (Istanbul) | Olay |
+|---|---|
+| 18:00 | BIST sürekli seans kapanır (günlük bar oluşur ama yfinance'te henüz güncellenebilir) |
+| 19:00 | Bar **FİNAL** sayılır (kapanış + `bar_close_grace_sec`=3600s). Bundan önce cycle koşarsa bar *provisional*'dır → observe'da işlem yok, active'de yürütme son final güne ertelenir |
+| **19:30** | **launchd `com.tradingbot.paper` tetiklenir**: `--refresh` (yfinance EOD) → `--cycle`. 19:05 alt-sınırına 25 dk marj |
+| her 15 dk | `com.tradingbot.watchdog`: heartbeat yaşını kontrol eder; bayatsa Telegram CRITICAL |
+
+**Neden 19:30, daha erken değil?** Türkiye kalıcı **UTC+3 (DST yok)**, dolayısıyla 19:30
+yerel yıl boyu sabittir. Kod tarafı `to_istanbul` ile tz-güvenlidir; yalnızca launchd
+**tetikleme** saati sistem yerel saatine bağlıdır (Mac Istanbul varsayılır).
+
+**`--refresh` sonucu 'bar yok' (yfinance gecikmesi):** eksik sembol(ler) sembol-bazlı
+zarafetle atlanır (`WARN DATA: bar yok: [...]`). O gün **tüm** sembollerde bar yoksa veya
+bazıları eksikse **veri-tamlığı kapısı (K6)** yürütmeyi erteler — **kısmi/undersized basket
+YASAK**; cycle son tam-veri gününe sınırlanır. Ertesi iş günü 19:30 koşusunda veri tamamlanınca
+**K3 catch-up** kaçan anahtarlamayı yürütür (varsa `DELAYED_SIGNAL` alarmı).
+
+**Retry:** koşu-içi yfinance ağ retry'ı YOKTUR; geçici bir yfinance hatası bir sonraki
+planlı günlük koşu + catch-up ile kendiliğinden telafi edilir (gölge modda gecikme
+zararsızdır — gerçek emir yok). Kalıcı sorun için §6 Sorun Giderme.
+
 ---
 
 ## 3. Günlük ne beklemeli / nereye bakmalı
