@@ -87,7 +87,8 @@ def _watchdog_main() -> int:
     tconf = TelegramConfig(enabled=bool(token), chat_id=os.environ.get("TELEGRAM_CHAT_ID"),
                            token_present=bool(token))
     notifier = TelegramNotifier(tconf, known_secrets=tuple(
-        v for v in (token, os.environ.get("TELEGRAM_CHAT_ID")) if v))
+        v for v in (token, os.environ.get("TELEGRAM_CHAT_ID")) if v),
+        logger=lambda m: print(f"WARN TELEGRAM: {m}"))
 
     wd = Watchdog(notifier, stale_sec=stale, path=runtime / "heartbeat")
     stale_now = wd.check()

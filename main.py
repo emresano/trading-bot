@@ -122,7 +122,8 @@ class PaperScheduler:
         tconf = TelegramConfig(enabled=bool(tg.get("enabled", False)) and token_present,
                                chat_id=os.environ.get("TELEGRAM_CHAT_ID"),
                                token_present=token_present)
-        self.notifier = TelegramNotifier(tconf, sender=notifier_sender, known_secrets=known_secrets)
+        self.notifier = TelegramNotifier(tconf, sender=notifier_sender, known_secrets=known_secrets,
+                                         logger=lambda m: self._log("WARN", "TELEGRAM", m))
 
         # breaker + kill-switch
         safety = cfg.get("safety", {})

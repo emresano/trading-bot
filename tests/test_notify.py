@@ -6,9 +6,16 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from notify.telegram_bot import TelegramNotifier, TelegramConfig, CommandRouter
+from notify.telegram_bot import (
+    TelegramNotifier, TelegramConfig, CommandRouter, make_http_sender,
+)
 from notify.eod_summary import build_eod_summary
 from safety.heartbeat import write_heartbeat, heartbeat_age_sec, Watchdog
+
+
+class _Resp:
+    def __init__(self, status_code):
+        self.status_code = status_code
 
 
 # ------------------------------------------------------------------ notifier
@@ -24,6 +31,71 @@ def test_notifier_uses_injected_sender_and_masks():
     assert n.send("token=API-SECRET123 fill oldu") is True
     assert "API-SECRET123" not in captured[0]
     assert "***" in captured[0]
+
+
+# ------------------------------------------------------------------ gerçek HTTP gönderici (mock)
+def test_http_sender_posts_masked_payload_on_success():
+    posts = []
+    send = make_http_sender("TOK", "42", poster=lambda p: posts.append(p) or _Resp(200))
+    send("merhaba")
+    assert posts == [{"chat_id": "42", "text": "merhaba"}]
+
+
+def test_http_sender_retries_then_succeeds():
+    calls = {"n": 0}
+    sleeps = []
+
+    def poster(_payload):
+        calls["n"] += 1
+        return _Resp(200 if calls["n"] == 3 else 500)
+
+    send = make_http_sender("TOK", "42", poster=poster, sleep=sleeps.append)
+    send("x")
+    assert calls["n"] == 3                 # iki başarısız + bir başarılı
+    assert sleeps == [1.0, 2.0]            # üstel bekleme (base×2^attempt)
+
+
+def test_http_sender_raises_after_persistent_failure():
+    def poster(_payload):
+        raise ConnectionError("ağ yok")
+
+    send = make_http_sender("TOK", "42", poster=poster, sleep=lambda _s: None)
+    with pytest.raises(ConnectionError):
+        send("x")
+
+
+def test_notifier_builds_http_sender_from_env(monkeypatch):
+    """enabled + token(env) + chat_id → gerçek HTTP göndericisi kurulur; sender enjekte YOK."""
+    monkeypatch.setenv("TELEGRAM_TOKEN", "SECRET-TOK")
+    posts = []
+    factory = lambda tok, cid: (lambda text: posts.append((tok, cid, text)))
+    n = TelegramNotifier(TelegramConfig(enabled=True, chat_id="42", token_present=True),
+                         http_factory=factory, known_secrets=("SECRET-TOK",))
+    assert n.send("selam") is True
+    assert posts == [("SECRET-TOK", "42", "selam")]
+
+
+def test_notifier_persistent_failure_never_raises_and_warns(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_TOKEN", "TOK")
+    warns = []
+
+    def boom_factory(tok, cid):
+        def _s(_text):
+            raise TimeoutError("timeout")
+        return _s
+
+    n = TelegramNotifier(TelegramConfig(enabled=True, chat_id="42", token_present=True),
+                         http_factory=boom_factory, logger=warns.append)
+    assert n.send("mesaj") is False        # döngü kırılmaz
+    assert n.sent == ["mesaj"]             # denetim izi yine tutulur
+    assert warns and "kalıcı başarısız" in warns[0]
+
+
+def test_notifier_no_token_stays_log_only(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_TOKEN", raising=False)
+    n = TelegramNotifier(TelegramConfig(enabled=True, chat_id="42", token_present=True))
+    assert n.send("x") is False            # göndericisiz → log-only
+    assert n.sent == ["x"]
 
 
 # ------------------------------------------------------------------ komut router
