@@ -1,17 +1,19 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-07T18:15:00+03:00 (Europe/Istanbul)
-Şu an: **FAZ 5 (PAPER) — F5-B1 (GÖLGE PAPER, AlgoLab'SIZ) KOD İŞİ TAMAMLANDI —
-kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `PHASE5B1_REVIEW.md`).
-Gölge paper döngüsü GERÇEK veriyle (yfinance EOD) uçtan uca çalışıyor: `data/live_feed.py`
-(temizlik-pariteli bootstrap+EOD), `main.py` PaperScheduler (observe/active mod), ilk-
-başlatma (INITIAL_ENTER), launchd plist'leri + OPERATÖR KILAVUZU, B7-D1 önerisi, EVDS
-denemesi (BLOCKED — endpoint), gözetimli ilk koşu. **AlgoLab İPTAL** (2025-12-31 kapandı;
-EK KAYIT aşağıda). `mode: paper` ve eşikler DEĞİŞMEDİ; v7.1-golden her commit 3/3 bayt-bayt;
-D1 üretim fonksiyonları DEĞİŞMEDİ (runner ÇAĞIRIR). **Canlı depo↔backtest kompozit paritesi
-bit-bit (5511 günde 0.0); snapshot↔yfinance 66132 bar-günde ~1e-7.** Faz 6 BAŞLATILMADI;
-Durma Noktası 2 kapalı. Tam süit: **470 passed** (F5-A 456 + F5-B1 14).
+Son güncelleme: 2026-07-08T10:00:00+03:00 (Europe/Istanbul)
+Şu an: **FAZ 5 (PAPER) — F5-B1.1 (GÖLGE SERTLEŞTİRME, K1 kapanış) KOD İŞİ TAMAMLANDI —
+kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `PHASE5B11_REVIEW.md`). 9 sertleştirme
+maddesi: canlı faiz ileri besleme (K1), kill-switch mutabakat tablosu (K2), catch-up+gecikmiş
+sinyal (K3), veri kayması+resync (K4), provisional-bar regresyonu (K5), INITIAL_ENTER maliyet
+mutabakatı+veri-tamlığı kapısı (K6), bakım penceresi (K7), EVDS CSV modu (K8), B7 iki-katmanlı
+karne (K9). `mode: paper` DOKUNULMADI; N/b/M mühürlü; D1 fonksiyonları + `data/snapshots/`
+DEĞİŞMEDİ; v7.1-golden her commit 3/3 bayt-bayt. Faz 6 BAŞLATILMADI; go_live_date=null;
+launchd etkinleştirilmedi; Durma Noktası 2 kapalı. Tam süit: **485 passed** (F5-B1 470 + 15).
+
+**F5-B1 (gölge paper, GERÇEK yfinance EOD) daha önce tamamlandı** (bkz. `PHASE5B1_REVIEW.md`):
+canlı depo↔backtest kompozit bit-bit 0.0; snapshot↔yfinance 66132 bar-günde ~1e-7; 470 passed.
+**AlgoLab İPTAL** (2025-12-31; F5-B2=ManualExecutionAdapter — EK KAYIT aşağıda).
 
 **F5-A (offline runtime iskeleti) daha önce tamamlandı** (bkz. `PHASE5A_REVIEW.md`):
 9 aşama, fixture/kuru-testli, 456 passed.
@@ -264,6 +266,31 @@ fonksiyonları + v7.1-golden korundu.
   BrokerAdapter ile entegre edilebilir."
 - Bu turda başka kapsam değişikliği YOK; Faz 6 başlatılmadı, real'e adım yok.
 
+## KALICI KAYIT 11 — F5-B1.1 (Gölge Sertleştirme, K1 kapanış) tamamlandı (2026-07-08)
+Gölge paper döngüsü sertleştirildi (bkz. `PHASE5B11_REVIEW.md`). 9 madde:
+- **K1** `data/cash_rate_feed.py`: TRY_ON_RATE canlı ileri besleme (snapshot READ-ONLY +
+  SQLite uzantı; bayat>35g→FRED, başarısız→son değer+WARN; formül backtest ile AYNI). EOD
+  özet+heartbeat_status.json'a faiz+kaynak tarihi+bayatlık. GERÇEK: FRED de 2026-03'te
+  bitiyor → faiz tasarım gereği bayat (muhafazakâr); zamanlı için EVDS (#18). tz bug düzeltildi.
+- **K2** Kill-switch mutabakatı (`KILLSWITCH_RECONCILIATION.md`, ölçüm runtime/f5b1/
+  killswitch_measurement.json): prod backtest worst gün −11.60%, max ardışık kaybeden RT=5,
+  max DD −28.43. **consecutive_losses_freeze 4→7** (maks+2), **daily_loss_limit_pct 0.08→0.12**
+  (worst altı) — config+kill_switch senkron; tarihsel tetik 0. (Bunlar operasyonel SAFETY
+  eşiği, ÖNERİ; strateji parametresi/kabul eşiği DEĞİL — DEĞİŞMEZLER ihlali yok.)
+- **K3** catch-up: downtime'da kaçan anahtarlama → DELAYED_SIGNAL alarmı+journal etiketi.
+- **K4** veri kayması: detect_drift (son 30 bar) → DATA_DRIFT (finalize yok); operatör
+  `--resync` (yedek+tam çekim+force-overwrite+otomatik kompozit parite). replace_bars eklendi.
+- **K5** provisional-bar iki-yön + active erteleme testleri (grace=3600s).
+- **K6** INITIAL_ENTER maliyet mutabakatı: 99943.96 KUSUR DEĞİL (kısmi basket/forming-bar);
+  tam barda 99852.29 = 100000−comm−slip bit-bit. **Kök-neden hardening: veri-tamlığı yürütme
+  kapısı** (tüm sembollerde bar yoksa yürütme ertelenir → kısmi basket yasağı).
+- **K7** OPERATOR_GUIDE §7 resync + §8 bakım penceresi + dokunulmaz modül listesi.
+- **K8** `tools/evds_compare.py --csv` elle-export modu (kuyruk #18 endpoint'siz kapatılabilir).
+- **K9** B7_D1_PROPOSAL iki katmanlı karne (mekanik ≥4hafta + olay ≥2 tatbikat); tatbikat
+  implementasyonu YAPILMADI (öneri).
+Tam süit **485 passed** (F5-B1 470 + 15); golden 3/3 her commit. mode/N/b/M/snapshot/D1
+fonksiyonları DEĞİŞMEDİ. Faz 6/real/launchd'ye adım YOK; iki durma noktası kullanıcıda.
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
@@ -331,8 +358,10 @@ engine-seviyesi SHORT execution (short-gate sonrası).
     trades.csv` (commitli, `.gitignore` istisnası). E2+ her commit bayt-bayt kıyaslar.
 18. **[real-öncesi kuyruk] EVDS↔TRY_ON_RATE çapraz doğrulama — DENENDİ, BLOCKED** (F5-B1,
     `EVDS_COMPARISON.md`): EVDS_API_KEY VAR ama REST endpoint evds2→evds3 geçişiyle SPA
-    döndürüyor (JSON yok). `tools/evds_compare.py` hazır — endpoint/auth doğrulanınca ya da
-    seri CSV export edilince yeniden koşulur. Snapshot DEĞİŞMEDİ; hâlâ FRED/OECD (KAYIT 6).
+    döndürüyor (JSON yok). **F5-B1.1 K8: `tools/evds_compare.py --csv` elle-export modu
+    eklendi** → endpoint düzelmeden kullanıcı EVDS CSV export'uyla kapatabilir (kolon eşleme +
+    çoklu tarih formatı). Snapshot DEĞİŞMEZ; hâlâ FRED/OECD (KAYIT 6). Ayrıca F5-B1.1 K1:
+    canlı faiz FRED'den beslenir ama FRED de ~4 ay gecikmeli → faiz kronik bayat (muhafazakâr).
     2023 boşluğu ff → cash-yield MUHAFAZAKÂR sapma (yön güvenli). Real öncesi tamamlanmalı.
 19. **[üretim-turu kuyruğu] D1 nakit bacağının GERÇEK enstrümanı** netleştirilecek
     (AlgoLab para piyasası fonu/repo süpürme; oran/likidite/vade). Şu anki
