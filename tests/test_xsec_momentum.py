@@ -142,3 +142,26 @@ def test_no_position_before_warmup_completes():
     res = run_xsec_momentum(closes, _fip_cfg(), _us_cm())
     # İlk rebalans sinyali en erken 12. ay-sonunda → exec_date ~13. ay.
     assert res.rebalances[0].signal_date > closes["CONT"].index[0] + pd.DateOffset(months=11)
+
+
+def test_d2_us_headline_numbers_regression():
+    """D2_US_S1.md headline mekanik sayılarını (gerçek US2 snapshot, mühürlü tam
+    paket) ÇAPA alır — sessiz sapmayı yakalar + determinizm garantisi. E4 emsali."""
+    import yaml
+    from tools.e4_common import load_us_closes
+    from tools.run_regime_core import compute_summary
+    from tools.run_xsec_momentum_us2 import build_xsec_cfg
+
+    cfg = yaml.safe_load(open("config/momentum_us2.yaml", encoding="utf-8"))
+    closes, _ = load_us_closes(cfg)
+    xcfg = build_xsec_cfg(cfg)
+    cm = UsEquitiesCostModel(commission_bps=0.0, sec_fee_bps=0.28,
+                             taf_per_share=0.000166, slippage_bps=5.0)
+    rate = pd.read_parquet(cfg["cash_yield"]["aux_snapshot"])["rate_pct"] / 100.0
+    res = run_xsec_momentum(closes, xcfg, cm, cash_rate=rate,
+                            cashleg_haircut=cfg["cash_yield"]["haircut_bps"] / 1e4)
+    s = compute_summary(res.equity_curve)
+    assert len(res.rebalances) == 246
+    assert s["sharpe"] == pytest.approx(0.72540, abs=5e-4)
+    assert s["cagr"] == pytest.approx(0.10875, abs=5e-4)
+    assert s["max_drawdown"] == pytest.approx(-0.32610, abs=5e-4)
