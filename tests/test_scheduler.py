@@ -25,24 +25,24 @@ def _seed_store(store: LiveHistoryStore, symbols, series):
         store.upsert_bars(sym, df, source="test")
 
 
-def _cfg(go_live=None):
+def _cfg(go_live=None, telegram_enabled=False):
     return {
         "symbols": ["THYAO", "GARAN"],
         "regime": {"ma_period": 3, "band_pct": 0.0, "confirm_days": 1},
         "costs": {"commission_bps": 10, "slippage_bps": 5},
         "initial_equity": 100000,
         "safety": {"freeze_dir": None},   # __init__ runtime altına düşer
-        "telegram": {"enabled": False},
+        "telegram": {"enabled": telegram_enabled},
         "paper": {"go_live_date": go_live},
     }
 
 
-def _make(tmp_path, go_live=None, rising=True):
+def _make(tmp_path, go_live=None, rising=True, telegram_enabled=False):
     store = LiveHistoryStore(tmp_path / "h.sqlite")
     series = [100.0 + i for i in range(12)] if rising else [200.0 - i for i in range(12)]
     _seed_store(store, ["THYAO", "GARAN"], series)
     feed = LiveDataFeed(store, ["THYAO", "GARAN"], fetch_raw_fn=lambda y, s: pd.DataFrame())
-    cfg = _cfg(go_live)
+    cfg = _cfg(go_live, telegram_enabled=telegram_enabled)
     if cfg["safety"]["freeze_dir"] is None:
         cfg["safety"]["freeze_dir"] = str(tmp_path / "freeze")
     sent = []
@@ -312,4 +312,39 @@ def test_shadow_reconciliation_logs_no_broker(tmp_path: Path):
     rows = sched.journal.read_all()
     recon_msgs = [r for r in rows if r.get("category") == "RECON"]
     assert any("GÖLGE" in r.get("message", "") for r in recon_msgs)
+    sched.close()
+
+
+# ------------------------------------------------------------------ F5-B2a: alarm→Telegram kablolaması
+def test_freeze_and_drift_alarms_reach_telegram(tmp_path: Path, monkeypatch):
+    """Kuru-test (madde 2): mock FREEZE + mock DATA_DRIFT alarmları enjekte edilen
+    Telegram göndericisine ULAŞIR (kısa + maskeli) ve journal'a alarm olarak yazılır.
+    Not: enabled = telegram.enabled AND token_present → testte token env'e konur;
+    enjekte sender önceliklidir (gerçek HTTP YOK)."""
+    monkeypatch.setenv("TELEGRAM_TOKEN", "TESTTOK")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "1")
+    sched, sent = _make(tmp_path, go_live=None, telegram_enabled=True)
+    sched._alarm({"category": "KILL_SWITCH", "level": "CRITICAL",
+                  "message": "consecutive_losses_freeze: 7 ardışık kayıp → FREEZE"})
+    sched._alarm({"category": "DATA_DRIFT", "level": "CRITICAL",
+                  "message": "THYAO son 30 barda sapma; finalize durduruldu"})
+    joined = "\n".join(sent)
+    assert "KILL_SWITCH" in joined and "FREEZE" in joined
+    assert "DATA_DRIFT" in joined
+    # journal alarm kaydı da düşer
+    alarms = [r for r in sched.journal.read_all() if r.get("type") == "alarm"]
+    cats = {a.get("category") for a in alarms}
+    assert {"KILL_SWITCH", "DATA_DRIFT"} <= cats
+    sched.close()
+
+
+def test_eod_summary_sent_with_interest_and_staleness(tmp_path: Path, monkeypatch):
+    """EOD özeti Telegram'a gider (K1 faiz satırı EOD şablonunda; bkz. test_notify)."""
+    monkeypatch.setenv("TELEGRAM_TOKEN", "TESTTOK")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "1")
+    sched, sent = _make(tmp_path, go_live=None, telegram_enabled=True)
+    sched.startup()
+    sched.run_cycle(BDAYS[-1].date())
+    eod = [m for m in sent if "EOD Özet" in m]
+    assert eod, "EOD özeti Telegram'a gönderilmedi"
     sched.close()
