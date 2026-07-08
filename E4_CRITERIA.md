@@ -107,3 +107,31 @@ KAYIT 3 ile reddedildi). Bir kabul KAPISI DEĞİLDİR — EXPANSION_E4.md'de yal
   bölümünden ÖNCE yer alacak.
 
 *Mühür sonu. Bu dosyadaki hiçbir eşik strateji sonucuna göre değiştirilemez.*
+
+---
+
+## 4. SON-BAKIŞ KURALI (E4b eki — 2026-07-08, HERHANGİ bir E4b koşumundan ÖNCE eklendi)
+
+**Bu, D1-US ailesinin aynı tarihçeye (US evreni 2005-2026) İKİNCİ ve SON
+bakışıdır** (S1→S1b emsali: S1 faizsiz ana koşum, S1b nakit-getiri düzeltmesi —
+burada E4 = faizsiz/%0, E4b = US kısa-faiz nakit tahakkuku). Tek davranış
+değişikliği nakit tahakkukudur.
+
+Bağlayıcı kurallar:
+1. **Yukarıdaki (§0-§3) E4 mühürlü tablosu ve eşikleri AYNEN geçerlidir.**
+   Yeniden mühürleme, benchmark değişikliği veya eşik ayarı YOKTUR.
+2. **Benchmark referansı SEPET olarak kalır.** Sonuç görüldükten SONRA "referansı
+   SPY yapalım" türü bir değişiklik, kriter-alışverişidir (criterion-shopping) ve
+   **D1-US için bu turda ve GELECEK turlarda YASAKTIR** — E4'te SPY'ın yalnız
+   bilgilendirici olması bir kereye mahsus bir seçim değil, kalıcı bir sınırdır.
+3. **Karar kuralı (önceden, sonuç görülmeden):** E4b'de mühürlü 4 kriterin
+   (1, 2, 3a, 3b) TAMAMI geçerse **D1-US ailesi US-kabul ADAYIdır**; **herhangi
+   biri kalırsa D1-US ailesi US-referansta KESİN reddedilir. ÜÇÜNCÜ BAKIŞ YOKTUR.**
+   Kesin red hâlinde D1 mantığı US'e "geri dönemez"; ancak gelecekte AYRI bir
+   tasarımın (farklı çekirdek/farklı evren) bir risk-katmanı adayı olarak, YENİ
+   ve ayrıca mühürlenmiş kriterlerle gündeme gelebilir — bu D1-US ailesinin
+   kendisinin yeniden değerlendirilmesi anlamına GELMEZ.
+4. Nihai kabul/red kaydı kullanıcının/baş danışmanın; Claude Code yalnız mekanik
+   uygular, hüküm vermez.
+
+*Son-bakış kuralı sonu. E4b koşumu bu kuraldan SONRA yapılır.*
