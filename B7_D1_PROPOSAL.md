@@ -17,49 +17,62 @@ HARDENING B7: *"Süre ≥ 2 hafta VE değerlendirilen sinyal sayısı ≥ 10."*
   (tarihsel ~yılda 3-4 round-trip). "Değerlendirilen sinyal = anahtarlama olayı" dersek,
   ≥10 olay ~3 yıl sürer — B7'nin "≥2 hafta" ruhunu kırar. Tanım uyarlanmalı.
 
-## 2. ÖNERİLEN tanım (iki katman, farklı rol)
+## 2. Neden tek başına "günlük değerlendirme" yetersiz (F5-B1.1 K9 revizyonu)
 
-| Terim | D1 tanımı | B7'deki rolü |
-|---|---|---|
-| **Değerlendirilen sinyal** (öneri) | **Her işlem günü yapılan rejim değerlendirmesi** (kompozit vs MA(200)±bant → ON/OFF kararı). Her işlem günü = 1 değerlendirilen sinyal. | **≥10 sayımı BUNUNLA karşılanır** — 2 haftada ~10 işlem günü. D1'in "sinyali" sürekli günlük bir durumdur, kesikli bir funnel-geçişi değil. |
-| **Anahtarlama olayı** | ENTER / INITIAL_ENTER / EXIT (rejim durumu değişimi). | Ayrı izlenir; **sayısı kabul kapısı DEĞİL** (nadir olması stratejinin doğası). Her anahtarlamanın paritesi (offline↔canlı) 0-fark olmalı. |
+İlk revizyon "değerlendirilen sinyal = günlük rejim değerlendirmesi" dedi. Bu, ≥10
+sayımını 2 haftada karşılar AMA **yalnızca sürekliliği** ölçer: bot her gün doğru rejim
+durumunu HESAPLADI mı? Bir kabul kriteri olarak zayıf, çünkü D1'de kritik risk
+YÜRÜTME anındadır (nadir ENTER/EXIT) ve gölge dönemde hiç gerçek anahtarlama OLMAYABİLİR
+— o zaman yürütme yolu HİÇ sınanmamış olarak "geçer". Bu yüzden **iki katmanlı karne**:
 
-**Gerekçe:** D1'de "bot her gün doğru rejim kararını verdi mi + doğru yürüttü mü" sorusu
-her işlem günü yanıtlanabilir (observe modda `signal_eval`, active modda `decision`
-günlüğü). Kabul, işlem SAYISINA değil, günlük değerlendirmenin DOĞRULUĞUNA + operasyonel
-sağlığa dayanmalı.
+## 2.1 Katman K1 — MEKANİK KARNE (süreklilik/operasyonel sağlık)
 
-## 3. ÖNERİLEN D1 karne alanları (paper ↔ backtest beklentisi)
+Hepsi sağlanmadan geçilmez (öneri; mühürleme Faz 6 başında):
+- **Süre ≥ 4 hafta KESİNTİSİZ** koşu (eski "2 hafta" yerine — yürütme yolunun sınanma
+  olasılığını artırmak + operasyonel güveni pekiştirmek için).
+- **0 çökme**; heartbeat kesinti toplamı < eşik (öneri: tek kesinti ≤ 1 gün, toplam ≤ 2 gün).
+- **B5 paritesinde 0 AÇIKLANAMAYAN fark** (temiz replay ↔ canlı journal; anahtarlama diff'i).
+- **Mutabakatta 0 AÇIKLANAMAYAN uyuşmazlık** (B2; GÖLGE iç PaperBroker↔ledger).
+- **Tüm kill-switch'ler ≥1 kez kuru-testle** doğrulanmış (F5-A + K2 mutabakat tablosu; korunur).
+- **Veri sağlığı:** çapraz-kaynak çakışma / DATA_DRIFT / "bar yok" günleri AÇIKLANABİLİR;
+  faiz bayatlığı beklenen sınırda (K1); resync gerektiyse temiz kapanmış.
+- **Günlük rejim değerlendirme sayısı** burada bir **MEKANİK SAĞLIK METRİĞİ** olarak kalır
+  (bot her işlem günü çalıştı mı) — kabul kapısı değil, süreklilik göstergesi.
 
-Faz 6 sonunda `PAPER_REVIEW.md` şu alanları raporlar (öneri):
+## 2.2 Katman K2 — OLAY KARNESİ (yürütme yolunun kanıtı)
 
-**A. Operasyonel sağlık (B7 çekirdeği — hepsi bağlayıcı öneri):**
-- Süre ≥ 2 hafta VE **değerlendirilen sinyal (işlem günü) ≥ 10**.
-- 0 açıklanamayan mutabakat uyuşmazlığı (B2) — GÖLGE modda iç PaperBroker↔ledger.
-- 0 çökme; heartbeat kesinti toplamı < eşik (öneri: tek kesinti ≤ 1 gün, toplam ≤ 2 gün).
-- **B5 paritesi: 0 açıklanamayan anahtarlama farkı** (temiz replay ↔ canlı journal).
-- Tüm kill-switch'ler ≥1 kez kuru-testle doğrulanmış (F5-A'da yapıldı; Faz 6'da korunur).
-- Veri sağlığı: çapraz-kaynak çakışma sayısı raporlanır; "bar yok" günleri açıklanabilir
-  (tatil/gecikme); ardışık veri-donması FREEZE'i tetiklenmemiş.
+Süreklilik yürütmeyi kanıtlamaz. Bu yüzden **en az 2 TATBİKAT** (öneri):
+- **1 ENTER tatbikatı + 1 EXIT tatbikatı:** geçmiş GERÇEK bir anahtarlama gününün
+  verisiyle tam akış provası (sinyal → boyutlama → paper fill → journal → parite →
+  mutabakat), sonuçların beklenenle birebir tutması.
+- **+ varsa GERÇEK anahtarlama:** gölge dönemde doğal bir ENTER/EXIT oluşursa o da olay
+  karnesine sayılır (ve pariteyle doğrulanır).
+- Amaç: "yürütme yolu gerçek bir anahtarlamada doğru davrandı" en az iki kez KANITLANSIN
+  — sadece "her gün sinyal hesaplandı" değil.
 
-**B. D1-özel doğruluk (bilgilendirici + öneri kapıları):**
-- **Kompozit/MA paritesi:** canlı depodan hesaplanan kompozit & MA(200), backtest
-  snapshot'ından hesaplananla aynı günlerde ≤ ULP/tolerans farkı (veri kayması yok).
-- **Anahtarlama paritesi:** paper döneminde gerçekleşen her anahtarlama tarihi/aksiyonu,
-  aynı closes'la offline `run_regime_core_prod` ile BİREBİR (fark = kırmızı).
+> **Tatbikat İMPLEMENTASYONU bu turda YAPILMADI** (F5-B1.1 kapsamı değil). Bu, Faz 6
+> başlangıcında tasarlanıp koşulacak bir prova mekanizmasının ÖNERİSİDİR. Not: F5-B1.1'de
+> INITIAL_ENTER + EXIT akışları (K3/K6) gerçek+sentetik veriyle zaten uçtan uca sınandı —
+> tatbikat mekanizması bunları Faz 6 kabul sürecine bağlayan resmi bir çerçevedir.
+
+## 3. D1 karne alanları (paper ↔ backtest beklentisi — her iki katmanda raporlanır)
+
+- **Kompozit/MA paritesi:** canlı depo kompoziti & MA(200), backtest snapshot'ıyla ortak
+  günlerde ≤ tolerans (F5-B1'de **bit-bit 0.0** kanıtlandı; resync sonrası otomatik yeniden koşulur).
+- **Anahtarlama paritesi:** her anahtarlama tarihi/aksiyonu offline `run_regime_core_prod`
+  ile BİREBİR (fark = kırmızı).
 - **Yürütme sapması (izlenen, kapı DEĞİL):** t+1 kapanışa-yakın canlı fiyat vs backtest
-  tam-kapanış fiyatı arasındaki equity sapması — beklenen, PHASE5_PLAN #3'te modellendi.
-- **Nakit bacağı:** modellenmiş faiz tahakkuku formül-tutarlı (raporda AYRI satır);
-  gerçek enstrüman kararı hâlâ real-öncesi kuyrukta (STATUS #19).
-
-**C. Bilgilendirici (kabul kriteri DEĞİL — C2 ile uyumlu):**
-- TRY/USD/enflasyon bazlı getiri satırları; rejim ON/OFF gün dağılımı; drawdown izi.
+  tam-kapanış; ayrıca **veri-tamlığı** (kısmi basket yasağı, K6) yürütme öncesi doğrulanır.
+- **Nakit bacağı:** modellenmiş faiz (K1 canlı besleme; bayatlık raporlanır); gerçek
+  enstrüman real-öncesi kuyrukta (STATUS #19).
+- **Bilgilendirici (kabul DEĞİL, C2):** TRY/USD/enflasyon getiri satırları; rejim ON/OFF
+  gün dağılımı; drawdown izi.
 
 ## 4. Ne YAPILMADI (bilinçli)
-- Hiçbir eşik mühürlenmedi; Faz 6 ölçüm penceresi **başlatılmadı**.
-- `go_live_date` null bırakıldı (observe mod) — resmi başlangıç ayrı karar.
-- Kabul kriterleri D1'e uyarlanırken 10-gate'in orijinal B7 metni GEVŞETİLMEDİ;
-  yalnızca "değerlendirilen sinyal" tanımı D1'in doğasına oturtuldu (öneri).
+- Hiçbir eşik mühürlenmedi; Faz 6 ölçüm penceresi **başlatılmadı**; `go_live_date` null.
+- Tatbikat mekanizması İMPLEMENTE EDİLMEDİ (yalnız öneri).
+- 10-gate'in orijinal B7 metni gevşetilmedi; D1'e uyarlandı + **sıkılaştırıldı** (2→4 hafta,
+  olay karnesi eklendi).
 
-**Karar kullanıcının/baş danışmanın:** bu tanım + karne alanları kabul edilir mi,
-hangi eşikler mühürlenir, Faz 6 ne zaman resmen başlar.
+**Karar kullanıcının/baş danışmanın:** iki-katmanlı karne + tatbikat çerçevesi kabul
+edilir mi, hangi eşikler mühürlenir, Faz 6 ne zaman resmen başlar.
