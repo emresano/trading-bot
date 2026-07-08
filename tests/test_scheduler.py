@@ -266,6 +266,46 @@ def test_catchup_with_gap_switch_emits_delayed_signal(tmp_path: Path):
     sched.close()
 
 
+def _dividend_fetch(adjust=0.98):
+    """yfinance temettü sonrası auto_adjust emsali: GEÇMİŞ kapanışları ×adjust ile
+    yeniden düzeltir. UTC-gece-yarısı barlar (normalize kimlik)."""
+    def _fn(yf_sym, start):
+        idx = pd.DatetimeIndex(BDAYS, name="ts").tz_localize("UTC")
+        adj = [(100.0 + i) * adjust for i in range(12)]
+        return pd.DataFrame({"open": adj, "high": adj, "low": adj, "close": adj,
+                             "volume": [1000.0]*12}, index=idx)
+    return _fn
+
+
+def test_data_drift_blocks_finalization_and_resync_fixes(tmp_path: Path):
+    """K4 uçtan uca: temettü yeniden-düzeltmesi → DATA_DRIFT (finalize edilmez) →
+    resync tarihçeyi tazeler → drift kaybolur."""
+    store = LiveHistoryStore(tmp_path / "h.sqlite")
+    _seed_store(store, ["THYAO", "GARAN"], [100.0 + i for i in range(12)])   # orijinal (temettü öncesi)
+    feed = LiveDataFeed(store, ["THYAO", "GARAN"], fetch_raw_fn=_dividend_fetch(0.98))
+    # drift tespiti: geçmiş barlar %2 sapmış (bugün hariç)
+    drifts = feed.detect_drift(exclude_from=pd.Timestamp(BDAYS[-1], tz="UTC"))
+    assert drifts, "temettü kayması tespit edilmeliydi"
+    assert all(d["pct_diff"] > 0.005 for d in drifts)
+
+    # scheduler döngüsü: DATA_DRIFT alarmı + finalize edilmez
+    cfg = _cfg(None)
+    cfg["safety"]["freeze_dir"] = str(tmp_path / "freeze")
+    sched = PaperScheduler(cfg, tmp_path / "rt", feed=feed, notifier_sender=[].append)
+    res = sched.run_cycle(BDAYS[-1].date())
+    assert any("VERİ KAYMASI" in n for n in res.notes)
+    events = [r for r in sched.journal.read_all() if r.get("category") == "DATA_DRIFT"]
+    assert events
+
+    # resync: tam tarihçe yeniden yazılır (adjusted değerler); sonra drift YOK
+    rep = sched.resync(BDAYS[-1].date())
+    assert sum(rep["replaced"].values()) > 0
+    assert feed.detect_drift(exclude_from=pd.Timestamp(BDAYS[-1], tz="UTC")) == []
+    # yedek alındı
+    assert Path(rep["backup"]).exists()
+    sched.close()
+
+
 def test_shadow_reconciliation_logs_no_broker(tmp_path: Path):
     sched, sent = _make(tmp_path, go_live=None)
     sched.startup()

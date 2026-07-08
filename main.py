@@ -310,10 +310,25 @@ class PaperScheduler:
                 self._log("WARN", "CASH_RATE",
                           f"faiz serisi BAYAT ({res.cash_rate_status['staleness_days']}g) → "
                           f"son değer {res.cash_rate_status['rate_pct']}% ile sürülüyor")
-        # FİNAL bar = (1) seans kapanışı+grace geçti VE (2) TÜM sembollerde bar var.
+        # K4: TARİHSEL veri kayması (temettü/split geriye-dönük düzeltme) tespiti.
+        drift = []
+        try:
+            drift = self.feed.detect_drift(exclude_from=as_of_ts)
+        except Exception as e:
+            self._log("WARN", "DATA_DRIFT", f"drift tespiti atlandı ({type(e).__name__})")
+        if drift:
+            res.notes.append(f"VERİ KAYMASI: {len(drift)} tarihsel bar sapması → sinyal "
+                             f"FİNALİZE EDİLMEZ (operatör 'resync' gerekir)")
+            self._alarm({"category": "DATA_DRIFT", "level": "CRITICAL",
+                         "message": f"{len(drift)} tarihsel bar kaydı sapması; ör: {drift[0]}"})
+            self.journal.record_event("CRITICAL", "DATA_DRIFT",
+                                      f"{len(drift)} sapan bar; ilk: {drift[0]}")
+
+        # FİNAL bar = (1) seans kapanışı+grace geçti VE (2) TÜM sembollerde bar var
+        #             VE (3) tarihsel veri kayması YOK (K4).
         time_final = self._is_bar_final(as_of)
         data_complete, missing = self._data_complete(closes, as_of_ts)
-        final = time_final and data_complete
+        final = time_final and data_complete and not drift
         if not time_final:
             res.notes.append("as_of barı henüz KAPANMADI (oluşmakta) → sinyal PROVISIONAL; "
                              "yürütme son yürütülebilir güne sınırlı")
@@ -446,6 +461,51 @@ class PaperScheduler:
             self._log("INFO", "PARITY", f"parite OK — {len(replay)} anahtarlama özdeş")
         return out
 
+    # ------------------------------------------------------------------ resync (K4, operatör)
+    def resync(self, as_of: Optional[date] = None) -> dict:
+        """OPERATÖR KOMUTU (K4): tam tarihçe yeniden çekilir (yfinance temettü/split
+        yeniden-düzeltmesi), eski depo yedeklenir, farklar loglanır, canlı↔backtest kompozit
+        paritesi OTOMATİK yeniden koşulur ve raporlanır. Otomatik DEĞİL — operatör başlatır."""
+        as_of = as_of or self.calendar._d(self.now_fn().astimezone().date())
+        self._log("INFO", "RESYNC", "resync başladı — tam tarihçe yeniden çekiliyor")
+        start = self.cfg.get("backtest", {}).get("start", "2005-01-01")
+        rep = self.feed.resync(self.runtime / "backups", start=start)
+        # otomatik parite: canlı kompozit ↔ backtest snapshot kompozit (ortak günlerde)
+        parity = self._composite_parity_vs_backtest()
+        rep["composite_parity"] = parity
+        lvl = "INFO" if parity.get("max_abs_diff", 1) < 1e-6 else "CRITICAL"
+        self._log(lvl, "RESYNC",
+                  f"resync bitti: {sum(rep['replaced'].values())} bar; kompozit parite "
+                  f"max_abs_diff={parity.get('max_abs_diff')}")
+        self.notifier.send(f"RESYNC tamam: {len(rep['diffs'])} sembolde tarihsel değişim; "
+                           f"kompozit parite max_abs_diff={parity.get('max_abs_diff')}")
+        return rep
+
+    def _composite_parity_vs_backtest(self) -> dict:
+        """Canlı depo kompoziti ↔ backtest snapshot kompoziti (ortak günlerde bit-bit)."""
+        from data.cleaning import load_and_clean_universe
+        from strategy.regime_core import build_composite
+        bt_cfg = self.cfg.get("backtest", {})
+        if not bt_cfg.get("snapshot") or not Path(bt_cfg["snapshot"]).exists():
+            return {"skipped": "backtest snapshot yok"}
+        live = build_composite(self.feed.closes())[0]
+        snap_dir = Path(bt_cfg["snapshot"])
+        start = bt_cfg["start"]
+
+        def _load(s):
+            return pd.read_parquet(snap_dir / f"{s}.parquet").loc[start:]
+
+        try:
+            cleaned, _ = load_and_clean_universe(self.symbols, _load)
+            bt = build_composite({s: cleaned[s]["close"] for s in self.symbols})[0]
+        except Exception as e:
+            return {"error": type(e).__name__}
+        common = live.index.intersection(bt.index)
+        if len(common) == 0:
+            return {"common_days": 0}
+        diff = (live.loc[common] - bt.loc[common]).abs()
+        return {"common_days": int(len(common)), "max_abs_diff": float(diff.max())}
+
     def _next_calendar_note(self, as_of: date) -> str:
         from datetime import timedelta
         d = pd.Timestamp(as_of).date() + timedelta(days=1)
@@ -501,6 +561,8 @@ def main() -> None:
     ap.add_argument("--bootstrap", action="store_true", help="snapshot'tan canlı depoyu bootstrap et")
     ap.add_argument("--refresh", action="store_true", help="yfinance EOD güncelle")
     ap.add_argument("--cycle", action="store_true", help="bir günlük döngü koş")
+    ap.add_argument("--resync", action="store_true",
+                    help="K4 operatör: tam tarihçe yeniden çek + yedekle + parite (veri kayması sonrası)")
     ap.add_argument("--as-of", default=None, help="döngü günü (YYYY-MM-DD; vars. bugün)")
     ap.add_argument("--runtime", default=None, help="runtime kökü (vars. config paper.runtime_dir)")
     args = ap.parse_args()
@@ -516,6 +578,10 @@ def main() -> None:
         print("bootstrap:", {s: rep[s].inserted for s in list(rep)[:3]}, "...")
     if args.refresh:
         print("refresh:", sched.refresh_data())
+    if args.resync:
+        rep = sched.resync()
+        print("resync:", {"replaced_total": sum(rep["replaced"].values()),
+                          "diffs": rep["diffs"], "composite_parity": rep["composite_parity"]})
     sched.startup()
     if args.cycle:
         as_of = date.fromisoformat(args.as_of) if args.as_of else datetime.now(timezone.utc).astimezone().date()

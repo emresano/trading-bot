@@ -101,8 +101,10 @@ rm runtime/paper/freeze/<SWITCH_ADI>     # incelendikten SONRA elle temizle
 ```
 
 - **BREAKER (drawdown -%40)**: en ciddi; equity tepeden %40 düştü. İncele, gerekçesiz
-  değilse bekle.
-- **CONSEC_LOSS**: 4 ardışık zararlı round-trip. Temizlerken sayaç sıfırlanır.
+  değilse bekle. (Eşikler K2 mutabakatı — `KILLSWITCH_RECONCILIATION.md`.)
+- **CONSEC_LOSS**: 7 ardışık zararlı round-trip (tarihsel maks 5 + 2). Temizlerken sayaç
+  sıfırlanır. Tarihsel tetiklenme 0 → tetiklenirse gerçekten görülmemiş bir seri demektir.
+- **DAILY_LOSS**: tek-gün ≤ -%12 (tarihsel worst -11.6 altı). Kriz günü sinyali.
 - Çıkışlar (pozisyon kapatma) FREEZE'den ETKİLENMEZ — her zaman serbesttir.
 
 ---
@@ -127,3 +129,55 @@ komutu YOKTUR** — router açıkça reddeder.
 - **Parite KIRMIZI ALARM:** temiz yeniden-koşum canlı günlükten ayrıştı (veri/state
   kayması) → `decision_journal.jsonl`'da `PARITY` alarmı; state'i inceleyip gerekiyorsa
   baş danışmana danış. Otomatik düzeltme yapılmaz.
+- **Faiz BAYAT (⚠️ EOD özette):** TRY_ON_RATE serisi FRED/OECD ~4 ay gecikmeli → faiz
+  genelde bayattır (son değerle sürülür, tahakkuk durmaz — muhafazakâr). Endişe değil;
+  zamanlı TCMB faizi için EVDS (kuyruk #18). Yalnız değer AYLARCA sabit + rejim uzun süre
+  KAPALI ise nakit getirisi gerçekten sapabilir → baş danışmana bildir.
+
+---
+
+## 7. Veri kayması (DATA_DRIFT) ve `resync` (K4)
+
+yfinance `auto_adjust` verisi temettü/split'te **geçmiş kapanışları geriye dönük
+değiştirir**. Bot her döngüde son 30 barı kaynağa karşı doğrular; tolerans-üstü tarihsel
+sapma → **DATA_DRIFT (CRITICAL)** alarmı + **o gün sinyal FİNALİZE EDİLMEZ** (drifted
+veriyle işlem yapılmaz) + journal `data_drift` kaydı.
+
+**Operatör `resync` prosedürü** (drift alarmı sonrası):
+```bash
+launchctl unload ~/Library/LaunchAgents/com.tradingbot.paper.plist   # botu durdur
+.venv/bin/python main.py --config config/regime_core.yaml --resync    # tam tarihçe yeniden çek
+launchctl load ~/Library/LaunchAgents/com.tradingbot.paper.plist      # başlat
+```
+`--resync` şunları yapar (otomatik DEĞİL, sen başlatırsın): (1) mevcut depoyu
+`runtime/paper/backups/live_history_<ts>.sqlite`'a **yedekler**, (2) tüm tarihçeyi
+kaynaktan **yeniden çeker + temizler + üzerine yazar**, (3) farkları loglar, (4)
+canlı↔backtest kompozit **paritesini otomatik yeniden koşar** ve `max_abs_diff` raporlar
+(≈0 beklenir). Çıktıdaki `composite_parity` satırını kontrol et; büyükse baş danışmana danış.
+
+---
+
+## 8. Bakım penceresi — çalışan bota dokunma (K7)
+
+**Kural:** çalışan bota CANLI dokunma. Değişiklik gerekiyorsa **durdur → değiştir →
+test et → başlat**:
+```bash
+launchctl unload ~/Library/LaunchAgents/com.tradingbot.paper.plist   # 1) DURDUR
+# 2) değişikliği yap
+.venv/bin/python -m pytest -q                                         # 3) TAM SÜİT + golden yeşil olmalı
+launchctl load ~/Library/LaunchAgents/com.tradingbot.paper.plist      # 4) BAŞLAT
+```
+
+**Araştırma/geliştirme turlarının DOKUNAMAYACAĞI modüller** (paper döngüsünün doğruluk
+çekirdeği — değişiklik yalnız ayrı, onaylı, golden-korumalı bir turda):
+- `strategy/regime_core.py` — D1 üretim sinyal/boyutlama (backtest=canlı aynı fonksiyon).
+- `execution/` — PaperBroker, runner, broker adapter.
+- `safety/` — mutabakat, kill-switch, parite, heartbeat.
+- `data/live_store.py`, `data/cleaning.py` — depo + temizlik paritesi.
+- `config/regime_core.yaml`, `config/config.yaml`, `config/bist_calendar.yaml` — parametreler/eşikler.
+- `requirements.txt` / `requirements.lock` — bağımlılık pinleri.
+- `data/snapshots/` — mühürlü veri temeli (yalnız okunur).
+
+Bu modüllerden birine dokunan her değişiklik **v7.1-golden 3/3 bayt-bayt** ve tam süit
+yeşil kanıtı ister; aksi halde başlatma. Aktif paper hesabı varken parametre değişikliği
+paper geçmişini geçersiz kılabilir — önce baş danışman onayı.

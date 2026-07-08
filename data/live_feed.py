@@ -33,7 +33,7 @@ from typing import Callable, Optional
 import pandas as pd
 
 from data.cleaning import filter_ghost_bars, normalize_bist_dates
-from data.live_store import LiveHistoryStore, UpsertReport
+from data.live_store import CROSS_SOURCE_TOL_PCT, LiveHistoryStore, UpsertReport
 
 # yfinance'ten çekerken snapshot ile örtüşen bir pencere bırak (çapraz-tutarlılık +
 # ghost filtresinin prev_close bağlamı için). Takvim günü.
@@ -45,6 +45,11 @@ YF_SOURCE = "yfinance"
 def yf_symbol(symbol: str) -> str:
     """BIST sembolü → yfinance sembolü (config/config.yaml instruments ile aynı kural)."""
     return f"{symbol}.IS"
+
+
+def _utc_stamp() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def default_fetch_raw(yf_sym: str, start: Optional[str]) -> pd.DataFrame:
@@ -151,6 +156,72 @@ class LiveDataFeed:
         for sym, df in cleaned.items():
             report.per_symbol[sym] = self.store.upsert_bars(sym, df, source=YF_SOURCE)
         return report
+
+    # ------------------------------------------------------------------ veri kayması (K4)
+    def detect_drift(self, window: int = 30, tol_pct: float = CROSS_SOURCE_TOL_PCT,
+                     exclude_from: Optional[pd.Timestamp] = None) -> list[dict]:
+        """TARİHSEL veri kayması dedektörü (K4): son `window` bar kaynağa karşı yeniden
+        doğrulanır. yfinance auto_adjust temettü/split'te GEÇMİŞ kapanışları geriye dönük
+        değiştirir → depodaki tarihsel değer kaynaktan sapar. `exclude_from` (vars. bugün)
+        ve sonrası HARİÇ (oluşmakta olan bar kayma değil). Döner: sapan bar kayıtları."""
+        fresh_raw: dict[str, pd.DataFrame] = {}
+        for sym in self.symbols:
+            stored = self.store.get_closes(sym)
+            if stored.empty:
+                continue
+            start = (stored.index[-1] - pd.Timedelta(days=window * 2)).strftime("%Y-%m-%d")
+            df = self.fetch_raw_fn(yf_symbol(sym), start)
+            if df is not None and not df.empty:
+                fresh_raw[sym] = df
+        if not fresh_raw:
+            return []
+        cleaned, _ghost = clean_universe(fresh_raw)
+        drifts: list[dict] = []
+        for sym, df in cleaned.items():
+            stored = self.store.get_closes(sym)
+            fresh = df["close"]
+            common = stored.index.intersection(fresh.index)
+            for d in common[-window:]:
+                if exclude_from is not None and d >= exclude_from:
+                    continue
+                a, b = float(stored.loc[d]), float(fresh.loc[d])
+                if a != 0 and abs(b - a) / abs(a) > tol_pct:
+                    drifts.append({"symbol": sym, "date": str(d.date()),
+                                   "stored": a, "fresh": b, "pct_diff": abs(b - a) / abs(a)})
+        return drifts
+
+    def resync(self, backup_dir: Path | str, start: str) -> dict:
+        """Tam tarihçe yeniden çekimi (operatör `resync` komutu, K4). Eski depo yedeklenir,
+        tüm semboller kaynaktan tam çekilir + temizlenir + FORCE-overwrite yazılır, farklar
+        loglanır. Parite yeniden-koşumu ÇAĞIRAN'ın işi (scheduler raporlar). Döner: rapor."""
+        import shutil
+        backup_dir = Path(backup_dir)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = _utc_stamp()
+        backup_path = backup_dir / f"live_history_{stamp}.sqlite"
+        shutil.copy2(self.store.path, backup_path)
+
+        # eski kapanışları (fark loglamak için) tut
+        old = {s: self.store.get_closes(s) for s in self.symbols}
+        raw = {s: self.fetch_raw_fn(yf_symbol(s), start) for s in self.symbols}
+        raw = {s: df for s, df in raw.items() if df is not None and not df.empty}
+        cleaned, ghost = clean_universe(raw)
+        diffs: list[dict] = []
+        replaced: dict[str, int] = {}
+        for sym, df in cleaned.items():
+            new_close = df["close"]
+            o = old.get(sym)
+            if o is not None and len(o):
+                common = o.index.intersection(new_close.index)
+                changed = int((abs(new_close.loc[common] - o.loc[common]) /
+                               o.loc[common].abs() > CROSS_SOURCE_TOL_PCT).sum())
+                if changed:
+                    diffs.append({"symbol": sym, "changed_bars": changed})
+            replaced[sym] = self.store.replace_bars(sym, df, source=YF_SOURCE)
+        self._log(f"resync: yedek={backup_path.name}, {sum(replaced.values())} bar yeniden yazıldı, "
+                  f"{len(diffs)} sembolde tarihsel değişim, {len(ghost)} ghost")
+        return {"backup": str(backup_path), "replaced": replaced, "diffs": diffs,
+                "ghost_removed": len(ghost)}
 
     # ------------------------------------------------------------------ kanıt / rapor
     def closes(self) -> dict[str, pd.Series]:

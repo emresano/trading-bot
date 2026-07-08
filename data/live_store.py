@@ -133,6 +133,25 @@ class LiveHistoryStore:
         self._conn.commit()
         return rep
 
+    def replace_bars(self, symbol: str, df: pd.DataFrame, source: str) -> int:
+        """Bir sembolün TÜM barlarını sil + taze df ile değiştir (resync/force-overwrite,
+        K4). Idempotent upsert'in aksine ÇAKIŞMAYI ÇÖZ = gelen değeri KABUL ET (yfinance
+        temettü/split yeniden-düzeltmesi eski değerleri geçersiz kılar). Döner: yazılan satır."""
+        now = _utcnow_iso()
+        cur = self._conn.cursor()
+        cur.execute("DELETE FROM daily_bars WHERE symbol=?", (symbol,))
+        n = 0
+        for ts, row in df.iterrows():
+            close_in = None if pd.isna(row["close"]) else float(row["close"])
+            cur.execute(
+                "INSERT INTO daily_bars (symbol, ts_utc, open, high, low, close, volume, "
+                "source, suspect, created_at) VALUES (?,?,?,?,?,?,?,?,0,?)",
+                (symbol, _to_utc_iso(ts), _f(row.get("open")), _f(row.get("high")),
+                 _f(row.get("low")), close_in, _f(row.get("volume")), source, now))
+            n += 1
+        self._conn.commit()
+        return n
+
     def bootstrap_from_snapshot(self, snapshot_dir: Path | str, symbols: list[str],
                                 start: Optional[str] = None) -> dict[str, UpsertReport]:
         """A1 snapshot (data/snapshots/<tarih>/<SEMBOL>.parquet) → depo. Kaynak='snapshot'."""
