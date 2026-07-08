@@ -1,0 +1,149 @@
+# config/momentum_us2.yaml
+# D2US-S1 — KESİTSEL MOMENTUM ailesi (D2-US) araştırma yapılandırması.
+# config/config.yaml (canlı bot), config/regime_core.yaml (BIST D1),
+# config/regime_core_us.yaml (E4 D1-US) dosyalarından AYRI ve BAĞIMSIZDIR —
+# o dosyaların HİÇBİRİ okunmadı/değiştirilmedi. Canlı bot bu dosyayı OKUMAZ
+# (yalnızca offline araştırma sürücüsü tools/run_xsec_momentum_us2.py okur).
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# MÜHÜRLÜ DEĞİŞMEZLER (disiplin #3 — parametre/varyant taraması YASAK).
+# Tüm tasarım sabitleri KOŞUMDAN ÖNCE, literatür varsayılanlarıyla mühürlendi;
+# koşum sonucuna göre HİÇBİR bileşen seçilmez. Ablasyon/komşuluk YALNIZ bilgi.
+# İnsan-okur mühür ve gerekçe: D2US_CRITERIA.md (bu commit'te birlikte).
+# ═══════════════════════════════════════════════════════════════════════════
+
+strategy_family: xsec_momentum
+
+# US2 evreni (50 sembol, 10 GICS sektörü) — DATA_AUDIT_US2.md (item 1).
+# Geçmiş getiriye göre SEÇİLMEDİ; survivorship yanlılığı raporlanır.
+symbols:
+  - AAPL
+  - MSFT
+  - INTC
+  - CSCO
+  - ORCL
+  - IBM
+  - TXN
+  - QCOM
+  - JNJ
+  - PFE
+  - MRK
+  - ABT
+  - AMGN
+  - MDT
+  - LLY
+  - GILD
+  - JPM
+  - BAC
+  - WFC
+  - GS
+  - AXP
+  - C
+  - XOM
+  - CVX
+  - COP
+  - SLB
+  - PG
+  - KO
+  - WMT
+  - PEP
+  - CL
+  - MO
+  - HD
+  - MCD
+  - NKE
+  - SBUX
+  - LOW
+  - TGT
+  - DIS
+  - VZ
+  - CMCSA
+  - T
+  - CAT
+  - HON
+  - UNP
+  - BA
+  - DUK
+  - SO
+  - NEM
+  - APD
+
+# ── TASARIM SABİTLERİ (item 3) — MÜHÜRLÜ, koşumdan ÖNCE, tarama YOK ──────────
+design:
+  formation_months: 12       # oluşum penceresi (ay)
+  skip_months: 1             # son ayı atla → "12-1" momentum (Jegadeesh-Titman gap)
+  rebalance: monthly         # ay-sonu (son işlem günü) sinyal → SONRAKİ işlem günü
+                             # KAPANIŞ yürütme (t+1). Tutma sırasında ara rebalance YOK.
+  preselect_top: 20          # ön-seçim: formation getirisine göre en iyi 20
+  final_n: 10                # nihai seçim: 20 arasından FIP ile 10
+  selection: fip_information_discreteness
+                             # ID = sign(12-1 getiri) × (%negatif_gün − %pozitif_gün),
+                             # formation penceresinde günlük getirilerden; DÜŞÜK ID tercih
+                             # (en sürekli/frog-in-the-pan momentum). En düşük ID'li 10 seçilir.
+  weight: equal              # her slot 1/final_n = %10
+  abs_momentum_gate:         # pozisyon-bazlı mutlak-momentum (dual-momentum) NAKİT kapısı
+    enabled: true
+    # Slot NAKİT olur eğer: hissenin 12-1 getirisi ≤ T-bill'in AYNI formation
+    # penceresi [t-12ay, t-1ay] boyunca tahakkuk eden getirisi. T-bill oranı = DGS3MO
+    # (aux_us snapshot), HAM (haircut YOK — bu bir sinyal eşiğidir, nakit-bacağı
+    # getirisi değil), ACT/365. "12-ay" ibaresi ~1-yıllık formation ufkunun
+    # kısaltmasıdır; hisse 12-1 getirisiyle apples-to-apples olsun diye BİREBİR
+    # aynı [t-12ay, t-1ay] penceresinde ölçülür (window-tutarlılık kararı, mühürlü).
+    rate_source: DGS3MO
+    haircut_bps: 0           # kapı için HAM oran (nakit bacağından ayrı)
+  vol_target:                # portföy vol-hedefleme katmanı (Barroso-Santa-Clara emsali)
+    enabled: true
+    # maruziyet = min(max_leverage, target_vol / realized_6ay_portföy_vol).
+    # Kaldıraç YOK. (1 − maruziyet) fraksiyonu NAKİT (faiz kazanır).
+    target_vol: 0.182326     # SEPET (US2 eşit-ağırlık al-tut) TAM-DÖNEM realize yıllık
+                             # vol (√252). TEK SABİT, mühürde yazıldı. Benchmark
+                             # verisinden türetildi (strateji koşumundan BAĞIMSIZ).
+    realized_window_days: 126 # 6 ay = 126 işlem günü (trailing strateji book getirileri)
+    max_leverage: 1.0        # maruziyet ≤ 1 (kaldıraç YOK)
+    # Isınma / yetersiz-geçmiş / realize_vol=0 → maruziyet = 1.0 (üst sınır).
+
+# US maliyet modeli (E4 CostModel, costs/us_equities.py) — E4/E4b ile AYNI oranlar.
+# commission=0; SATIŞTA SEC fee + TAF; slippage 5bps. E3'te resmî kaynakla doğrulanır.
+costs:
+  commission_bps: 0
+  sec_fee_bps: 0.28
+  taf_per_share: 0.000166
+  slippage_bps: 5
+
+initial_equity: 100000
+
+# Walk-forward (OOS) — S1b/E4 ile AYNI takvim. Parametre optimizasyonu YOK
+# (tasarım her pencerede AYNEN kullanılır). Pencere sayısı veriden türer.
+walk_forward:
+  train_months: 24
+  test_months: 6
+  step_months: 6
+
+monte_carlo:
+  runs: 500
+  random_seed: 42            # S1b yöntemi (aylık getiri permütasyonu), deterministik
+
+backtest:
+  start: "2005-01-01"
+  snapshot: "data/snapshots/us2/2026-07-08"   # item 1 dondurulmuş US2 snapshot
+
+# Benchmark: US2 eşit-ağırlık sepet al-tut (MALİYETSİZ — strateji aleyhine
+# muhafazakâr; e4_common.build_basket_curve) MÜHÜR REFERANSIDIR. SPY yalnız BİLGİ.
+benchmark:
+  index_symbol: "SPY"
+  snapshot: "data/snapshots/us_bench/2026-07-08/SPY.parquet"
+
+# Nakit bacağı = US 3-aylık T-bill (DGS3MO) − 50bp (E4b serisi, dondurulmuş).
+# Tahakkuk = S1b/TRY yapısı: r_net = max(rate − haircut, 0), ACT/365; NAKİT
+# fraksiyonuna (kapı-nakdi + vol-katmanı yatırılmamış kısım + yuvarlama artığı).
+cash_yield:
+  enabled: true
+  aux_snapshot: "data/snapshots/aux_us/2026-07-08/DGS3MO.parquet"
+  haircut_bps: 50
+
+# Komşuluk (item 4d) — YALNIZ GÖZLEMSEL sağlamlık, SEÇİM ARACI DEĞİL (disiplin #3).
+# Mühürlü nokta (12 / 10 / 126) her zaman merkezde; komşular yalnız uçurum kontrolü.
+neighborhood:
+  formation_months: [9, 12, 15]
+  final_n: [8, 10, 12]
+  vol_window_days: [84, 126, 168]   # 4 / 6 / 8 ay
