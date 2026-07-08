@@ -66,6 +66,7 @@ class CycleResult:
     trips: list = field(default_factory=list)
     eod_summary: str = ""
     notes: list = field(default_factory=list)
+    cash_rate_status: dict = field(default_factory=dict)
 
 
 class PaperScheduler:
@@ -96,8 +97,10 @@ class PaperScheduler:
 
         # takvim
         self.calendar = BistCalendar(logger=lambda m: self._log("WARN", "CALENDAR", m))
-        # cash rate (aux snapshot TRY_ON_RATE — backtest ile aynı kaynak/formül)
-        self.cash_rate = self._load_cash_rate(cfg)
+        # cash rate: snapshot (read-only) + CANLI uzantı besleme (K1). backtest ile
+        # AYNI kaynak/formül; snapshot DEĞİŞMEZ, canlı yeni aylar ayrı depoya.
+        self.cash_rate_feed = self._build_cash_rate_feed(cfg)
+        self.cash_rate = self.cash_rate_feed.combined_series() if self.cash_rate_feed else None
 
         # depo + besleme (feed enjekte edilirse onun deposu otoriter — test/paylaşım)
         if feed is not None:
@@ -158,7 +161,7 @@ class PaperScheduler:
         self.journal.record_alarm(alarm)
         self.notifier.send(f"[{alarm.get('level')}] {alarm.get('category')}: {alarm.get('message')}")
 
-    def _load_cash_rate(self, cfg: dict) -> Optional[pd.Series]:
+    def _build_cash_rate_feed(self, cfg: dict):
         cy = cfg.get("cash_yield")
         if not (cy and cy.get("enabled")):
             return None
@@ -166,7 +169,9 @@ class PaperScheduler:
         if not p.exists():
             self._log("WARN", "DATA", f"cash_yield aux yok: {p} → faiz tahakkuku YOK")
             return None
-        return pd.read_parquet(p)["rate_pct"] / 100.0
+        from data.cash_rate_feed import CashRateFeed
+        return CashRateFeed(p, self.runtime / "cash_rate_ext.sqlite",
+                            staleness_days=int(cy.get("staleness_days", 35)))
 
     def _sched_state(self) -> dict:
         if self._state_file.exists():
@@ -176,6 +181,16 @@ class PaperScheduler:
 
     def _save_sched_state(self, st: dict) -> None:
         self._state_file.write_text(json.dumps(st, indent=2, default=str))
+
+    def _write_heartbeat_status(self, as_of, res) -> None:
+        """Heartbeat companion (K1): faiz değeri + kaynak tarihi + bayatlık. Watchdog'un
+        okuduğu `heartbeat` dosyası SADE timestamp kalır (format değişmez); bu ayrı dosya."""
+        status = {
+            "ts": _utcnow().isoformat(), "as_of": str(as_of), "mode": res.mode,
+            "equity": res.equity, "cash": res.cash, "regime_on": res.regime_on,
+            "cash_rate": res.cash_rate_status or None,
+        }
+        (self.runtime / "heartbeat_status.json").write_text(json.dumps(status, indent=2, default=str))
 
     # ------------------------------------------------------------------ veri yenileme
     def refresh_data(self) -> dict:
@@ -285,6 +300,16 @@ class PaperScheduler:
 
         closes = self.feed.closes()
         st = self._sched_state()
+        # K1: faiz serisini canlı güncelle (bayatsa FRED; başarısızsa son değer + WARN).
+        if self.cash_rate_feed is not None:
+            res.cash_rate_status = self.cash_rate_feed.refresh(
+                as_of, logger=lambda m: self._log("INFO", "CASH_RATE", m))
+            self.cash_rate = self.cash_rate_feed.combined_series()
+            self.runner.cash_rate = self.cash_rate      # runner refreshed seriyi kullansın
+            if res.cash_rate_status.get("stale"):
+                self._log("WARN", "CASH_RATE",
+                          f"faiz serisi BAYAT ({res.cash_rate_status['staleness_days']}g) → "
+                          f"son değer {res.cash_rate_status['rate_pct']}% ile sürülüyor")
         # FİNAL bar = (1) seans kapanışı+grace geçti VE (2) TÜM sembollerde bar var.
         time_final = self._is_bar_final(as_of)
         data_complete, missing = self._data_complete(closes, as_of_ts)
@@ -360,14 +385,16 @@ class PaperScheduler:
                                  "message": f"{t.switch}: {t.reason}"})
             st["modeled_interest_total"] = self.broker.accrued_interest
 
-        # heartbeat + EOD özet
+        # heartbeat (+ K1 faiz durumu companion; watchdog heartbeat formatı DEĞİŞMEZ)
         write_heartbeat(self.runtime / "heartbeat")
+        self._write_heartbeat_status(as_of, res)
         next_note = self._next_calendar_note(as_of)
         res.eod_summary = build_eod_summary(
             date=as_of, equity=res.equity, cash=res.cash, day_pnl=res.day_pnl,
             in_position=bool(self.broker.quantities()), breaker_state="OK",
             frozen_switches=self.killswitch.frozen_switches(),
-            modeled_interest_total=res.modeled_interest_total, next_calendar_note=next_note)
+            modeled_interest_total=res.modeled_interest_total, next_calendar_note=next_note,
+            cash_rate_status=res.cash_rate_status or None)
         if self.mode == "observe":
             res.eod_summary = (f"[GÖZLEM — paper hesabı başlatılmadı, işlem yok] "
                                f"Rejim değerlendirmesi: {'ON' if res.regime_on else 'OFF'}\n"
