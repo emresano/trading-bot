@@ -1,17 +1,19 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T23:30:00+03:00 (Europe/Istanbul)
-Şu an (EXPANSION hattı): **D4-US (varlık-sınıfı ETF dual-momentum ailesi) tasarım+spike
-turu TAMAMLANDI (KALICI KAYIT 20 açılış + 21 kapanış).** MEKANİK SONUÇ (mühürlü 4-kriter,
-referans=eşit-ağırlık 10-ETF sepeti): **1/4 (yalnız 3b maxDD)** — CAGR 6.667% (sepet
-6.696%, FAIL 0.03pp), Sharpe 0.546 (<0.616 FAIL), OOS Sharpe 0.399 (<0.580 FAIL), maxDD
--25.72% (≤34.53% PASS). Önceden mühürlenen kurala göre **D4-US US-referansta kabul adayı
-DEĞİL** (HÜKÜM değil — karar kullanıcının/baş danışmanın). Aile GERÇEK savunmacı rotasyon
-sergiledi (GFC -8% vs sepet -18.5%; 2022 -4.7% vs -17% via emtia) ama diversifiye sepeti
-risk-ayarlı GEÇMEDİ. US3 tek-hisse yolu ERTELENDİ (EODHD kapsam doğrulaması → kuyruk #21).
-Üç aile (D1/D2/D4-US) da mekanik 1/4; D4-US referansa EN YAKIN + EN SAVUNMACI (bilgi).
-**Hiçbir satın alma/kayıt/API anahtarı edinme YAPILMADI; iki durma noktası kullanıcıda.**
+Son güncelleme: 2026-07-09T10:15:00+03:00 (Europe/Istanbul)
+Şu an: **D4-US baş danışman kararıyla KESİN RED (KALICI KAYIT 22) — US AKTİF AİLE
+ARAMASI ASKIDA.** D4US-S1 (KALICI KAYIT 20+21) mühürlü tabloda 1/4 idi; baş danışman
+kaydı bunu onayladı (kriter 2'nin 0.03pp'lik dar farkı kural gereği FAIL, sonucu
+değiştirmez — kriter 1/3a zaten geniş farkla kalmıştı). ETF tarihçesine bakış sayacı
+1 kullanıldı; D4 ailesi ve TÜM varyantları bu tarihçede KAPALI. Üç aile (D1-US/D2-US/
+D4-US) üç farklı mekanizma, üçü de 1/4 — meta bulgu: 3b (DD-kesme) hep PASS, 1/3a
+(risk-ayarlı getiri edge'i, dürüst diversifiye referansa karşı) hep FAIL; BIST-D1'in
+4/4'ü istisna değil (yüksek TL nakit faizi + BIST rejim yapısı USD'de yok). **US
+yeniden açılması yalnız kullanıcı kararıyla ve yalnız iki yapısal kaldıraçtan biriyle:**
+(i) kuyruk #21 tek-hisse point-in-time yolu (EODHD kapsam doğrulaması, satın alma
+DEĞİL), (ii) short-gate tasarım turu. **Ana odak artık BIST Faz 6: K1.5 2/2 → G1
+(kullanıcı) → Faz 6 başlangıç kriterleri.** Detay: aşağı "KALICI KAYIT 22" bölümü.
 
 Ayrıca bu turda **K1.5 mekanik teyidi 1/2** kaydedildi (2026-07-08 akşam koşusu:
 DATA_DRIFT yok, provisional yok, TELEGRAM ACTIVE, EOD Rejim/Pozisyon ayrı+tutarlı —
@@ -682,6 +684,31 @@ edilerek reuse (drift imkânsız). v7.1-golden her commit 3/3; tam süit **541 p
 Faz 6/real/launchd/go_live'a adım YOK; iki durma noktası kullanıcıda. **Kabul kararı
 kullanıcının/baş danışmanın; otomatik geçiş YOK.**
 
+## KALICI KAYIT 22 — D4-US baş danışman hüküm kaydı + US hattı askı kaydı (2026-07-09)
+**Baş danışman kaydı (2026-07-09):** D4-US US-referansta RED onaylandı (D4US-S1 mühürlü
+tablo 1/4; kriter 2'nin 0.03pp'lik dar farkı kural gereği FAIL'dir ve sonucu değiştirmez
+— kriter 1 ve 3a geniş farkla kalmıştır). İkinci ölçüm-bakışı YOK (mühürde kapalı). ETF
+tarihçesine bakış sayacı: 1 kullanıldı; D4 ailesi ve TÜM varyantları bu tarihçede
+KAPALI. Komşuluk gözlemi (formation-6: Sharpe 0.671 / CAGR 8.68% / maxDD -23.6%; top-4:
+0.593) İN-SAMPLE'dır — sonuç görüldükten sonra komşuluğun en iyisini yeni-aile diye aynı
+tarihçede koşmak varyant-seçimi yasağının ihlalidir; meşru tek test ileri-zaman yeni
+örneklemdir, o da kabul edilmemiş stratejiye açılmaz.
+
+**ÜÇ-AİLE META BULGUSU:** D1-US/D2-US/D4-US üç farklı mekanizma, üçü de 1/4; üçünde de
+3b PASS (DD-kesme gerçek), 1 ve 3a FAIL (dürüst diversifiye referansa karşı risk-ayarlı
+getiri edge'i yok). BIST-D1'in 4/4'ü istisna değil açıklamalı: yüksek TL nakit faizi +
+BIST rejim yapısı filtreye gerçek değer veriyor; USD'de bu iki koşul yok.
+
+**KARAR:** US AKTİF AİLE ARAMASI ASKIDA. Yeniden açılma yalnız kullanıcı kararıyla ve
+yalnız iki yapısal kaldıraçtan biriyle olur: (i) kuyruk #21 tek-hisse point-in-time yolu
+(ücretli veri; ilk adım satın alma DEĞİL, EODHD kapsam doğrulaması), (ii) short-gate
+tasarım turu. **Ana odak: BIST Faz 6 (K1.5 2/2 → G1 launchd → ölçüm dönemi).**
+
+Kod/koşum/snapshot değişikliği YOK bu turda — yalnız STATUS.md kaydı. İzolasyon aynen
+(canlı bot modülleri + S1/S1b/E4/D2US/D4US araçları + tüm snapshot'lar dokunulmadı);
+v7.1-golden 3/3; tam süit değişmedi (541 passed). Faz 6/real/launchd/go_live'a adım YOK;
+iki durma noktası kullanıcıda.
+
 ## K1.5 Mekanik Teyit — 1/2 (2026-07-08)
 2026-07-08 akşam koşusu denetlendi (not: launchd servisleri bu makinede henüz kurulu
 DEĞİL — `launchctl list` boş, `runtime/paper/logs/` yok; "akşam koşusu" = günün son
@@ -716,17 +743,24 @@ farklı bir güne ait bağımsız bir gözlem gerekir; kod değişikliği YAPILM
   eki), tam süit 378 passed, git push. Tag: `regime-core-d1-prod`.
 
 ## Sırada
-- **[YENİ, EXPANSION/US hattı] D4-US turu TAMAMLANDI, KARAR kullanıcıda (KALICI KAYIT
-  20+21):** D4US-S1 (varlık-sınıfı ETF dual-momentum, D2US-S1 şablonu) mühürlü tabloda
-  **1/4** (yalnız 3b maxDD) → önceden mühürlenen kurala göre US-referansta kabul adayı
-  DEĞİL (HÜKÜM değil). **Karar bekleniyor:** kabul/red/farklı-tasarım iterasyonu
-  kullanıcının/baş danışmanın (bkz. `D4_US_S1.md` §11). Aile en savunmacı/referansa en
-  yakın olanıydı ama diversifiye sepeti risk-ayarlı geçmedi.
-- **[EXPANSION/US3 kuyruğu #21] US3 tek-hisse point-in-time yolu ERTELENDİ:** yeniden
-  açılırsa satın-alma ÖNCESİ EODHD paket-kapsam doğrulaması zorunlu (bkz. sorun/blok #21,
-  `DATA_FEASIBILITY_US3.md`). Hiçbir satın alma/kayıt YAPILMADI.
+**Aktif kuyruk sırası (KALICI KAYIT 22 ile netleşti): K1.5 2/2 doğrulaması → G1
+(kullanıcı eylemi: launchd kurulumu) → Faz 6 başlangıç kriterleri.** US hattı ASKIDA
+(aşağıdaki iki madde) — yeniden açılma yalnız kullanıcı kararıyla.
+
 - **[K1.5] ikinci temiz koşu (2/2) bekleniyor** — farklı bir güne ait bağımsız bir
-  gözlemle tamamlanacak (bkz. "K1.5 Mekanik Teyit" bölümü).
+  gözlemle tamamlanacak (bkz. "K1.5 Mekanik Teyit" bölümü). **Aktif kuyruğun ilk adımı.**
+- **[G1, kullanıcı eylemi] launchd servis kurulumu** — K1.5 2/2 tamamlanınca sırada;
+  bot + watchdog servislerinin gerçek launchd altında koşması (bkz. `deploy/*.plist`,
+  `OPERATOR_GUIDE.md`). Faz 6 resmi başlangıcı bu + go_live kararına bağlı.
+- **[ASKIDA — EXPANSION/US hattı, KALICI KAYIT 22] D4-US KESİN RED (baş danışman
+  onayı):** D4US-S1 mühürlü tabloda 1/4 → RED. **US aktif aile araması ASKIDA** — üç
+  aile (D1/D2/D4-US) hepsi 1/4 (meta bulgu: DD-kesme PASS, risk-ayarlı getiri edge'i
+  FAIL). Yeniden açılma yalnız iki yapısal kaldıraçtan biriyle: (i) kuyruk #21 (EODHD
+  kapsam doğrulaması), (ii) short-gate tasarım turu.
+- **[ASKIDA, koşullu-bekliyor — EXPANSION/US3 kuyruğu #21] US3 tek-hisse point-in-time
+  yolu:** yeniden açılırsa satın-alma ÖNCESİ EODHD paket-kapsam doğrulaması zorunlu
+  (bkz. sorun/blok #21, `DATA_FEASIBILITY_US3.md`). Hiçbir satın alma/kayıt YAPILMADI —
+  US-hattı-yeniden-açılışının iki kaldıracından biri (KALICI KAYIT 22).
 
 **F5-B1 (gölge paper) KOD İŞİ TAMAMLANDI** — kullanıcı/baş danışman değerlendirmesi
 bekliyor (`PHASE5B1_REVIEW.md`, KALICI KAYIT 10). Otomatik GEÇİŞ YOK. Sıradaki adımlar
@@ -819,14 +853,22 @@ engine-seviyesi SHORT execution (short-gate sonrası).
     D1-US KESİN RED. **%0 kararı doğrulandı: US faizi küçük (nakit-only CAGR ~%1.51),
     sonucu iyimser saptırmamıştı.** SPY-vs-sepet referans sorusu SON-BAKIŞ KURALIYLA
     kapatıldı (D1-US için SPY'a geçiş YASAK; sepet kalıcı referans).
-21. **[EXPANSION/US3 kuyruğu] EODHD paket-kapsam ÖN-doğrulaması (satın-alma öncesi
-    zorunlu).** US3 tek-hisse point-in-time evren yolu (delisted-dahil, 2005+) ücretsiz
-    kaynaklarla kurulamıyor (`DATA_FEASIBILITY_US3.md`); en ucuz güvenilir ücretli yol
-    EODHD (~$200-300/yıl). Baş danışman ERTELEDİ (KALICI KAYIT 20). **Bu hat yeniden
-    açılırsa:** herhangi bir satın alma/abonelik ÖNCESİ, EODHD'nin gerçekten
-    (a) delisted/defunct ticker fiyat tarihçesi, (b) point-in-time endeks üyeliği,
-    (c) 2005'e uzanan derinliği tek pakette sağladığı DOĞRULANMALI (deneme/dokümantasyon
-    ile) — aksi halde para harcanmaz. Hiçbir satın alma/kayıt YAPILMADI.
+21. **[EXPANSION/US3 kuyruğu — KOŞULLU-BEKLİYOR, ASKIDA] EODHD paket-kapsam
+    ÖN-doğrulaması (satın-alma öncesi zorunlu).** US3 tek-hisse point-in-time evren yolu
+    (delisted-dahil, 2005+) ücretsiz kaynaklarla kurulamıyor (`DATA_FEASIBILITY_US3.md`);
+    en ucuz güvenilir ücretli yol EODHD (~$200-300/yıl). Baş danışman ERTELEDİ (KALICI
+    KAYIT 20); D4-US RED sonrası US aktif aile araması TAMAMEN ASKIYA alındı (KALICI
+    KAYIT 22) — bu madde artık US hattının yeniden açılması için İKİ yapısal kaldıraçtan
+    biri (diğeri: short-gate tasarım turu, Bölüm 17 #10). **Bu hat yeniden açılırsa:**
+    herhangi bir satın alma/abonelik ÖNCESİ, EODHD'nin gerçekten (a) delisted/defunct
+    ticker fiyat tarihçesi, (b) point-in-time endeks üyeliği, (c) 2005'e uzanan derinliği
+    tek pakette sağladığı DOĞRULANMALI (deneme/dokümantasyon ile) — aksi halde para
+    harcanmaz. Hiçbir satın alma/kayıt YAPILMADI.
+22. **[EXPANSION/US hattı — ASKIDA, KALICI KAYIT 22] short-gate tasarım turu.** US
+    hattının yeniden açılması için ikinci yapısal kaldıraç (madde #21'in alternatifi):
+    engine-seviyesi SHORT execution + short-gate seti tasarımı (Bölüm 17 #10, FX
+    aktivasyonu öncesi — kısa mekaniği risk/direction.py'de zaten test edilerek kurulu,
+    ayna simetrisi/quote-ccy/marjin). Bu turda BAŞLATILMADI; yalnız kuyruğa kayıt.
 
 ## Önceki fazlardan taşınan varsayımlar
 pandas-ta yerine pandas-ta-classic + numpy 2.2 (e31e401); BIST seans saatleri
