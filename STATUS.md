@@ -1,14 +1,16 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T17:20:00+03:00 (Europe/Istanbul)
-Şu an (EXPANSION hattı): **E4 (US ADİL TEST) KOD+ÖLÇÜM İŞİ TAMAMLANDI — kullanıcı/baş
-danışman değerlendirmesi bekliyor** (bkz. `EXPANSION_E4.md` + `E4_CRITERIA.md` + KALICI
-KAYIT 15). Offline araştırma; `mode: paper` ve TÜM canlı bot modülleri DOKUNULMADI; N/b/M
-mühürlü (S1b), v7.1-golden 3/3 bayt-bayt. Mekanik sonuç: **D1-US mühürlü 4-kriterden
-1'ini geçti (kriter 2 drawdown-yarılama); 3'ü kaldı** → US-referansta kabul adayı DEĞİL
-(karar kullanıcının). 10-gate US adil referansı: ~düz-negatif (RAPOR-only). Faz 6/real/
-launchd/go_live'a adım YOK. (Aşağıdaki F5 paper hattı bu turdan bağımsız, değişmedi.)
+Son güncelleme: 2026-07-08T18:05:00+03:00 (Europe/Istanbul)
+Şu an (EXPANSION hattı): **E4b (D1-US NAKİT BACAĞI ÖLÇÜM-TAMAMLAMA) TAMAMLANDI —
+kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `EXPANSION_E4B.md` +
+`E4_CRITERIA.md` §4 SON-BAKIŞ KURALI + KALICI KAYIT 16). E4'ün (US adil test) S1→S1b
+emsali nakit-getiri düzeltmesi: tek değişiklik = US 3-aylık T-bill (DGS3MO, 50bp haircut)
+nakit tahakkuku. Offline; `mode: paper` + TÜM canlı bot modülleri DOKUNULMADI; N/b/M
+mühürlü, referans SEPET DEĞİŞMEDİ, v7.1-golden 3/3. **Mekanik sonuç: faiz Sharpe'ı
+0.726→0.758 itti ama mühürlü tablo hâlâ 1/4** (kriter 2 tek geçen) → SON-BAKIŞ KURALI
+gereği **D1-US US-referansta KESİN RED, üçüncü bakış YOK** (karar kullanıcının).
+Faz 6/real/launchd/go_live'a adım YOK. (E4 ilk bakışı: KAYIT 15. F5 paper hattı ayrı.)
 
 --- Önceki oturum (F5 paper hattı, bu turda DOKUNULMADI) ---
 Mikro-düzeltme (yalnız EOD gösterimi): `notify/eod_summary.py`'de "Rejim" (compute_regime_
@@ -451,6 +453,44 @@ DEĞİŞMEDİ — yeni US döngüsü (backtest/regime_core_us.py) onu İTHAL ede
 ~3e-15. v7.1-golden 3/3; tam süit **517 passed** (511+6). **Karar
 kullanıcının/baş danışmanın; otomatik geçiş YOK; iki durma noktası kullanıcıda.**
 
+## KALICI KAYIT 16 — EXPANSION E4b (D1-US nakit bacağı ölçüm-tamamlama) tamamlandı (2026-07-08)
+E4'ün (KAYIT 15) S1→S1b emsali nakit-getiri düzeltmesi (bkz. `EXPANSION_E4B.md`).
+**Tek davranış değişikliği = nakit tahakkuku:** US 3-aylık T-bill (FRED DGS3MO,
+günlük, dondurulmuş `data/snapshots/aux_us/2026-07-08/`, sha256'lı; 5380 gözlem,
+max boşluk 4g, uzun boşluk 0), **50bp haircut** (muhafazakâr — para-piyasası fonu
+gider+sürtünme; gerekçe koşumdan ÖNCE mühürlendi). Tahakkuk = S1b/TRY yapısı
+(r_net=max(rate−haircut,0), ACT/365).
+
+**SON-BAKIŞ KURALI** (koşumdan ÖNCE `E4_CRITERIA.md` §4'e mühürlendi, ayrı commit):
+D1-US'in aynı tarihçeye İKİNCİ ve SON bakışı; E4 mühürlü tablosu/eşikleri/referansı
+(SEPET) AYNEN; benchmark değişikliği/SPY'a geçiş YASAK (kriter-alışverişi). 4/4
+geçerse US-kabul adayı; herhangi biri kalırsa KESİN RED, üçüncü bakış YOK.
+
+**AYRIŞTIRMA (faizin izole katkısı, tek-değişiklik — switch'ler 57'de BİREBİR AYNI):**
+nakitte %24.3 gün; CAGR 8.19→**8.60%** (+0.41pp); Sharpe 0.726→**0.758** (+0.032);
+maxDD ~değişmedi (−4e-5 marj daha derin — düşüş-öncesi tepe yükseldi). US nakit-only
+CAGR ~%1.51 (S1b'deki TRY ~%13.77'nin niceliksel karşıtı — faiz KÜÇÜK).
+
+**MÜHÜRLÜ TABLO (E4b faizli, MEKANİK, referans=sepet):** 1) Sharpe 0.758 > 0.8561?
+**FAIL**. 2) |maxDD| 23.11% ≤ 23.14%? **PASS** (razor-thin). 3a) OOS Sharpe 0.692 >
+0.9154? **FAIL**. 3b) OOS |maxDD| 20.42% ≤ 14.96%? **FAIL**. → **1/4 (E4 ile AYNI
+tablo).** Faiz Sharpe'ları itti ama survivorship-şişirilmiş sepetin ~0.10 puan
+çıta açığını kapatmadı. MC(faizli) dd_p5 -32.6%.
+
+**→ MEKANİK SONUÇ (SON-BAKIŞ KURALININ uygulaması): D1-US ailesi US-referansta
+KESİN REDDEDİLDİ. Dönüş yolu KAPALI.** D1 mantığı ancak gelecekte AYRI bir
+tasarımın (farklı çekirdek/evren) risk-katmanı adayı olarak, YENİ ve ayrıca
+mühürlenmiş kriterlerle gündeme gelebilir — D1-US ailesinin kendisinin yeniden
+değerlendirilmesi DEĞİL. Bu bir HÜKÜM değil, önceden mühürlenen kuralın mekanik
+sonucudur; nihai kayıt kullanıcının/baş danışmanın.
+
+**İzolasyon:** `mode: paper` + canlı bot modülleri + `backtest/regime_core.py`
+(S1/S1b simülatörü) + config/config.yaml + config/regime_core.yaml DOKUNULMADI.
+Yeni: `tools/build_us_rate_snapshot.py`, `tools/run_regime_core_us_e4b.py`,
+`backtest/regime_core_us.py`'ye haircut param (default 0.02=S1b; cash_rate=None iken
+etkisiz → E4 %0 reprodüksiyonu korundu). v7.1-golden 3/3; tam süit **522 passed**
+(517+5). Faz 6/real/launchd/go_live'a adım YOK; iki durma noktası kullanıcıda.
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
@@ -481,11 +521,15 @@ gerçeği**: yarım-gün seanslar ve idari-izin köprü tatilleri için canlıda
 kütüphanesine (exchange_calendars) GÜVENİLMEZ — resmî kaynak (BIST/Borsa İstanbul
 duyuruları) + veri-yok toleransı gerekir; canlı döngü bir günü yanlış "işlem günü"
 sayarsa regime-core o gün hatalı sinyal/yürütme üretebilir.
-(b) **EXPANSION.md**: E1 + E2 + **E4 (US ADİL TEST) TAMAMLANDI** (KALICI KAYIT 15,
-`EXPANSION_E4.md`). E4 mekanik sonucu: D1-US mühürlü 4-kriterden 1/4 geçti → kabul
-adayı DEĞİL (karar kullanıcının). **Kullanıcı sıralaması (KAYIT 14): E4 → geçerse
-US gölge paper → geçerse E3.** E4 "geçmediğinden" US gölge paper/E3 adımları
-kullanıcı/baş danışman kararına bağlı (otomatik ilerleme YOK). E3'e taşınan açık
+(b) **EXPANSION.md**: E1 + E2 + **E4 + E4b (US ADİL TEST + nakit-tamamlama)
+TAMAMLANDI** (KALICI KAYIT 15+16, `EXPANSION_E4.md` + `EXPANSION_E4B.md`). Mekanik
+sonuç: D1-US mühürlü 4-kriterden **1/4** geçti (E4 %0 ve E4b faizli AYNI tablo) →
+**SON-BAKIŞ KURALI gereği D1-US US-referansta KESİN RED, üçüncü bakış YOK** (karar
+kullanıcının). **Kullanıcı sıralaması (KAYIT 14): E4 → geçerse US gölge paper →
+geçerse E3.** E4/E4b "geçmediğinden" **US gölge paper hattı AÇILMADI**; D1-US için
+dönüş yolu kapalı. Sıradaki E-fazı seçimi (E3 broker adapter mı, farklı çekirdek/
+evren tasarımı mı) kullanıcı/baş danışman kararı — otomatik ilerleme YOK. E3'e
+taşınan açık
 maddeler (değişmedi): SEC/TAF+swap resmî doğrulama, US hesap tipi kararı, short
 gate seti tasarımı (Bölüm 17 #10, FX aktivasyonu öncesi), US instruments[] config'e
 girişi, econ/earnings gerçek parquet dosyaları. Ertelenenler (Faz 5 modülleri inşa
@@ -538,13 +582,13 @@ engine-seviyesi SHORT execution (short-gate sonrası).
 19. **[üretim-turu kuyruğu] D1 nakit bacağının GERÇEK enstrümanı** netleştirilecek
     (AlgoLab para piyasası fonu/repo süpürme; oran/likidite/vade). Şu anki
     %0/faizli model yalnızca bir yaklaşıklık.
-20. **[US sleeve kuyruğu, E4] US nakit bacağı serisi YOK → E4'te %0 (muhafazakâr)
-    alındı.** Gerçek US T-bill / para-piyasası fonu getirisi (FED effective/DGS1MO
-    gibi) bir aux snapshot'a dondurulup S1b/E4 formülüyle (oran−haircut, ACT/365)
-    yeniden ölçüm, US gölge paper/üretim öncesi kuyruğa alındı. %0, stratejiyi
-    HAFİFE alır (bir geçişi şişiremez) → E4 mekanik sonucunu (1/4) iyimser yönde
-    saptırmaz. Ayrıca: E4 referansı SEPETti; SPY'a karşı D1-US Sharpe GEÇİYORDU —
-    "referans SPY mi sepet mi?" yeniden-tasarım sorusu (mühürleme öncesi, ayrı onay).
+20. **[KAPANDI — E4b] US nakit bacağı ölçüldü.** E4'teki %0 boşluğu E4b'de gerçek
+    US kısa faiziyle (FRED DGS3MO 3-aylık T-bill, dondurulmuş aux_us snapshot, 50bp
+    haircut) S1b formülüyle tamamlandı (bkz. KAYIT 16, `EXPANSION_E4B.md`). Sonuç:
+    faiz Sharpe'ı 0.726→0.758, CAGR +0.41pp itti ama mühürlü tablo 1/4'te kaldı →
+    D1-US KESİN RED. **%0 kararı doğrulandı: US faizi küçük (nakit-only CAGR ~%1.51),
+    sonucu iyimser saptırmamıştı.** SPY-vs-sepet referans sorusu SON-BAKIŞ KURALIYLA
+    kapatıldı (D1-US için SPY'a geçiş YASAK; sepet kalıcı referans).
 
 ## Önceki fazlardan taşınan varsayımlar
 pandas-ta yerine pandas-ta-classic + numpy 2.2 (e31e401); BIST seans saatleri
