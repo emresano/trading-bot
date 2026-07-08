@@ -224,6 +224,48 @@ def test_initial_enter_cost_reconciliation(tmp_path: Path):
     b.close()
 
 
+def _make_series(tmp_path, series, go_live, subdir="rt"):
+    store = LiveHistoryStore(tmp_path / f"{subdir}.sqlite")
+    _seed_store(store, ["THYAO", "GARAN"], series)
+    feed = LiveDataFeed(store, ["THYAO", "GARAN"], fetch_raw_fn=lambda y, s: pd.DataFrame())
+    cfg = _cfg(go_live)
+    cfg["safety"]["freeze_dir"] = str(tmp_path / f"freeze_{subdir}")
+    return PaperScheduler(cfg, tmp_path / subdir, feed=feed, notifier_sender=[].append)
+
+
+def test_catchup_no_switch_no_delayed_alarm(tmp_path: Path):
+    """K3(a): bot birkaç gün kapalı, gapte anahtarlama YOK → kaçan günler sırayla
+    işlenir (HOLD), GECİKMİŞ SİNYAL alarmı YOK, yeni işlem yok."""
+    rising = [100.0 + i for i in range(12)]           # rejim sürekli ON
+    sched = _make_series(tmp_path, rising, BDAYS[4].date(), subdir="a")
+    sched.startup()
+    sched.run_cycle(BDAYS[5].date())                  # aktivasyon → INITIAL_ENTER
+    held = dict(sched.broker.quantities())
+    assert held                                       # pozisyon açık
+    sched.run_cycle(BDAYS[9].date())                  # 3 gün downtime, catch-up
+    events = [r for r in sched.journal.read_all() if r.get("category") == "DELAYED_SIGNAL"]
+    assert events == []                               # gecikmiş sinyal YOK
+    assert dict(sched.broker.quantities()) == held    # pozisyon değişmedi
+    sched.close()
+
+
+def test_catchup_with_gap_switch_emits_delayed_signal(tmp_path: Path):
+    """K3(b): bot kapalıyken rejim EXIT'i oluştu → GECİKMİŞ SİNYAL alarmı + journal
+    etiketi + catch-up ile yürütüldü (pozisyon kapandı)."""
+    # 0..6 yükselir (rejim ON), 7'de düşer → rejim OFF → BDAYS[8]'de EXIT
+    series = [100.0, 101, 102, 103, 104, 105, 106, 90, 90, 90, 90, 90]
+    sched = _make_series(tmp_path, series, BDAYS[4].date(), subdir="b")
+    sched.startup()
+    sched.run_cycle(BDAYS[5].date())                  # INITIAL_ENTER (rejim ON)
+    assert sched.broker.quantities()
+    sched.run_cycle(BDAYS[9].date())                  # downtime; gapte EXIT oldu
+    events = [r for r in sched.journal.read_all() if r.get("category") == "DELAYED_SIGNAL"]
+    assert events, "GECİKMİŞ SİNYAL alarmı bekleniyordu"
+    assert any("EXIT" in r["message"] for r in events)
+    assert sched.broker.quantities() == {}            # EXIT yürütüldü, nakitte
+    sched.close()
+
+
 def test_shadow_reconciliation_logs_no_broker(tmp_path: Path):
     sched, sent = _make(tmp_path, go_live=None)
     sched.startup()

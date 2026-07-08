@@ -318,7 +318,8 @@ class PaperScheduler:
         else:  # active
             # ilk aktivasyon: initialize_flat(go_live, adopt)
             last_processed, *_ = self.runner._state()
-            if last_processed is None:
+            first_activation = last_processed is None
+            if first_activation:
                 adopt = self._adopt_regime_on(closes)
                 self.runner.initialize_flat(self.go_live_date, adopt_regime_on=adopt)
                 self._log("INFO", "GOLIVE",
@@ -326,6 +327,21 @@ class PaperScheduler:
                           f"(AÇIKSA t+1 kapanışta INITIAL_ENTER)")
             # oluşmakta olan bar üzerinde yürütme YOK — yalnız son FİNAL güne kadar işle.
             decisions = self.runner.process_up_to(closes, today=exec_today)
+            # CATCH-UP + GECİKMİŞ SİNYAL (K3): bot kapalıyken (birden çok gün) oluşan
+            # anahtarlamalar bugünün-öncesi günlerde yürütülür → GECİKMİŞ SİNYAL alarmı +
+            # journal etiketi. İlk aktivasyon (go-live catch-up) BEKLENENDİR, işaretlenmez.
+            if not first_activation:
+                catchup = [d for d in decisions
+                           if d.action in self._SWITCH_ACTIONS and pd.Timestamp(d.date) < exec_today]
+                for d in catchup:
+                    self._alarm({"category": "DELAYED_SIGNAL", "level": "WARN",
+                                 "message": f"GECİKMİŞ SİNYAL: {d.action}@{pd.Timestamp(d.date).date()} "
+                                            f"bot kapalıyken oluştu; catch-up ile bir sonraki kapanışta yürütüldü"})
+                    self.journal.record_event("WARN", "DELAYED_SIGNAL",
+                                              f"{d.action}@{pd.Timestamp(d.date).date()} gecikmeli yürütüldü "
+                                              f"(kaçan gün, exec_today={exec_today.date()})")
+                if catchup:
+                    res.notes.append(f"catch-up: {len(catchup)} gecikmiş anahtarlama yürütüldü")
             acct = self.broker.get_account_state()
             res.equity, res.cash = acct.equity, acct.cash
             if decisions:
