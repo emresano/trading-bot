@@ -381,6 +381,22 @@ Tam süit **507 passed** (F5-B2a 494 + 13 yeni); golden 3/3 her commit. `mode`/e
 `regime_core.py`/`data/snapshots/` DEĞİŞMEDİ. Faz 6/real/launchd'ye adım YOK; iki durma
 noktası kullanıcıda.
 
+## KALICI KAYIT 14 — US otonomi hattı önceliklendirildi (kullanıcı kararı, 2026-07-08)
+Kullanıcı 2026-07-08'de sıralamayı belirledi:
+**US otonomi hattı önceliklendirildi: sıra E4 (US adil test) → geçerse US gölge
+paper → geçerse E3 broker adapter (tam otonomi hedefi).**
+- **BIST D1'de risk artırımı talebi disiplin #10 gereği REDDEDİLDİ**; D2 agresif
+  profil, D1 GERÇEK sicili oluşana dek KAPALI.
+- **BIST yarı-otomatik hat (ManualExecutionAdapter, F5-B2) DEĞİŞMEDİ** — bu karar
+  onu ne hızlandırır ne değiştirir.
+- E4 kapsamı: (A) dondurulmuş 10-gate ailesinin ABD'de adil referans testi
+  (donmuş huni, hüküm yok), (B) D1'in (regime_core mantığı) US sepetinde spike'ı
+  — USD-cinsi sleeve'in temeli. Offline araştırma; canlı bot modüllerine (mode:
+  paper dahil) dokunulmaz; N/b/M mühürlü; v7.1-golden korunur.
+- **Bu kayıt otomatik geçiş anlamına GELMEZ**: E4 sonrası US gölge paper'a geçiş,
+  ve sonrasında E3, AYRI kullanıcı/baş danışman onayları gerektirir. İki durma
+  noktası (Faz 4 backtest değerlendirmesi + gerçek sermaye) aynen kullanıcıda.
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
