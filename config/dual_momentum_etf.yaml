@@ -1,0 +1,105 @@
+# config/dual_momentum_etf.yaml
+# D4US-S1 — VARLIK-SINIFI ETF DUAL-MOMENTUM ailesi (D4-US) araştırma yapılandırması.
+# config/config.yaml (canlı bot), config/regime_core*.yaml (BIST/US D1),
+# config/momentum_us2.yaml (D2-US) dosyalarından AYRI ve BAĞIMSIZDIR — o dosyaların
+# HİÇBİRİ okunmadı/değiştirilmedi. Canlı bot bu dosyayı OKUMAZ (yalnızca offline
+# araştırma sürücüsü tools/run_dual_momentum_etf.py okur).
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# MÜHÜRLÜ DEĞİŞMEZLER (disiplin #3 — parametre/varyant taraması YASAK).
+# Tüm tasarım sabitleri KOŞUMDAN ÖNCE, varlık-sınıfı momentum literatürünün
+# (Faber "GTAA/GAA", Antonacci "Dual Momentum/GEM") varsayılanlarıyla mühürlendi;
+# koşum sonucuna göre HİÇBİR bileşen seçilmez. Ablasyon/komşuluk YALNIZ bilgi.
+# İnsan-okur mühür ve gerekçe: D4US_CRITERIA.md (bu commit'te birlikte).
+# ═══════════════════════════════════════════════════════════════════════════
+
+strategy_family: dual_momentum_etf
+
+# ETF evreni (10 varlık-sınıfı, SABİT — ikame YASAK) — DATA_AUDIT_ETF.md (item 1).
+# Geçmiş getiriye göre SEÇİLMEDİ; her biri kendi sınıfının kanonik/likit ETF'i.
+symbols:
+  - SPY   # US large-cap hisse
+  - IWM   # US small-cap hisse
+  - EFA   # gelişmiş uluslararası hisse
+  - EEM   # gelişen piyasa hissesi
+  - VNQ   # US GYO
+  - TLT   # US 20+ yıl Hazine
+  - IEF   # US 7-10 yıl Hazine
+  - LQD   # US yatırım-yapılabilir kredi
+  - GLD   # altın
+  - DBC   # geniş emtia
+
+# ── TASARIM SABİTLERİ (item 3) — MÜHÜRLÜ, koşumdan ÖNCE, tarama YOK ──────────
+design:
+  formation_months: 12       # oluşum penceresi (ay)
+  skip_months: 0             # SON AY ATLANMAZ → "12-0" momentum. GEREKÇE (mühürlü):
+                             # son-ay-atlama (12-1) tek-hisse KISA-VADELİ TERSİNE-DÖNÜŞ
+                             # olgusudur; varlık-sınıfı literatürünün (Faber/Antonacci)
+                             # varsayılanı 12-0'dır → sonuçtan BAĞIMSIZ, koşumdan önce sabit.
+  rebalance: monthly         # ay-sonu (son işlem günü) sinyal → SONRAKİ işlem günü
+                             # KAPANIŞ yürütme (t+1). Tutma sırasında ara rebalance YOK.
+  top_n: 3                   # momentum'a göre en iyi 3 ETF (göreli momentum seçimi)
+  weight: equal              # her slot 1/top_n = 1/3
+  abs_momentum_gate:         # pozisyon-bazlı mutlak-momentum (dual-momentum) NAKİT kapısı
+    enabled: true
+    # Seçilen her ETF için: 12-ay (12-0) getirisi ≤ T-bill'in AYNI formation penceresi
+    # [m[j-12], m[j]] boyunca tahakkuk eden getirisi ise o slot NAKİT (yatırılmaz).
+    # T-bill oranı = HAM DGS3MO (haircut YOK — sinyal eşiği, nakit-bacağı getirisi
+    # değil), ACT/365. Yatırılan slot sayısı < 3 olabilir; kalan nakit.
+    rate_source: DGS3MO
+    haircut_bps: 0
+  vol_target:
+    enabled: false           # DERS-1 (KALICI KAYIT 19): vol-hedefleme katmanı YOK.
+                             # D2'de target_vol'ün sepet TAM-DÖNEM realize volünden
+                             # türetilmesi hafif look-ahead'di → bu pakette hiç yok.
+  leverage: none             # kaldıraç YOK (maruziyet her zaman ≤ 1)
+  direction: long_only       # LONG-only (short YOK — Bölüm 8/17 #10 emsali)
+
+# US maliyet modeli (E4/E4b/D2US ile AYNI oranlar; costs/us_equities.py).
+# commission=0; SATIŞTA SEC fee + TAF; slippage 5bps. E3'te resmî kaynakla doğrulanır.
+costs:
+  commission_bps: 0
+  sec_fee_bps: 0.28
+  taf_per_share: 0.000166
+  slippage_bps: 5
+
+initial_equity: 100000
+
+# Walk-forward (OOS) — S1b/E4/D2US ile AYNI takvim (train=24ay/test=6ay/step=6ay).
+# Parametre optimizasyonu YOK (tasarım her pencerede AYNEN kullanılır). Pencere
+# sayısı veriden türer.
+walk_forward:
+  train_months: 24
+  test_months: 6
+  step_months: 6
+
+monte_carlo:
+  runs: 500
+  random_seed: 42            # S1b yöntemi (aylık getiri permütasyonu), deterministik
+
+backtest:
+  start: "2005-01-01"
+  snapshot: "data/snapshots/etf_us/2026-07-08"   # item 1 dondurulmuş ETF snapshot
+
+# Benchmark: 10-ETF eşit-ağırlık sepet al-tut (MALİYETSİZ, total-return;
+# e4_common.build_basket_curve = build_composite × initial_equity) MÜHÜR REFERANSIDIR.
+# Bu sepet GERÇEKTEN yatırılabilir + survivorship-şişirilmiş DEĞİL (varlık sınıfı iflas
+# etmez — DATA_AUDIT_ETF.md §4). SPY (total-return, AYNI snapshot) yalnız BİLGİLENDİRİCİ;
+# SPY'a REFERANS geçişi KALICI YASAK (E4 §4 emsali).
+benchmark:
+  index_symbol: "SPY"
+  snapshot: "data/snapshots/etf_us/2026-07-08/SPY.parquet"
+
+# Nakit bacağı = US 3-aylık T-bill (DGS3MO) − 50bp (E4b serisi, dondurulmuş, AYNEN
+# reuse). Tahakkuk = S1b/TRY yapısı: r_net = max(rate − haircut, 0), ACT/365; NAKİT
+# fraksiyonuna (kapı-nakdi + top-N'den az yatırım + yuvarlama artığı).
+cash_yield:
+  enabled: true
+  aux_snapshot: "data/snapshots/aux_us/2026-07-08/DGS3MO.parquet"
+  haircut_bps: 50
+
+# Komşuluk (item 4d) — YALNIZ GÖZLEMSEL sağlamlık, SEÇİM ARACI DEĞİL (disiplin #3).
+# Mühürlü nokta (formation 12 / top_n 3) her zaman merkezde; komşular yalnız uçurum kontrolü.
+neighborhood:
+  formation_months: [6, 12]
+  top_n: [2, 3, 4]
