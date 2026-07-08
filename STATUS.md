@@ -1,7 +1,16 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T16:25:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-08T17:20:00+03:00 (Europe/Istanbul)
+Şu an (EXPANSION hattı): **E4 (US ADİL TEST) KOD+ÖLÇÜM İŞİ TAMAMLANDI — kullanıcı/baş
+danışman değerlendirmesi bekliyor** (bkz. `EXPANSION_E4.md` + `E4_CRITERIA.md` + KALICI
+KAYIT 15). Offline araştırma; `mode: paper` ve TÜM canlı bot modülleri DOKUNULMADI; N/b/M
+mühürlü (S1b), v7.1-golden 3/3 bayt-bayt. Mekanik sonuç: **D1-US mühürlü 4-kriterden
+1'ini geçti (kriter 2 drawdown-yarılama); 3'ü kaldı** → US-referansta kabul adayı DEĞİL
+(karar kullanıcının). 10-gate US adil referansı: ~düz-negatif (RAPOR-only). Faz 6/real/
+launchd/go_live'a adım YOK. (Aşağıdaki F5 paper hattı bu turdan bağımsız, değişmedi.)
+
+--- Önceki oturum (F5 paper hattı, bu turda DOKUNULMADI) ---
 Mikro-düzeltme (yalnız EOD gösterimi): `notify/eod_summary.py`'de "Rejim" (compute_regime_
 signal çıktısı) ve "Pozisyon" (broker'da sepet var mı) tek, yanlış birleştirilmiş satırda
 karışıyordu — observe modda pozisyon HER ZAMAN NAKİT olduğu için rejim ON iken bile "NAKİT
@@ -397,6 +406,51 @@ paper → geçerse E3 broker adapter (tam otonomi hedefi).**
   ve sonrasında E3, AYRI kullanıcı/baş danışman onayları gerektirir. İki durma
   noktası (Faz 4 backtest değerlendirmesi + gerçek sermaye) aynen kullanıcıda.
 
+## KALICI KAYIT 15 — EXPANSION E4 (US ADİL TEST) tamamlandı (2026-07-08)
+Offline araştırma turu (bkz. `EXPANSION_E4.md` + `E4_CRITERIA.md`). İki amaç:
+(A) dondurulmuş 10-gate ailesinin ABD'de adil referansı, (B) D1 (regime_core)
+mantığının US sepetinde spike'ı. **Mühürleme koşumdan ÖNCE** (ayrı commit
+`cdf8100`, strateji kodu HENÜZ yokken); mühürlü tablo ESNETİLMEDİ.
+
+**Kararlar/değişmezler:** N/b/M = 200/%1/3 mühürlü (S1b), AYNEN kullanıldı —
+parametre taraması/varyant seçimi YOK (disiplin #3). Nakit bacağı = **%0
+(muhafazakâr, madde 1)**: mevcut US aux faiz serisi yok → `cash_rate=None`
+(S1b mekanizmasıyla %0'da bayt-eşdeğer). Referans benchmark = **eşit-ağırlık
+US sepeti** (survivorship-şişirilmiş → yüksek çıta; SPY yalnız bilgilendirici).
+
+**Veri:** US snapshot 2026-07-06 (20 sembol, 2005-01-03→2026-07-02, 5408 gün,
+0 hayalet-bar). `load_and_clean_universe` DEĞİŞMEDEN reuse (normalize_bist_dates
+US 00:00-UTC'de NO-OP; test'le çapa). SPY dondurulmuş snapshot (us_bench/
+2026-07-08, sha256+manifest, deterministik).
+
+**MEKANİK SONUÇ — mühürlü 4-kriter (referans=sepet):**
+1) USD Sharpe > sepet 0.8561 → 0.726 **FAIL**.
+2) tam-dönem |maxDD| ≤ 23.14% → 23.11% **PASS** (razor-thin).
+3a) OOS aylık-Sharpe > sepet 0.9154 → 0.669 **FAIL**.
+3b) OOS |maxDD| ≤ 14.96% → 20.41% **FAIL**.
+→ **1/4 geçti; D1-US US-referansta kabul adayı DEĞİL** (önceden mühürlenen
+"4/4 yoksa red, dar-fark yok" kuralının mekanik uygulaması — HÜKÜM değil).
+4) Uçurum kontrolü: N/b/M komşuluğunda süreklilik, uçurum YOK; mühürlü nokta
+komşuluğun ALT tarafında (US'e optimize EDİLMEDİ — overfitting-karşıtı gözlem).
+D1-US ana: CAGR +8.19%, maxDD -23.11%, Sharpe 0.726, 57 switch; MC dd_p5 -33.5%.
+
+**Bulgu (BIST-USD ile tutarlı):** regime-filtre drawdown'ı sepetin ~yarısına
+indiriyor (sermaye-koruma tutuyor) ama survivorship-şişirilmiş sepetin
+Sharpe'ını GEÇMİYOR — S1b (f)'deki USD-terim yapının birebir tekrarı. Not:
+D1-US, SPY'a karşı (gerçekçi/kurulabilir endeks) Sharpe'ı GEÇİYOR (0.726>0.640)
+ve DD çok daha sığ — ama mühürlü referans SEPET, değiştirilemez.
+
+**10-gate US adil referansı (RAPOR-only, kabul kapısı DEĞİL):** 21 yılda
+~düz-negatif (CAGR -%0.11, Sharpe -0.089, PF 0.88, %94.5 nakit) → BIST'te
+reddedilen ailenin US'te de zayıf olduğunun teyidi (bilinen-sorun #6 tutarlı).
+
+**İzolasyon:** `mode: paper` + canlı bot modülleri (strategy/regime_core.py,
+execution/, safety/, data/live_*, notify/, main.py, config/regime_core.yaml,
+config/config.yaml) DOKUNULMADI. S1/S1b simülatörü (backtest/regime_core.py)
+DEĞİŞMEDİ — yeni US döngüsü (backtest/regime_core_us.py) onu İTHAL eder; parite
+~3e-15. v7.1-golden 3/3; tam süit **517 passed** (511+6). **Karar
+kullanıcının/baş danışmanın; otomatik geçiş YOK; iki durma noktası kullanıcıda.**
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
@@ -427,11 +481,14 @@ gerçeği**: yarım-gün seanslar ve idari-izin köprü tatilleri için canlıda
 kütüphanesine (exchange_calendars) GÜVENİLMEZ — resmî kaynak (BIST/Borsa İstanbul
 duyuruları) + veri-yok toleransı gerekir; canlı döngü bir günü yanlış "işlem günü"
 sayarsa regime-core o gün hatalı sinyal/yürütme üretebilir.
-(b) **EXPANSION.md**: E1 + E2 TAMAMLANDI. Sıradaki E-fazı **E3 (broker adapter
-spike + karar)** — "E3 onaylandı" AYRI gerekir. E3/E4'e taşınan açık maddeler:
-SEC/TAF+swap resmî doğrulama, US hesap tipi kararı, short gate seti tasarımı
-(Bölüm 17 #10, FX aktivasyonu öncesi), US instruments[] config'e girişi,
-econ/earnings gerçek parquet dosyaları. Ertelenenler (Faz 5 modülleri inşa
+(b) **EXPANSION.md**: E1 + E2 + **E4 (US ADİL TEST) TAMAMLANDI** (KALICI KAYIT 15,
+`EXPANSION_E4.md`). E4 mekanik sonucu: D1-US mühürlü 4-kriterden 1/4 geçti → kabul
+adayı DEĞİL (karar kullanıcının). **Kullanıcı sıralaması (KAYIT 14): E4 → geçerse
+US gölge paper → geçerse E3.** E4 "geçmediğinden" US gölge paper/E3 adımları
+kullanıcı/baş danışman kararına bağlı (otomatik ilerleme YOK). E3'e taşınan açık
+maddeler (değişmedi): SEC/TAF+swap resmî doğrulama, US hesap tipi kararı, short
+gate seti tasarımı (Bölüm 17 #10, FX aktivasyonu öncesi), US instruments[] config'e
+girişi, econ/earnings gerçek parquet dosyaları. Ertelenenler (Faz 5 modülleri inşa
 edilince): PaperBroker daily_carry, journal market/currency kolonları,
 engine-seviyesi SHORT execution (short-gate sonrası).
 (c) **Ablasyon + S1/S1b + P1**: TAMAMLANDI. Kalan işler (EVDS çapraz doğrulama,
@@ -457,6 +514,10 @@ engine-seviyesi SHORT execution (short-gate sonrası).
     (Bölüm 10.4 fallback devrede; is_blackout altyapısı E2'de kuruldu, veri yoksa
     (False,"…") döner → backtest vetosuz).
 13. US evreni survivorship yanlılığı taşıyor (bilinen, kabul edilen — DATA_AUDIT_US.md).
+    **E4'te belirginleşti:** yanlılık, mühürlü referans olan eşit-ağırlık US sepetini
+    gerçek-üstü yükseltiyor (CAGR %16.31, SPY %10.86'ya karşı) → D1-US kabul çıtası
+    gerçekte-mümkün-olandan yüksek. Düzeltme (hayatta kalmayanları içeren evren) E4
+    kapsamı dışı; yeniden-tasarım/US sleeve turunda ele alınır.
 15. **Hiçbir 10-gate varyant USD-CAGR>0 başarı çıtasını geçmiyor** (KALICI KAYIT 1)
     — TRY'nin USD karşısındaki yapısal değer kaybı baskın. max DD/endeks-DD oranı İYİ.
 17. Golden regresyon çapası `backtest-v7.1-golden` — `runtime/backtest_reports_v7_1/
@@ -477,6 +538,13 @@ engine-seviyesi SHORT execution (short-gate sonrası).
 19. **[üretim-turu kuyruğu] D1 nakit bacağının GERÇEK enstrümanı** netleştirilecek
     (AlgoLab para piyasası fonu/repo süpürme; oran/likidite/vade). Şu anki
     %0/faizli model yalnızca bir yaklaşıklık.
+20. **[US sleeve kuyruğu, E4] US nakit bacağı serisi YOK → E4'te %0 (muhafazakâr)
+    alındı.** Gerçek US T-bill / para-piyasası fonu getirisi (FED effective/DGS1MO
+    gibi) bir aux snapshot'a dondurulup S1b/E4 formülüyle (oran−haircut, ACT/365)
+    yeniden ölçüm, US gölge paper/üretim öncesi kuyruğa alındı. %0, stratejiyi
+    HAFİFE alır (bir geçişi şişiremez) → E4 mekanik sonucunu (1/4) iyimser yönde
+    saptırmaz. Ayrıca: E4 referansı SEPETti; SPY'a karşı D1-US Sharpe GEÇİYORDU —
+    "referans SPY mi sepet mi?" yeniden-tasarım sorusu (mühürleme öncesi, ayrı onay).
 
 ## Önceki fazlardan taşınan varsayımlar
 pandas-ta yerine pandas-ta-classic + numpy 2.2 (e31e401); BIST seans saatleri
