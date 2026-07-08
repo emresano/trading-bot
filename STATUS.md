@@ -555,6 +555,21 @@ config/regime_core*.yaml) DOKUNULMADI. Yeni BAĞIMSIZ: `backtest/xsec_momentum.p
 (522+8). Faz 6/real/launchd/go_live'a adım YOK; iki durma noktası kullanıcıda.
 **Kabul kararı kullanıcının/baş danışmanın; otomatik geçiş YOK.**
 
+## KALICI KAYIT 19 — D2-US baş danışman kaydı: RED onaylandı, US2 tarihçesi KAPALI (2026-07-08)
+Baş danışman kaydı (2026-07-08): D2-US (kesitsel momentum) US-referansta RED onaylandı
+(D2US-S1 mühürlü tablo 1/4; D2US_CRITERIA.md §3/§5 kuralının uygulaması). Ölçüm tek
+turda TAMDI (maliyet+nakit+OOS+MC+crash+turnover dahil) → E4b-tarzı ikinci ölçüm-bakışı
+YOKTUR; bu tarihçede her yeniden-koşum tasarım değişikliği sayılır ve varyant-seçimi
+yasağına girer. US2 tarihçesine bakış sayacı: 1 kullanıldı, D2 ailesi bu tarihçede
+KAPALI. Ders-1 (metodoloji): target_vol'un sepet TAM-DÖNEM realize volünden türetilmesi
+hafif look-ahead'dir (mühür-öncesi ve strateji-bağımsız olsa da); gelecek tasarımlarda
+trailing/expanding vol veya ex-ante sabit kullanılacak — bu turun sonucunu DEĞİŞTİRMEZ
+(en iyi ablasyon varyantı V2 bile kriter 1'i geçmiyor). Ders-2 (yapısal): V0 yalın 12-1
+top-10 seçimi sepetin ALTINDA (CAGR 10.22%<13.84%, Sharpe 0.602<0.804) → dar 50'lik
+mega-cap evrende kesitsel seçim alfası NEGATİF; zayıflık savunma katmanlarında değil
+evren genişliğinde. Sıradaki adım: US3 point-in-time evren VERİ FİZİBİLİTESİ (strateji
+tasarımı değil).
+
 ## K1.5 Mekanik Teyit — 1/2 (2026-07-08)
 2026-07-08 akşam koşusu denetlendi (not: launchd servisleri bu makinede henüz kurulu
 DEĞİL — `launchctl list` boş, `runtime/paper/logs/` yok; "akşam koşusu" = günün son
