@@ -1,15 +1,19 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T10:00:00+03:00 (Europe/Istanbul)
-Şu an: **FAZ 5 (PAPER) — F5-B1.1 (GÖLGE SERTLEŞTİRME, K1 kapanış) KOD İŞİ TAMAMLANDI —
-kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `PHASE5B11_REVIEW.md`). 9 sertleştirme
-maddesi: canlı faiz ileri besleme (K1), kill-switch mutabakat tablosu (K2), catch-up+gecikmiş
-sinyal (K3), veri kayması+resync (K4), provisional-bar regresyonu (K5), INITIAL_ENTER maliyet
-mutabakatı+veri-tamlığı kapısı (K6), bakım penceresi (K7), EVDS CSV modu (K8), B7 iki-katmanlı
-karne (K9). `mode: paper` DOKUNULMADI; N/b/M mühürlü; D1 fonksiyonları + `data/snapshots/`
-DEĞİŞMEDİ; v7.1-golden her commit 3/3 bayt-bayt. Faz 6 BAŞLATILMADI; go_live_date=null;
-launchd etkinleştirilmedi; Durma Noktası 2 kapalı. Tam süit: **485 passed** (F5-B1 470 + 15).
+Son güncelleme: 2026-07-08T12:30:00+03:00 (Europe/Istanbul)
+Şu an: **FAZ 5 (PAPER) — F5-B2a (TELEGRAM CANLI BİLDİRİM + OPERASYON) KOD İŞİ TAMAMLANDI —
+kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `PHASE5B2A_REVIEW.md`). 6 madde:
+gerçek Bot API sendMessage (timeout+3 retry+üstel bekleme, döngü kırılmaz — m1), alarm+EOD
+kablolama kuru-testi (m2), launchd K5-grace saat doğrulaması + zaman çizelgesi (m3),
+"bayat=muhafazakâr" genelleme düzeltmesi (m4), GERÇEK EVDS CSV kıyası + value_col fix (m5),
+kapanış (m6). `mode: paper` DOKUNULMADI; N/b/M mühürlü; D1 fonksiyonları + `data/snapshots/`
+DEĞİŞMEDİ; v7.1-golden her commit 3/3 bayt-bayt. Gelen Telegram komutu/long-poll YOK;
+ManualExecutionAdapter TASARIMI F5-B2'ye kaldı. Faz 6 BAŞLATILMADI; go_live_date=null;
+launchd etkinleştirilmedi; Durma Noktası 2 kapalı. Tam süit: **494 passed** (F5-B1.1 485 + 9).
+
+**F5-B1.1 (gölge sertleştirme, K1-K9) daha önce tamamlandı** (bkz. `PHASE5B11_REVIEW.md`,
+KALICI KAYIT 11): 9 madde, 485 passed.
 
 **F5-B1 (gölge paper, GERÇEK yfinance EOD) daha önce tamamlandı** (bkz. `PHASE5B1_REVIEW.md`):
 canlı depo↔backtest kompozit bit-bit 0.0; snapshot↔yfinance 66132 bar-günde ~1e-7; 470 passed.
@@ -291,6 +295,28 @@ Gölge paper döngüsü sertleştirildi (bkz. `PHASE5B11_REVIEW.md`). 9 madde:
 Tam süit **485 passed** (F5-B1 470 + 15); golden 3/3 her commit. mode/N/b/M/snapshot/D1
 fonksiyonları DEĞİŞMEDİ. Faz 6/real/launchd'ye adım YOK; iki durma noktası kullanıcıda.
 
+## KALICI KAYIT 12 — F5-B2a (Telegram canlı bildirim + operasyon) tamamlandı (2026-07-08)
+F5-B2'nin **bildirim yarısı** (bkz. `PHASE5B2A_REVIEW.md`). 6 madde, her biri ayrı commit:
+- **m1** `notify/telegram_bot.py`: `make_http_sender` (Bot API sendMessage, timeout + 3 deneme
+  + üstel bekleme; kalıcı hatada istisna). `TelegramNotifier` enabled+token(env)+chat_id ise
+  HTTP kurar; hata YAKALANIR → logger WARN, send False → **günlük döngü ASLA kırılmaz**. Token
+  YOKSA log-only AYNEN. main.py + watchdog logger bağlandı. 7 test (mock HTTP). Gerçek test
+  mesajı: secrets.env TELEGRAM_TOKEN BOŞ → atlandı.
+- **m2** Alarm+EOD kablolaması zaten mevcut (F5-B1); kuru-test eklendi (mock FREEZE + mock
+  DATA_DRIFT → gönderim + journal alarm kanıtı; EOD gönderimi). 2 test.
+- **m3** launchd K5-grace doğrulaması: paper plist 19:30 Istanbul (18:00+3600s=19:00 final,
+  25dk marj; TR kalıcı UTC+3). Hatalı "~1.5s grace" yorumu düzeltildi. OPERATOR_GUIDE §2a
+  zaman çizelgesi + 'bar yok' veri-tamlığı ertelemesi + koşu-içi retry yokluğu.
+- **m4** "bayat=muhafazakâr" GENELLEME DEĞİL: yön faiz patikasına bağlı (yükseliş→muhafazakâr,
+  DÜŞÜŞ→abartır/agresif). PHASE5B11_REVIEW + STATUS #18 düzeltildi. Kod değişikliği YOK.
+- **m5** GERÇEK EVDS CSV (`runtime/manual/evds_export.csv`, TLREF 1860 satır) koşuldu.
+  BULGU: EVDS sistematik ~2-6p YÜKSEK (seri-tanım farkı); 2023 boşluğu EVDS'de 12/12 DOLU
+  (2023-11 baseline ff 23.5 vs EVDS 41.45); 2022-10 %9.0 baseline dip'i EVDS'de YOK (artefakt
+  teyit). **Snapshot DEĞİŞMEDİ.** Araç fix: value_col otomatik seçimi boş 'Unnamed' kolonu
+  alıp sessizce 0 satır okuyordu → sayısal-değerli son kolon (+1 test). Rapor: EVDS_COMPARISON.md.
+- **m6** kapanış: bu kayıt + PHASE5B2A_REVIEW.md, tam süit 494 passed, golden 3/3, push.
+Faz 6/real/launchd'ye adım YOK; iki durma noktası kullanıcıda.
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
@@ -364,7 +390,11 @@ engine-seviyesi SHORT execution (short-gate sonrası).
     canlı faiz FRED'den beslenir ama FRED de ~4 ay gecikmeli → faiz kronik bayat.
     2023 boşluğu ff → cash-yield MUHAFAZAKÂR sapma. **F5-B2a m4 düzeltmesi:** "bayat =
     muhafazakâr" GENELLEME DEĞİL — yön faiz patikasına bağlı; yükseliş döngüsünde muhafazakâr
-    (eksik tahakkuk), DÜŞÜŞ döngüsünde nakit getirisini ABARTIR (agresif). Real öncesi tamamlanmalı.
+    (eksik tahakkuk), DÜŞÜŞ döngüsünde nakit getirisini ABARTIR (agresif). **F5-B2a m5:** GERÇEK
+    EVDS CSV (TLREF) kıyası koşuldu (EVDS_COMPARISON.md) — EVDS sistematik ~2-6p YÜKSEK (seri-tanım
+    farkı), 2023 boşluğu EVDS'de 12/12 DOLU, 2022-10 %9.0 baseline artefaktı teyit. Snapshot
+    DEĞİŞMEDİ. Bu madde artık "veri yok" DEĞİL, "tanım-uyumlu seri + S1b yeniden ölçüm turu"
+    bekliyor. Real öncesi tamamlanmalı.
 19. **[üretim-turu kuyruğu] D1 nakit bacağının GERÇEK enstrümanı** netleştirilecek
     (AlgoLab para piyasası fonu/repo süpürme; oran/likidite/vade). Şu anki
     %0/faizli model yalnızca bir yaklaşıklık.
