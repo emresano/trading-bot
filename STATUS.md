@@ -555,6 +555,33 @@ config/regime_core*.yaml) DOKUNULMADI. Yeni BAĞIMSIZ: `backtest/xsec_momentum.p
 (522+8). Faz 6/real/launchd/go_live'a adım YOK; iki durma noktası kullanıcıda.
 **Kabul kararı kullanıcının/baş danışmanın; otomatik geçiş YOK.**
 
+## K1.5 Mekanik Teyit — 1/2 (2026-07-08)
+2026-07-08 akşam koşusu denetlendi (not: launchd servisleri bu makinede henüz kurulu
+DEĞİL — `launchctl list` boş, `runtime/paper/logs/` yok; "akşam koşusu" = günün son
+manuel `--refresh --cycle` çağrısı, `runtime/paper/decision_journal.jsonl` +
+`heartbeat_status.json`'da 2026-07-08T17:05:41Z / 20:05 Istanbul damgalı). Dört kalem:
+- **(a) DATA_DRIFT yok** — PASS. Günün TEK DATA_DRIFT alarmı 12:03 cycle'ındaydı (ASELS
+  3-bar sapması); 12:56'da `--resync` ile giderildi (kompozit parite max_abs_diff≈5.4e-5);
+  sonraki tüm cycle'larda (12:56, 13:11, 17:05) DATA_DRIFT YOK.
+- **(b) provisional yok** — PASS. 17:05:41 cycle'ının `signal_eval` kaydı
+  `"provisional": false` (as_of barı zaman-final + veri tam; önceki 3 cycle 12:03-13:11
+  hâlâ oluşmakta olan bar yüzünden `provisional: true`'ydu — beklenen davranış).
+- **(c) TELEGRAM: ACTIVE** — PASS. `heartbeat_status.json` (aynı ts):
+  `telegram.state="ACTIVE"`, `reason="token+chat_id mevcut"`.
+- **(d) EOD'de "Rejim"/"Pozisyon" AYRI satır + tutarlı** — PASS (kod-yolu doğrulamasıyla;
+  ham EOD metni hiçbir yere journal'lanmıyor, yalnız stdout/Telegram'a gönderiliyor —
+  bu yüzden literal string değil `main.py`/`notify/eod_summary.py` kod-yolu + bu
+  cycle'ın girdileri izlendi). `main.py` observe dalı (satır ~354-366): `res.regime_on`
+  DOĞRUDAN `evaluate_signal` çıktısından (composite/MA/band, bugünün gerçek rejim
+  durumu) atanıyor — bu cycle için `True`. `build_eod_summary` çağrısında
+  `in_position=bool(self.broker.quantities())`; observe modda hesap hiç başlatılmadığı
+  için bu her zaman `False` → "Pozisyon: NAKİT (observe — hesap başlatılmadı)". İki alan
+  BAĞIMSIZ kaynaklardan geliyor (F5-B2a.1 düzeltmesi, KALICI KAYIT 13) → "Rejim: ON" +
+  "Pozisyon: NAKİT (observe...)" birlikte basılması ÇELİŞKİ değil, tasarım gereği
+  (observe'da rejim ON iken pozisyon her zaman nakittir çünkü hesap yok).
+**Dördü de sağlandı → K1.5 temiz koşu 1/2 (2026-07-08).** İkinci temiz koşu (2/2) için
+farklı bir güne ait bağımsız bir gözlem gerekir; kod değişikliği YAPILMADI.
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
