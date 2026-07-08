@@ -361,8 +361,10 @@ engine-seviyesi SHORT execution (short-gate sonrası).
     döndürüyor (JSON yok). **F5-B1.1 K8: `tools/evds_compare.py --csv` elle-export modu
     eklendi** → endpoint düzelmeden kullanıcı EVDS CSV export'uyla kapatabilir (kolon eşleme +
     çoklu tarih formatı). Snapshot DEĞİŞMEZ; hâlâ FRED/OECD (KAYIT 6). Ayrıca F5-B1.1 K1:
-    canlı faiz FRED'den beslenir ama FRED de ~4 ay gecikmeli → faiz kronik bayat (muhafazakâr).
-    2023 boşluğu ff → cash-yield MUHAFAZAKÂR sapma (yön güvenli). Real öncesi tamamlanmalı.
+    canlı faiz FRED'den beslenir ama FRED de ~4 ay gecikmeli → faiz kronik bayat.
+    2023 boşluğu ff → cash-yield MUHAFAZAKÂR sapma. **F5-B2a m4 düzeltmesi:** "bayat =
+    muhafazakâr" GENELLEME DEĞİL — yön faiz patikasına bağlı; yükseliş döngüsünde muhafazakâr
+    (eksik tahakkuk), DÜŞÜŞ döngüsünde nakit getirisini ABARTIR (agresif). Real öncesi tamamlanmalı.
 19. **[üretim-turu kuyruğu] D1 nakit bacağının GERÇEK enstrümanı** netleştirilecek
     (AlgoLab para piyasası fonu/repo süpürme; oran/likidite/vade). Şu anki
     %0/faizli model yalnızca bir yaklaşıklık.

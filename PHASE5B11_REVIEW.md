@@ -38,8 +38,12 @@ golden 3/3 her commit.
   (IRSTCI01TRM156N); çekim başarısız/boşsa son değer + WARN (tahakkuk durmaz). Formül/
   haircut backtest ile AYNI. EOD özet + `heartbeat_status.json`'a faiz+kaynak tarihi+bayatlık.
 - **GERÇEK DURUM:** FRED/OECD serisi de 2026-03'te bitiyor (~4 ay gecikme) → canlı faiz
-  **tasarım gereği bayat** kalır (35.5%, ⚠️BAYAT). Muhafazakâr (düşük tahakkuk). Zamanlı
-  TCMB için EVDS (kuyruk #18).
+  **tasarım gereği bayat** kalır (35.5%, ⚠️BAYAT). Zamanlı TCMB için EVDS (kuyruk #18).
+- **DÜZELTME (F5-B2a m4):** "bayatlık = muhafazakâr" bir GENELLEME DEĞİLDİR; sapmanın YÖNÜ
+  faiz patikasına bağlıdır. Bayat oran = ESKİ oranla tahakkuk. **Faiz YÜKSELİŞ döngüsünde**
+  (2023 boşluğu) eski oran güncelden düşüktür → tahakkuku EKSİK gösterir = muhafazakâr.
+  **Faiz DÜŞÜŞ döngüsünde** eski (yüksek) oran güncelden yüksektir → nakit getirisini
+  ABARTIR = muhafazakâr DEĞİL (agresif). Şu anki gecikme, faiz düşerse aleyhe çalışır.
 - **Bug düzeltildi:** FRED index `.values` tz'yi siliyordu → `since` karşılaştırması
   TypeError → hep fetch_failed. tz-aware DatetimeIndex korunarak düzeltildi.
 
@@ -91,8 +95,9 @@ kapatılabilir. Snapshot DEĞİŞMEZ (yalnız rapor).
 ## 3. Dürüst çekinceler
 
 1. **Faiz kaynağı gecikmesi:** TRY_ON_RATE (FRED/OECD) ~4 ay gecikmeli → canlı faiz kronik
-   bayat. Yön güvenli (düşük tahakkuk = muhafazakâr) ama uzun nakit + yüksek-faiz döneminde
-   nakit getirisi sapabilir; kalıcı çözüm EVDS (kuyruk #18).
+   bayat. **Sapma yönü faiz patikasına bağlı** (m4 düzeltmesi): yükseliş döngüsünde bayat
+   oran muhafazakâr (eksik tahakkuk), DÜŞÜŞ döngüsünde nakit getirisini ABARTIR (agresif).
+   Uzun nakit + faiz-düşüş döneminde aleyhe sapabilir; kalıcı çözüm EVDS (kuyruk #18).
 2. **Kill-switch eşikleri tarihsel-0-tetik konumlu:** paper döneminde bir switch tetiklenirse
    gerçekten görülmemiş bir koşuldur. Eşikler ÖNERİ; kullanıcı/baş danışman onayına tabi.
 3. **Veri kayması ilk temettüde kesin oluşacak:** mevcut "0 çakışma" ilk BIST temettüsünde
