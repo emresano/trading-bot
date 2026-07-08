@@ -46,11 +46,16 @@ def run_regime_core_costmodel(
     cost_model: CostModel,
     date_range: Optional[tuple[pd.Timestamp, pd.Timestamp]] = None,
     cash_rate: Optional[pd.Series] = None,
+    haircut: float = CASH_YIELD_HAIRCUT,
 ) -> RegimeCoreResult:
     """`run_regime_core` (S1b) ile AYNI döngü ve AYNI sinyal — tek fark:
     komisyon/slippage `cfg.commission_bps/slippage_bps` yerine `cost_model`
     üzerinden uygulanır. `cfg`'nin bps alanları BU çağrıda YOK SAYILIR
     (cost_model maliyetin tek sahibi).
+
+    `haircut` (E4b): nakit tahakkuku kırpması, ondalık (varsayılan 0.02 = S1b/TRY
+    200bp; US E4b'de config'ten 0.005 = 50bp geçilir). `cash_rate=None` iken
+    (E4/%0) etkisizdir — tahakkuk bloğu hiç çalışmaz.
 
     ENTER sizing: her sembol için bütçe = equity_before/len(symbols);
     qty = floor(bütçe / birim_maliyet), birim_maliyet = fill + entry_costs(fill,1)
@@ -89,7 +94,7 @@ def run_regime_core_costmodel(
             days_elapsed = (date - all_dates[i - 1]).days
             annual_rate = daily_cash_rate.loc[date]
             if pd.notna(annual_rate) and days_elapsed > 0:
-                r_net = max(float(annual_rate) - CASH_YIELD_HAIRCUT, 0.0)
+                r_net = max(float(annual_rate) - haircut, 0.0)
                 cash *= (1 + r_net / 365) ** days_elapsed
 
         # t+1 yürütme: dünün sinyal DEĞİŞİMİNİ bugün kapanışta uygula.
