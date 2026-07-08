@@ -1,16 +1,16 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T18:05:00+03:00 (Europe/Istanbul)
-Şu an (EXPANSION hattı): **E4b (D1-US NAKİT BACAĞI ÖLÇÜM-TAMAMLAMA) TAMAMLANDI —
-kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `EXPANSION_E4B.md` +
-`E4_CRITERIA.md` §4 SON-BAKIŞ KURALI + KALICI KAYIT 16). E4'ün (US adil test) S1→S1b
-emsali nakit-getiri düzeltmesi: tek değişiklik = US 3-aylık T-bill (DGS3MO, 50bp haircut)
-nakit tahakkuku. Offline; `mode: paper` + TÜM canlı bot modülleri DOKUNULMADI; N/b/M
-mühürlü, referans SEPET DEĞİŞMEDİ, v7.1-golden 3/3. **Mekanik sonuç: faiz Sharpe'ı
-0.726→0.758 itti ama mühürlü tablo hâlâ 1/4** (kriter 2 tek geçen) → SON-BAKIŞ KURALI
-gereği **D1-US US-referansta KESİN RED, üçüncü bakış YOK** (karar kullanıcının).
-Faz 6/real/launchd/go_live'a adım YOK. (E4 ilk bakışı: KAYIT 15. F5 paper hattı ayrı.)
+Son güncelleme: 2026-07-08T18:40:00+03:00 (Europe/Istanbul)
+Şu an (EXPANSION hattı): **D2US-S1 (KESİTSEL MOMENTUM AİLESİ tasarım+spike turu) AÇILDI**
+(bkz. KALICI KAYIT 17). D1-US KESİN RED (E4b, son-bakış kuralı) baş danışmanca onaylandı;
+yeni US-only, otonomi hedefli bir hat olarak **D2-US (12-1 kesitsel momentum + FIP + mutlak-
+momentum kapısı + vol-hedefleme)** açıldı. Bu tur: US2 evreni (~50 sembol) dondurma →
+benchmark+kriter MÜHÜRLEME (koşumdan ÖNCE) → tasarım sabitleri → spike koşumu → D2_US_S1.md.
+Offline araştırma; `mode: paper` + TÜM canlı bot modülleri + S1/S1b/E4 araçları
+DOKUNULMAZ; her madde ayrı commit; v7.1-golden her commit 3/3. Grid/varyant SEÇİMİ YASAK —
+tasarım TEK paket olarak mühürlenir. HÜKÜM YOK; kabul kararı kullanıcının/baş danışmanın.
+Faz 6/real/launchd/go_live'a adım YOK. (E4b kapanışı: KAYIT 16. F5 paper hattı ayrı.)
 
 --- Önceki oturum (F5 paper hattı, bu turda DOKUNULMADI) ---
 Mikro-düzeltme (yalnız EOD gösterimi): `notify/eod_summary.py`'de "Rejim" (compute_regime_
@@ -490,6 +490,35 @@ Yeni: `tools/build_us_rate_snapshot.py`, `tools/run_regime_core_us_e4b.py`,
 `backtest/regime_core_us.py`'ye haircut param (default 0.02=S1b; cash_rate=None iken
 etkisiz → E4 %0 reprodüksiyonu korundu). v7.1-golden 3/3; tam süit **522 passed**
 (517+5). Faz 6/real/launchd/go_live'a adım YOK; iki durma noktası kullanıcıda.
+
+## KALICI KAYIT 17 — D2-US (kesitsel momentum ailesi) tasarım+spike turu AÇILDI (2026-07-08)
+**Baş danışman kaydı (2026-07-08): D1-US KESİN RED onaylandı (E4b, son-bakış kuralı).
+D2-US (kesitsel momentum) tasarım+spike turu AÇILDI — US-only, otonomi hedefli hat.**
+
+D1-US'in (rejim-filtreli çekirdek) US-referansta kesin reddi (KAYIT 16, mühürlü tablo
+1/4) üzerine, D1 mantığının US'e "geri dönüşü" DEĞİL — YAPISAL YENİ bir aile açıldı:
+**D2-US = 12-1 kesitsel (cross-sectional) momentum + FIP information-discreteness seçimi
++ pozisyon-bazlı mutlak-momentum (dual-momentum) nakit kapısı + 6-ay realize vol hedefleme.**
+Getiri-arayan bir aile (D1 sermaye-koruma odaklıydı); bu yüzden kriter 2 = CAGR>sepet
+bir VARLIK şartıdır (E4/D1'de yoktu).
+
+**Turun disiplini (E4 izolasyonu AYNEN):**
+- Offline araştırma. `mode: paper` + TÜM canlı bot modülleri (strategy/regime_core.py,
+  execution/, safety/, data/live_*, notify/, main.py, config/config.yaml,
+  config/regime_core.yaml) + S1/S1b/E4 araçları (backtest/regime_core.py,
+  backtest/regime_core_us.py, tools/run_regime_core*.py, tools/e4_common.py,
+  config/regime_core_us.yaml) DOKUNULMAZ.
+- BIST v7.1-golden her commit 3/3 bayt-bayt. Her madde AYRI commit + push.
+- **Grid/varyant SEÇİMİ YASAK** (disiplin #3): tasarım TEK paket olarak, koşumdan ÖNCE
+  mühürlenir; koşum sonucuna göre bileşen seçilmez. Ablasyon YALNIZ bilgi/atıf amaçlı.
+- **Benchmark referansı koşumdan ÖNCE mühürlenir, sonradan DEĞİŞTİRİLEMEZ** (E4 §4 emsali).
+- HÜKÜM YOK; kabul kararı kullanıcının/baş danışmanın. Faz 6/real/launchd/go_live adımı YOK;
+  iki durma noktası kullanıcıda.
+
+Sıra (her biri ayrı commit): (0) bu kayıt → (1) US2 evreni ~50 sembol dondurma +
+DATA_AUDIT_US2.md + survivorship → (2) benchmark (US2 eşit-ağırlık sepet + SPY bilgi) +
+D2US_CRITERIA.md MÜHÜR → (3) tasarım sabitleri (aynı mühür commit'i) → (4) spike koşumu +
+mekanik tablo + crash/turnover/ablasyon/komşuluk → (5) D2_US_S1.md + kapanış. **DUR.**
 
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
