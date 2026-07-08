@@ -1,7 +1,11 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T14:15:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-08T16:00:00+03:00 (Europe/Istanbul)
+Operatör aksiyonu (kod değişikliği YOK): ilk gerçek DATA_DRIFT vakası (2026-07-07, 3 bar —
+ASELS/EREGL/TUPRS, temettü/split izi YOK) `--resync` ile giderildi (4 sembol 1'er bar,
+kompozit parite ≈0); doğrulama cycle'ı DATA_DRIFT'siz + EOD Telegram'a gitti. Detay:
+`PHASE5B2A_REVIEW.md` "B2a.1 Eki — İlk gerçek DATA_DRIFT vakası + resync sonucu".
 Şu an: **FAZ 5 (PAPER) — F5-B2a.1 (TELEGRAM TEŞHİS + SESSİZ DÜŞÜŞ SERTLEŞTİRME) TAMAMLANDI —
 kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `PHASE5B2A_REVIEW.md` "B2a.1 Eki").
 Kök neden: gerçek Telegram kimlik bilgileri kodun okuduğu `config/secrets.env` DEĞİL, repo

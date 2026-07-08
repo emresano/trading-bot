@@ -200,3 +200,49 @@ bunu artık **görünür** kılıyor (bir daha sessizce tekrarlanamaz). Güvenli
 token yazdırma) ciddiye alınıp hemen düzeltildi; kullanıcının token rotasyon kararı doğru
 bir tedbirdi. F5-B2 (ManualExecutionAdapter + gelen komut alıcısı) ve go-live kararı ayrı,
 onaylı adımlardır.
+
+---
+
+## B2a.1 Eki — İlk gerçek DATA_DRIFT vakası + resync sonucu (2026-07-08, operatör aksiyonu)
+
+**Kod değişikliği YOK** — bu bölüm salt operatör aksiyonu + gözlem raporudur. `mode: paper`
+ve tüm değişmezler aynen.
+
+**Vaka:** 2026-07-08 gözlem cycle'ında K4 mekanizması 3 bar sapması tespit etti (2026-07-07
+tarihli): `ASELS` 385.00→383.00 TL (−%0.52), `EREGL` 40.98→41.26 TL (+%0.68), `TUPRS`
+256.00→258.00 TL (+%0.78) — hepsi `CROSS_SOURCE_TOL_PCT`=%0.5 toleransının hemen üstünde.
+Sinyal bu yüzden finalize edilmedi (K4 tasarımı gereği); gözlem modunda işlem etkisi yoktu.
+
+**Temettü/split izi kontrolü:** `yfinance` `actions` (Dividends/Stock Splits) üç sembol için
+de 2026-06-01…2026-07-08 penceresinde tarandı. Hiçbirinde 2026-07-07'ye denk gelen bir
+kayıt yok (`EREGL`'in en yakın kaydı 2026-06-03 temettüsü — ilgisiz tarih). **Bu, sapmanın
+geriye-dönük temettü/split ayarlamasından KAYNAKLANMADIĞINI doğrular** — desen (üç ilgisiz
+sembol, küçük karışık-işaretli yüzdeler, tek gün) yfinance'in gün-içi önbelleklenmiş
+kapanışının gün sonunda resmi/nihai kapanışla güncellenmesiyle (geç bar revizyonu)
+tutarlıdır.
+
+**Sağlama (ASELS):** operatörün belirttiği bağlam — 2026-07-07'de ASELS'te pay-bazlı devre
+kesici + %−4.67 kapanış — resync SONRASI depo değeriyle çapraz kontrol edildi: ASELS
+2026-07-06 kapanışı 401.75 TL, 2026-07-07 (resync sonrası, fresh) 383.00 TL →
+(383.00−401.75)/401.75 = **−%4.67**, birebir eşleşiyor; 383.00 TL aynı zamanda
+operatörün belirttiği ~383.00 TL resmî BIST kapanışıyla da örtüşüyor. Bu, geç-revizyon
+açıklamasını ASELS özelinde sayısal olarak destekliyor.
+
+**Resync (`--resync`, OPERATOR_GUIDE §7):** mevcut depo yedeklendi
+(`runtime/paper/backups/live_history_20260708T125614Z.sqlite`), tüm tarihçe (66168 bar)
+yeniden çekildi + temizlendi + üzerine yazıldı. **4 sembolde 1'er bar değişti**: `ASELS`,
+`EREGL`, `TUPRS` (alarmdaki 3'ü) + `TOASO` (tam-tarihçe taramasında ayrıca yakalanan,
+alarm penceresi dışında kalan küçük bir revizyon — aynı geç-revizyon sınıfı). **Otomatik
+kompozit parite** (canlı↔backtest snapshot, ortak 5511 günde): `max_abs_diff=5.42e-05`
+mutlak — kompozit ölçeği (~700 TL) göz önüne alındığında **göreli ~7.7e-8**, pratikte ≈0
+(beklenen aralıkta).
+
+**Doğrulama cycle'ı (resync sonrası, `--cycle`, observe):** `DATA_DRIFT` alarmı **YOK**;
+bugünün (2026-07-08) barı henüz kapanmadığı için sinyal doğru şekilde PROVISIONAL
+işaretlendi (K5, beklenen davranış — bir kusur değil); EOD özeti gönderildi — journal'da
+gönderim-hatası WARN'ı yok, `heartbeat_status.json` → `telegram.state=ACTIVE` (maskeli
+kanıt, değer yok).
+
+**Hüküm verilmedi** — bu bölüm yalnızca gözlem/işlem kaydıdır; K4 mekanizmasının tasarım
+gereği çalıştığının (sapma → finalize etme → operatör resync → parite doğrulaması) ilk
+gerçek-dünya kanıtıdır.
