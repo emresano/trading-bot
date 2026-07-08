@@ -218,13 +218,25 @@ class PaperScheduler:
         close_dt = _dt.combine(as_of_d, end).replace(tzinfo=now_local.tzinfo) + timedelta(seconds=self.grace_sec)
         return now_local >= close_dt
 
-    def _last_final_date(self, as_of: date) -> pd.Timestamp:
-        """as_of ve öncesindeki son FİNAL (kapanmış) işlem günü (UTC ts)."""
+    def _data_complete(self, closes: dict[str, pd.Series], ts: pd.Timestamp) -> tuple[bool, list[str]]:
+        """ts günü İÇİN TÜM sembollerin barı depoda var mı (VERİ TAMLIĞI). Canlıda
+        yfinance bazı sembollerin gün barını diğerlerinden geç yayınlayabilir; eksik
+        sembol varken basket ENTER yürütmek EKSİK basket (undersized) üretir — bu, F5-B1
+        dry-run'ında gözlenen 'kısmi basket' kusurunun kök nedeniydi. Yürütme yalnız
+        TAM veride yapılır (backtest paritesini de korur: backtest tam-veride koşar)."""
+        missing = [s for s, ser in closes.items() if ts not in ser.index]
+        return (len(missing) == 0, missing)
+
+    def _last_executable_date(self, as_of: date, closes: dict[str, pd.Series]) -> pd.Timestamp:
+        """as_of ve öncesindeki son YÜRÜTÜLEBİLİR gün: hem FİNAL (kapanış+grace) hem
+        TÜM sembollerde bar var (veri tam)."""
         from datetime import timedelta
         d = self.calendar._d(as_of)
-        for _ in range(10):
-            if self.calendar.is_trading_day(d) and self._is_bar_final(d):
-                return pd.Timestamp(d, tz="UTC")
+        for _ in range(15):
+            ts = pd.Timestamp(d, tz="UTC")
+            if (self.calendar.is_trading_day(d) and self._is_bar_final(d)
+                    and self._data_complete(closes, ts)[0]):
+                return ts
             d -= timedelta(days=1)
         return pd.Timestamp(as_of, tz="UTC")
 
@@ -272,21 +284,21 @@ class PaperScheduler:
             return res
 
         closes = self.feed.closes()
-        # veri-yok toleransı: as_of günü için bar var mı?
-        have_today = all(as_of_ts in s.index or
-                         (len(s) and s.index[-1] >= as_of_ts) for s in closes.values())
-        if not have_today:
-            res.notes.append("as_of günü için tam bar yok (yfinance gecikmesi/tatil) → sinyal ertelendi")
-            self._log("WARN", "DATA", res.notes[-1])
-
         st = self._sched_state()
-        final = self._is_bar_final(as_of)
-        if not final:
+        # FİNAL bar = (1) seans kapanışı+grace geçti VE (2) TÜM sembollerde bar var.
+        time_final = self._is_bar_final(as_of)
+        data_complete, missing = self._data_complete(closes, as_of_ts)
+        final = time_final and data_complete
+        if not time_final:
             res.notes.append("as_of barı henüz KAPANMADI (oluşmakta) → sinyal PROVISIONAL; "
-                             "yürütme son kapanmış güne kadar sınırlı")
+                             "yürütme son yürütülebilir güne sınırlı")
             self._log("WARN", "SIGNAL", res.notes[-1])
-        # yürütmede kullanılacak son FİNAL gün (oluşmakta olan bar yasağı)
-        exec_today = as_of_ts if final else self._last_final_date(as_of)
+        elif not data_complete:
+            res.notes.append(f"as_of barı zaman-final ama VERİ EKSİK ({len(missing)} sembol: "
+                             f"{missing[:5]}...) → yürütme ertelendi (kısmi basket yasağı)")
+            self._log("WARN", "DATA", res.notes[-1])
+        # yürütmede kullanılacak son yürütülebilir gün (final+veri-tam); değilse son tam gün
+        exec_today = as_of_ts if final else self._last_executable_date(as_of, closes)
 
         if self.mode == "observe":
             snap = self.evaluate_signal(closes, as_of_ts)

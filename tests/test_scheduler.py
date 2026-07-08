@@ -140,6 +140,58 @@ def test_provisional_bar_flagged_and_execution_deferred(tmp_path: Path):
     sched.close()
 
 
+def test_data_completeness_defers_partial_basket(tmp_path: Path):
+    """K6 kök-neden: as_of gününde bir sembolün barı eksikse (yfinance gecikmesi)
+    yürütme ERTELENİR (kısmi basket yasağı) — WARN + son tam güne sınırlanır."""
+    store = LiveHistoryStore(tmp_path / "h.sqlite")
+    # THYAO tüm günler; GARAN son gün EKSİK (yfinance gecikmesi emsali)
+    full = [100.0 + i for i in range(12)]
+    idx = pd.DatetimeIndex(BDAYS, name="ts").tz_localize("UTC")
+    store.upsert_bars("THYAO", pd.DataFrame(
+        {"open": full, "high": full, "low": full, "close": full, "volume": [1000.0]*12},
+        index=idx), source="test")
+    garan = full[:-1]
+    store.upsert_bars("GARAN", pd.DataFrame(
+        {"open": garan, "high": garan, "low": garan, "close": garan, "volume": [1000.0]*11},
+        index=idx[:-1]), source="test")
+    feed = LiveDataFeed(store, ["THYAO", "GARAN"], fetch_raw_fn=lambda y, s: pd.DataFrame())
+    cfg = _cfg(BDAYS[4].date())
+    cfg["safety"]["freeze_dir"] = str(tmp_path / "freeze")
+    sched = PaperScheduler(cfg, tmp_path / "rt", feed=feed, notifier_sender=[].append)
+    sched.startup()
+    res = sched.run_cycle(BDAYS[-1].date())   # son gün GARAN eksik
+    assert any("VERİ EKSİK" in n for n in res.notes)
+    # yürütme yine de INITIAL_ENTER (BDAYS[5], iki sembol de var) — TAM basket
+    assert set(sched.broker.quantities()) == {"THYAO", "GARAN"}
+    sched.close()
+
+
+def test_initial_enter_cost_reconciliation(tmp_path: Path):
+    """K6: INITIAL_ENTER equity_after == initial − komisyon(10bp) − slippage_drag(5bp),
+    invested notional üzerinden — bit-bit (broker yolu = plan_enter formülü)."""
+    from execution.paper_broker import PaperBroker
+    from strategy.regime_core import plan_enter
+    from core.models import Side
+    syms = ["THYAO", "GARAN", "ASELS"]
+    prices = {"THYAO": 347.25, "GARAN": 134.40, "ASELS": 385.0}
+    eq, comm, slip = 100000.0, 10.0, 5.0
+    qty, cash_after = plan_enter(eq, prices, syms, comm, slip)
+    b = PaperBroker(eq, comm, slip, state_path=tmp_path / "b.sqlite")
+    b.update_prices(prices)
+    for s in syms:
+        if s in qty:
+            b.submit_market_order(s, Side.BUY, qty[s])
+    acct = b.get_account_state()
+    slip_frac, comm_frac = slip / 1e4, comm / 1e4
+    sum_comm = sum(prices[s] * (1 + slip_frac) * qty[s] * comm_frac for s in qty)
+    sum_slip = sum(prices[s] * slip_frac * qty[s] for s in qty)
+    expected = eq - sum_comm - sum_slip
+    assert abs(b.cash - cash_after) < 1e-9          # broker == plan_enter
+    assert abs(acct.equity - expected) < 1e-6       # equity == initial − comm − slip
+    assert acct.equity < eq                          # maliyet drag'i (kusur değil)
+    b.close()
+
+
 def test_shadow_reconciliation_logs_no_broker(tmp_path: Path):
     sched, sent = _make(tmp_path, go_live=None)
     sched.startup()
