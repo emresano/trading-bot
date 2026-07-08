@@ -397,3 +397,8 @@ Bu maddeler STATUS.md'nin aktif "Bilinen sorun/blok" listesinden buraya taşınd
 16. ~~4/5 varyantta breaker 1 kez tetiklendi — kök nedeni İNCELENMEDİ~~
     **İNCELENDİ (R1): 4/4 "gerçek drawdown"** — veri artefaktı değil (bkz.
     ABLATION_PORTFOLIO.md "Breaker Adli İnceleme" eki).
+9. ~~`.gitignore`'da genel `.env`/`*.log` deseni eksikliği (A3'ten, düşük
+   öncelik)~~ **KAPANDI (F5-B2a.1, 2026-07-08)**: genel `secrets.env` / `*.env`
+   / `runtime/manual/` deseni eklendi (`config/secrets.env.example` istisna);
+   `git log --all` ile hiçbir secrets dosyasının hiçbir commit'te yer almadığı
+   doğrulandı. Bkz. `PHASE5B2A_REVIEW.md` "B2a.1 Eki".

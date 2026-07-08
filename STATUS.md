@@ -1,16 +1,27 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-08T12:30:00+03:00 (Europe/Istanbul)
-Şu an: **FAZ 5 (PAPER) — F5-B2a (TELEGRAM CANLI BİLDİRİM + OPERASYON) KOD İŞİ TAMAMLANDI —
-kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `PHASE5B2A_REVIEW.md`). 6 madde:
-gerçek Bot API sendMessage (timeout+3 retry+üstel bekleme, döngü kırılmaz — m1), alarm+EOD
-kablolama kuru-testi (m2), launchd K5-grace saat doğrulaması + zaman çizelgesi (m3),
-"bayat=muhafazakâr" genelleme düzeltmesi (m4), GERÇEK EVDS CSV kıyası + value_col fix (m5),
-kapanış (m6). `mode: paper` DOKUNULMADI; N/b/M mühürlü; D1 fonksiyonları + `data/snapshots/`
-DEĞİŞMEDİ; v7.1-golden her commit 3/3 bayt-bayt. Gelen Telegram komutu/long-poll YOK;
-ManualExecutionAdapter TASARIMI F5-B2'ye kaldı. Faz 6 BAŞLATILMADI; go_live_date=null;
-launchd etkinleştirilmedi; Durma Noktası 2 kapalı. Tam süit: **494 passed** (F5-B1.1 485 + 9).
+Son güncelleme: 2026-07-08T14:15:00+03:00 (Europe/Istanbul)
+Şu an: **FAZ 5 (PAPER) — F5-B2a.1 (TELEGRAM TEŞHİS + SESSİZ DÜŞÜŞ SERTLEŞTİRME) TAMAMLANDI —
+kullanıcı/baş danışman değerlendirmesi bekliyor** (bkz. `PHASE5B2A_REVIEW.md` "B2a.1 Eki").
+Kök neden: gerçek Telegram kimlik bilgileri kodun okuduğu `config/secrets.env` DEĞİL, repo
+kökündeki farklı bir `secrets.env`'e yazılmıştı (3 kez tekrarlandı — OPERATOR_GUIDE §0'a
+belirgin uyarı eklendi) + token değerinde 2 kez BotFather kopyalama artefaktı (gömülü
+boşluk). `--test-telegram` CLI eklendi + GERÇEK uçtan-uca doğrulandı (kullanıcı telefonunda
+onayladı) + manuel observe cycle EOD özeti gerçekten Telegram'a gitti. Sessiz-düşüş
+sertleştirmesi: `telegram.enabled=true` ama token/chat_id okunamazsa artık belirgin WARN +
+EOD/heartbeat_status.json'da kalıcı "TELEGRAM: ACTIVE/LOG-ONLY(neden)" satırı. `.gitignore`
+genel `secrets.env`/`*.env`/`runtime/manual/` deseni (STATUS #9 KAPANDI). **Güvenlik notu:**
+bir teşhis komutu yanlışlıkla gerçek token'ı bu oturumun çıktısına yazdırdı → kullanıcı
+BotFather'da token'ı iptal edip yeniledi (kullanıcı kararıyla). `mode: paper` DOKUNULMADI;
+N/b/M mühürlü; D1 fonksiyonları + `data/snapshots/` DEĞİŞMEDİ; v7.1-golden her commit 3/3
+bayt-bayt. Gelen Telegram komutu/long-poll YOK; ManualExecutionAdapter TASARIMI F5-B2'ye
+kaldı. Faz 6 BAŞLATILMADI; go_live_date=null; launchd etkinleştirilmedi; Durma Noktası 2
+kapalı. Tam süit: **507 passed** (F5-B2a 494 + 13 yeni).
+
+**F5-B2a (önceki alt-tur, TAMAMLANDI):** 6 madde — gerçek Bot API sendMessage (m1), alarm+EOD
+kablolama kuru-testi (m2), launchd K5-grace saat doğrulaması (m3), "bayat=muhafazakâr"
+genelleme düzeltmesi (m4), GERÇEK EVDS CSV kıyası (m5), kapanış (m6). Detay: KALICI KAYIT 12.
 
 **F5-B1.1 (gölge sertleştirme, K1-K9) daha önce tamamlandı** (bkz. `PHASE5B11_REVIEW.md`,
 KALICI KAYIT 11): 9 madde, 485 passed.
@@ -317,6 +328,48 @@ F5-B2'nin **bildirim yarısı** (bkz. `PHASE5B2A_REVIEW.md`). 6 madde, her biri 
 - **m6** kapanış: bu kayıt + PHASE5B2A_REVIEW.md, tam süit 494 passed, golden 3/3, push.
 Faz 6/real/launchd'ye adım YOK; iki durma noktası kullanıcıda.
 
+## KALICI KAYIT 13 — F5-B2a.1 (Telegram teşhis + sessiz düşüş sertleştirme) tamamlandı (2026-07-08)
+Kullanıcı gerçek Telegram token+chat_id'yi girdikten sonra bot bunları BOŞ görüyordu.
+Teşhis + düzeltme + sertleştirme (bkz. `PHASE5B2A_REVIEW.md` "B2a.1 Eki"):
+- **Kök neden**: kod (main.py/safety/heartbeat.py/tools/evds_compare.py/core/config.py)
+  yalnızca `config/secrets.env`'i okur (hard-code path); kullanıcı değerleri **repo
+  kökündeki farklı bir `secrets.env`'e** yazmıştı — format sorunu değil, YANLIŞ KONUM.
+  Bu, oturum boyunca **3 kez tekrarlandı** (her BotFather güncellemesinde tekrar kök
+  dizine yazıldı) → OPERATOR_GUIDE §0'a "doldurulacak dosya BUDUR, kök değil" uyarısı
+  eklendi. Ayrıca token değerinde **2 ayrı seferde gömülü boşluk** bulundu (muhtemelen
+  BotFather sohbet balonundan satır-kaydırmalı kopyalama artefaktı) — programatik
+  temizlendi (değer hiçbir zaman yazdırılmadan).
+- **`--test-telegram` CLI** (main.py): config yükler, `notifier_status()` ile durumu
+  raporlar (ACTIVE/LOG-ONLY+neden), ACTİFse maskeli test mesajı gönderir, exit code
+  yansıtır. OPERATOR_GUIDE §5a.
+- **Sessiz-düşüş sertleştirme**: `telegram.enabled=true` ama token/chat_id okunamazsa
+  artık (a) başlangıçta belirgin WARN journal'a düşer, (b) her EOD özetinde ve
+  `heartbeat_status.json`'da kalıcı `TELEGRAM: ACTIVE` / `TELEGRAM: LOG-ONLY (neden)`
+  satırı var — konfig-niyet ↔ çalışma-durumu uyuşmazlığı bir daha SESSİZ kalamaz.
+  13 yeni test (notifier_status, EOD satırı, scheduler silent-drop, CLI 4 senaryo).
+- **Secrets hijyeni (STATUS #9 KAPANDI)**: `.gitignore`'a genel `secrets.env`/`*.env`/
+  `runtime/manual/` deseni eklendi (`config/secrets.env.example` istisna);
+  `git log --all -- secrets.env` (+ `config/secrets.env`) ile hiçbir secrets dosyasının
+  hiçbir commit'te yer almadığı doğrulandı.
+- **GERÇEK uçtan-uca kanıt**: `--test-telegram` BAŞARILI (kullanıcı telefonunda mesajı
+  doğruladı). Ardından gerçek bir manuel `--refresh --cycle` (observe, 2026-07-08) koşuldu:
+  EOD özeti gerçekten Telegram'a gönderildi (`heartbeat_status.json`: `telegram.state=
+  ACTIVE`, journal'da gönderim-hatası WARN'ı YOK). **Yan gözlem** (kapsam DIŞI, K4'ün
+  ÖNCEDEN VAR olan davranışı): aynı cycle'da ASELS 2026-07-07 için 3 bar sapması
+  DATA_DRIFT (CRITICAL) alarmı tetiklendi ve Telegram'a gitti — sinyal bu yüzden
+  FİNALİZE EDİLMEDİ (observe modda zaten işlem yok, etkisi yok). Operatör isterse
+  OPERATOR_GUIDE §7 `--resync` uygulayabilir; bu turun kapsamı dışında, aksiyon
+  alınmadı.
+- **Güvenlik olayı (dürüstçe kayıt)**: bir teşhis komutu (`xxd` ham dosya kontrolü)
+  yanlışlıkla gerçek token değerini bu oturumun çıktısına yazdırdı (kural ihlali,
+  fark edilir edilmez durduruldu). Kullanıcıya hemen bildirildi; kullanıcı BotFather'da
+  token'ı **iptal edip yeniledi** (kendi kararıyla). Sonraki tüm teşhis yalnızca
+  yapısal/maskeli kontrollerle (uzunluk, karakter sınıfı, HTTP durum kodu) yapıldı —
+  değer bir daha hiçbir çıktıya yazılmadı.
+Tam süit **507 passed** (F5-B2a 494 + 13 yeni); golden 3/3 her commit. `mode`/eşikler/
+`regime_core.py`/`data/snapshots/` DEĞİŞMEDİ. Faz 6/real/launchd'ye adım YOK; iki durma
+noktası kullanıcıda.
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
@@ -358,7 +411,7 @@ engine-seviyesi SHORT execution (short-gate sonrası).
 üretim nakit bacağı enstrümanı) real-öncesi/üretim kuyruğunda (KAYIT 6 + aşağıda 18-19).
 
 ## Bilinen sorun/blok (aktif)
-> Çözülmüş / üstü çizili maddeler (2, 3, 4, 8, 10, 14, 16) **STATUS_ARCHIVE.md**'ye
+> Çözülmüş / üstü çizili maddeler (2, 3, 4, 8, 9, 10, 14, 16) **STATUS_ARCHIVE.md**'ye
 > taşındı. Orijinal numaralandırma korundu (boşluklar bilinçli).
 
 1. **Kullanıcı onayı bekleniyor (Durma Noktası 1, BIST)** — kasıtlı, aşılamaz kapı.
@@ -371,7 +424,6 @@ engine-seviyesi SHORT execution (short-gate sonrası).
    zayıflığı (huni DONDURULDU, KALICI KAYIT 3). D1 ailesi bu yolun yerine geçti.
 7. KCHOL 2007-06-08 hâlâ açıklanamadı (DATA_AUDIT_v2.md "açıklanamayan gap" —
    dış BIST/KAP doğrulaması gerekiyor).
-9. `.gitignore`'da genel `.env`/`*.log` deseni eksikliği (A3'ten, düşük öncelik).
 11. **`oanda.py` hiçbir practice hesapla test edilmedi** (referans implementasyon)
     — E3'te doğrulanacak. E1'in FX snapshot'ı `yf_fx.py`'den üretildi.
 12. **Ekonomik takvim vetosu (FX) backtest'te modellenemez** — tarihsel arşiv yok
