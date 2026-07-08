@@ -1,0 +1,93 @@
+# config/regime_core_us.yaml
+# EXPANSION E4 — US ADİL TEST turu: D1 (rejim-filtreli çekirdek) spike'ının ABD
+# evrenindeki koşumu. config/regime_core.yaml (BIST) ve config/config.yaml'DAN
+# AYRI, bağımsız bir araştırma dosyasıdır — o dosyaların HİÇBİRİ okunmadı/
+# değiştirilmedi. Canlı bot bu dosyayı OKUMAZ (yalnızca tools/run_regime_core_us.py
+# + tools/e4_common.py offline araştırma sürücüleri okur).
+#
+# MÜHÜRLÜ DEĞİŞMEZLER (bu turda değiştirilmez, disiplin #3 — parametre taraması YASAK):
+#   regime: N=200, b=0.01, M=3  ← S1b ile BİREBİR AYNI (KALICI KAYIT 5/6)
+#   walk_forward: 24/6/6, monte_carlo: 500/seed=42, cliff_grid komşulukları
+#   ← S1b ile BİREBİR AYNI (metodolojik özdeşlik).
+
+strategy_family: regime_core
+
+# US evreni (20 sembol, 8 sektör) — DATA_AUDIT_US.md (E1). Geçmiş getiriye göre
+# seçim YAPILMADI; bilinen survivorship yanlılığı EXPANSION_E4.md'de raporlanır.
+symbols:
+  - AAPL
+  - MSFT
+  - INTC
+  - CSCO
+  - JNJ
+  - PFE
+  - MRK
+  - JPM
+  - BAC
+  - XOM
+  - CVX
+  - PG
+  - KO
+  - WMT
+  - HD
+  - MCD
+  - NKE
+  - DIS
+  - VZ
+  - CAT
+
+# D1 tasarımı — S1b'de test-öncesi mühürlendi, US'te AYNEN kullanılır (seçim aracı DEĞİL).
+regime:
+  ma_period: 200        # N — MA(200)
+  band_pct: 0.01         # b — ×1.01 giriş üst bandı / ×0.99 çıkış alt bandı
+  confirm_days: 3        # M — 3 gün teyit (giriş); çıkış her zaman 1 gün
+
+# US maliyet modeli (E2 CostModel: costs/us_equities.py). commission_bps=0
+# (çoğu US broker komisyonsuz); SATIŞTA SEC fee + TAF; slippage 5bps.
+# Oranlar config/markets/us_equities.yaml ile AYNI (E1/E2). E3'te resmî kaynakla
+# doğrulanır (Bölüm 17 #3).
+costs:
+  commission_bps: 0
+  sec_fee_bps: 0.28       # SATIŞTA
+  taf_per_share: 0.000166 # SATIŞTA (tavan costs/us_equities.py::TAF_MAX_PER_SALE)
+  slippage_bps: 5
+
+initial_equity: 100000
+
+# Walk-forward (B) pencere takvimi — S1b ile AYNI (elle kopyalandı). Parametre
+# optimizasyonu YOK — N/b/M her pencerede AYNEN kullanılır.
+walk_forward:
+  train_months: 24
+  test_months: 6
+  step_months: 6
+
+monte_carlo:
+  runs: 500
+  random_seed: 42
+
+# Uçurum kontrolü grid'i (D) — SEÇİM İÇİN DEĞİL, yalnızca komşuluk sürekliliği (disiplin #3).
+cliff_grid:
+  ma_period: [100, 150, 200, 250]
+  band_pct: [0.0, 0.01, 0.02]
+  confirm_days: [1, 3, 5]
+
+backtest:
+  start: "2005-01-01"
+  snapshot: "data/snapshots/us/2026-07-06"
+
+# Endeks proxy'si al-tut kıyası (benchmark b) — DONDURULMUŞ SPY snapshot'ı
+# (deterministik/offline, E1 desenli manifest+sha256). 2026-07-08'de bir kez
+# çekildi; sürücü strateji equity aralığına dilimler.
+benchmark:
+  index_symbol: "SPY"
+  snapshot: "data/snapshots/us_bench/2026-07-08/SPY.parquet"
+
+# Nakit bacağı (madde 1 KARARI): US aux faiz serisi (FED effective / T-bill)
+# data/snapshots/aux'ta MEVCUT DEĞİL → nakit getirisi %0 (MUHAFAZAKÂR).
+# %0, rejim KAPALI dönemlerde nakde hiçbir tahakkuk uygulanmaması demektir;
+# stratejinin mutlak getirisini HAFİFE ALIR (gerçek US kısa faizi 2005-2026'da
+# >0 idi) → bir "geçiş"i ŞİŞİREMEZ; sepet her zaman yatırımda olduğundan
+# Sharpe-vs-sepet kıyasında strateji ALEYHİNE muhafazakâr bir varsayımdır.
+# Gerçek US T-bill/para-piyasası serisi kuyruğa alındı (TRY EVDS emsali).
+cash_yield:
+  enabled: false          # %0 — madde 1 kararı; sürücü cash_rate=None geçer

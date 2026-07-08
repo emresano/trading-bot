@@ -1,0 +1,20 @@
+{
+  "created_at_utc": "2026-07-08T13:53:04.865927+00:00",
+  "market_id": "us_bench",
+  "scope": "E4 benchmark: SPY (S&P 500 ETF) al-tut endeks proxysi, 2005-01-01 itibariyle, auto_adjust=True. US evren snapshotindan AYRI (bench scope).",
+  "adapter_id": "yf_us",
+  "source": "yfinance",
+  "correction_policy": "auto_adjust=True (yfinance) — kurumsal işlemler (split/temettü) düzeltilir",
+  "library_version": "0.2.66",
+  "volume_kind": "shares",
+  "start_date_filter": "2005-01-01",
+  "files": {
+    "SPY": {
+      "rows": 5411,
+      "start": "2005-01-03 00:00:00+00:00",
+      "end": "2026-07-08 00:00:00+00:00",
+      "sha256": "e76c2750445c5a8d74f6fa02767eeb1f18dbc1f64f59c2aa96a3b2ca34f4c456",
+      "bytes": 290019
+    }
+  }
+}
