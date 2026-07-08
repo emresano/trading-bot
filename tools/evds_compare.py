@@ -65,6 +65,62 @@ def try_fetch_evds(key: str) -> dict:
     return {"ok": bool(series), "series": series, "diagnostics": diag}
 
 
+def _parse_evds_dates(col: pd.Series) -> pd.DatetimeIndex:
+    """EVDS aylık tarih kolonu (çeşitli formatlar: 2024-1, 2024-01, 01-2024, 2024-01-01)."""
+    raw = col.astype(str).str.strip()
+    dt = pd.to_datetime(raw, errors="coerce")
+    if dt.isna().mean() > 0.5:  # 'YYYY-M' gibi → başına gün ekle
+        dt = pd.to_datetime(raw + "-01", errors="coerce")
+    if dt.isna().mean() > 0.5:  # 'M-YYYY' → dayfirst
+        dt = pd.to_datetime(raw, errors="coerce", dayfirst=True)
+    return pd.DatetimeIndex(dt).tz_localize("UTC")
+
+
+def load_evds_csv(path: Path | str, date_col: Optional[str] = None,
+                  value_col: Optional[str] = None) -> pd.Series:
+    """EVDS web arayüzünden ELLE export edilen CSV → aylık rate_pct serisi (kuyruk #18
+    endpoint düzelmeden kullanıcı export'uyla kapatılabilir). Kolon eşleme otomatik
+    (Tarih/Date + değer) ya da açıkça verilir; ondalık virgül normalize edilir."""
+    try:
+        df = pd.read_csv(path, sep=None, engine="python")
+    except Exception:
+        df = pd.read_csv(path, sep=";")
+    if date_col is None:
+        date_col = next((c for c in df.columns
+                         if c.lower() in ("tarih", "date", "observation_date")), df.columns[0])
+    if value_col is None:
+        cands = [c for c in df.columns if c != date_col]
+        value_col = cands[-1] if cands else df.columns[-1]
+    idx = _parse_evds_dates(df[date_col])
+    vals = pd.to_numeric(df[value_col].astype(str).str.replace(",", ".", regex=False),
+                         errors="coerce")
+    s = pd.Series(vals.values, index=idx, name="rate_pct")
+    return s[s.notna()].sort_index()
+
+
+def compare_to_baseline(evds: pd.Series, label: str) -> dict:
+    """EVDS serisini TRY_ON_RATE ile aylık hizala, fark hesapla, CSV yaz. 2023 boşluk
+    dönemi ayrıca raporlanır (mevcut serinin en zayıf yeri)."""
+    base = pd.read_parquet(TRY_ON_RATE)["rate_pct"]
+    base.index = pd.to_datetime(base.index, utc=True)
+    ev = evds.resample("MS").last()
+    joined = pd.concat([base.rename("try_on_rate"), ev.rename("evds")], axis=1)
+    joined["diff"] = joined["evds"] - joined["try_on_rate"]
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    joined.to_csv(OUT_DIR / f"evds_compare_{label}.csv")
+    both = joined.dropna(subset=["try_on_rate", "evds"])
+    gap_2023 = joined.loc["2023-01":"2023-12"]
+    return {
+        "label": label, "overlap_months": int(len(both)),
+        "mean_abs_diff": float(both["diff"].abs().mean()) if len(both) else None,
+        "max_abs_diff": float(both["diff"].abs().max()) if len(both) else None,
+        "max_diff_month": str(both["diff"].abs().idxmax().date()) if len(both) else None,
+        "gap_2023_evds_available": int(gap_2023["evds"].notna().sum()),
+        "gap_2023_base_missing": int(gap_2023["try_on_rate"].isna().sum()),
+        "csv": str(OUT_DIR / f"evds_compare_{label}.csv"),
+    }
+
+
 def characterize_baseline() -> dict:
     """Mevcut TRY_ON_RATE (FRED/OECD) tanımı — EVDS gelince kıyas tabanı."""
     r = pd.read_parquet(TRY_ON_RATE)["rate_pct"]
@@ -84,6 +140,14 @@ def characterize_baseline() -> dict:
 
 
 def main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser(description="EVDS↔TRY_ON_RATE çapraz doğrulama (F5-B1)")
+    ap.add_argument("--csv", default=None,
+                    help="EVDS web export CSV (endpoint çalışmıyorsa elle export ile kapat)")
+    ap.add_argument("--date-col", default=None)
+    ap.add_argument("--value-col", default=None)
+    args = ap.parse_args()
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     key = os.environ.get("EVDS_API_KEY")
     if not key:
@@ -100,8 +164,18 @@ def main() -> None:
     report = {"baseline": baseline, "evds_key_present": bool(key),
               "snapshot_modified": False}
 
-    if not key:
-        report["status"] = "SKIPPED — EVDS_API_KEY yok"
+    # ÖNCELİK: elle export edilen CSV (kuyruk #18'i endpoint olmadan kapatır).
+    if args.csv:
+        try:
+            ev = load_evds_csv(args.csv, args.date_col, args.value_col)
+            report["csv_input"] = {"path": args.csv, "rows": int(len(ev)),
+                                   "range": [str(ev.index[0].date()), str(ev.index[-1].date())] if len(ev) else None}
+            report["comparison"] = compare_to_baseline(ev, label="csv")
+            report["status"] = "OK — CSV ile karşılaştırma yazıldı (endpoint gerekmedi)"
+        except Exception as e:
+            report["status"] = f"CSV OKUMA HATASI: {type(e).__name__}: {e}"
+    elif not key:
+        report["status"] = "SKIPPED — EVDS_API_KEY yok (ve --csv verilmedi)"
     else:
         res = try_fetch_evds(key)
         report["evds_diagnostics"] = res["diagnostics"]

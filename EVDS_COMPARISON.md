@@ -37,8 +37,16 @@ Real paraya geçmeden önce TCMB'nin resmî kaynağıyla (EVDS API) doğrulanmal
    TCMB dokümanından (giriş yapılmış hesapla) teyit edilmeli. Doğrulanınca
    `tools/evds_compare.py::EVDS_HOSTS/EVDS_SERIES_CANDIDATES` güncellenip yeniden koşulur
    (script hazır: JSON gelirse aylık hizalar, farkı `runtime/f5b1/evds_compare_*.csv`'ye yazar).
-2. **Alternatif:** politika/gecelik faiz serisi evds3 arayüzünden **CSV export** edilip
-   `data/snapshots/aux/<tarih>/`'ye eklenir; script onunla da karşılaştırabilir.
+2. **Alternatif (F5-B1.1 K8 ile HAZIR):** politika/gecelik faiz serisi evds3 arayüzünden
+   **CSV export** edilip script'e verilir — endpoint gerekmez:
+   ```bash
+   .venv/bin/python -m tools.evds_compare --csv <export.csv>
+   # kolon eşleme otomatik (Tarih/Date + değer); gerekirse --date-col / --value-col
+   ```
+   Script CSV'yi aylık hizalar, TRY_ON_RATE ile farkı `runtime/f5b1/evds_compare_csv.csv`'ye
+   ve özeti `evds_comparison.json`'a yazar; **2023 boşluk dönemini** ayrıca raporlar
+   (EVDS'nin o ayları doldurup dolduramadığı). Çoklu tarih formatı (2024-1, 2024-01,
+   ISO) ve Türkçe ondalık virgül desteklenir. **Snapshot yine DEĞİŞMEZ** — yalnız rapor.
 3. **Düzeltme kararı:** fark anlamlıysa (özellikle 2023 boşluğunda) TRY_ON_RATE'in
    TCMB-kaynaklı sürümüyle değiştirilmesi **ayrı, onaylı bir turda** yapılır; S1b
    ölçümü o zaman yeniden üretilir (mühürlü kriterler yeniden kontrol edilir).
