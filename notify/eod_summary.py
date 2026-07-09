@@ -17,7 +17,9 @@ def build_eod_summary(*, date, equity: float, cash: float, day_pnl: float,
                       modeled_interest_total: float = 0.0,
                       next_calendar_note: str = "",
                       cash_rate_status: Optional[dict] = None,
-                      telegram_status: Optional[tuple[str, str]] = None) -> str:
+                      telegram_status: Optional[tuple[str, str]] = None,
+                      data_final: Optional[bool] = None,
+                      data_final_reason: Optional[str] = None) -> str:
     frozen = frozen_switches or []
     # F5-B2a.1 mikro-düzeltme: "rejim" (compute_regime_signal çıktısı) ve "pozisyon"
     # (broker'da sepet tutuluyor mu) BAĞIMSIZ kavramlar — özellikle observe modda
@@ -27,6 +29,12 @@ def build_eod_summary(*, date, equity: float, cash: float, day_pnl: float,
     if observe_mode:
         pos_text += " (observe — hesap başlatılmadı)"
     lines = [f"📊 EOD Özet — {date}"]
+    if data_final is not None:  # F5-B2a.2: drift/provisional sessizce EOD'de kaybolmasın
+        if data_final:
+            lines.append("Veri: FINAL ✓")
+        else:
+            reason = data_final_reason or "sinyal kesinleşmedi"
+            lines.append(f"Veri: PROVISIONAL ⚠ ({reason})")
     if regime_on is not None:
         lines.append(f"Rejim: {'ON' if regime_on else 'OFF'}")
     lines += [

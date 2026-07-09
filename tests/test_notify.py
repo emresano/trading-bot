@@ -262,3 +262,35 @@ def test_eod_summary_no_regime_line_when_regime_on_omitted():
                           in_position=False)
     assert "Rejim:" not in s
     assert "Pozisyon: NAKİT" in s
+
+
+# ---------------------------------------------------------- Veri-finallik görünürlüğü (F5-B2a.2)
+def test_eod_summary_no_data_final_line_when_omitted():
+    """Geriye uyumluluk: data_final verilmezse 'Veri:' satırı hiç basılmaz."""
+    s = build_eod_summary(date="2026-07-08", equity=100_000, cash=100_000, day_pnl=0,
+                          in_position=False)
+    assert "Veri:" not in s
+
+
+def test_eod_summary_data_final_true_shows_check():
+    s = build_eod_summary(date="2026-07-09", equity=100_000, cash=100_000, day_pnl=0,
+                          in_position=False, data_final=True)
+    assert "Veri: FINAL ✓" in s
+    assert "PROVISIONAL" not in s
+
+
+def test_eod_summary_data_final_false_drift_reason():
+    """2026-07-09 gerçek vakası: DATA_DRIFT operatöre EOD'de ARTIK görünür — bu turdan
+    önce EOD hiçbir provisional/drift izi taşımıyordu (operatör 'temiz' okudu, journal
+    provisional'dı)."""
+    s = build_eod_summary(date="2026-07-09", equity=100_000, cash=100_000, day_pnl=0,
+                          in_position=False, data_final=False,
+                          data_final_reason="DATA_DRIFT — sinyal kesinleşmedi")
+    assert "Veri: PROVISIONAL ⚠ (DATA_DRIFT — sinyal kesinleşmedi)" in s
+
+
+def test_eod_summary_data_final_false_default_reason():
+    """reason verilmezse jenerik ama yine de PROVISIONAL görünür (sessiz kalmaz)."""
+    s = build_eod_summary(date="2026-07-09", equity=100_000, cash=100_000, day_pnl=0,
+                          in_position=False, data_final=False)
+    assert "Veri: PROVISIONAL ⚠ (sinyal kesinleşmedi)" in s

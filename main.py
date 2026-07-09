@@ -350,6 +350,15 @@ class PaperScheduler:
             self._log("WARN", "DATA", res.notes[-1])
         # yürütmede kullanılacak son yürütülebilir gün (final+veri-tam); değilse son tam gün
         exec_today = as_of_ts if final else self._last_executable_date(as_of, closes)
+        # F5-B2a.2: EOD'de görünür veri-finallik nedeni (drift > veri-eksik > zaman sırasıyla)
+        if final:
+            data_final_reason = None
+        elif drift:
+            data_final_reason = "DATA_DRIFT — sinyal kesinleşmedi"
+        elif not data_complete:
+            data_final_reason = "veri eksik — sinyal kesinleşmedi"
+        else:
+            data_final_reason = "bar henüz kapanmadı — sinyal kesinleşmedi"
 
         if self.mode == "observe":
             snap = self.evaluate_signal(closes, as_of_ts)
@@ -427,7 +436,8 @@ class PaperScheduler:
             frozen_switches=self.killswitch.frozen_switches(),
             modeled_interest_total=res.modeled_interest_total, next_calendar_note=next_note,
             cash_rate_status=res.cash_rate_status or None,
-            telegram_status=self.telegram_status)
+            telegram_status=self.telegram_status,
+            data_final=final, data_final_reason=data_final_reason)
         if self.mode == "observe":
             res.eod_summary = "[GÖZLEM — paper hesabı başlatılmadı, işlem yok]\n" + res.eod_summary
         self.notifier.send(res.eod_summary)

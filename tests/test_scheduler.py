@@ -62,6 +62,8 @@ def test_observe_mode_logs_signal_no_trade(tmp_path: Path):
     # F5-B2a.1 mikro-düzeltme: rejim ON + pozisyon NAKİT (observe) ÇELİŞMEZ — iki AYRI satır
     assert "Rejim: ON" in res.eod_summary
     assert "Pozisyon: NAKİT (observe — hesap başlatılmadı)" in res.eod_summary
+    # F5-B2a.2: temiz koşuda EOD veri-finallik satırı görünür olmalı
+    assert "Veri: FINAL ✓" in res.eod_summary
     # journal'da signal_eval kaydı var
     rows = sched.journal.read_all()
     assert any(r["type"] == "signal_eval" for r in rows)
@@ -144,6 +146,8 @@ def test_provisional_intrasession_flags_true_no_trade(tmp_path: Path):
     assert sev and sev[-1]["provisional"] is True
     assert any("PROVISIONAL" in n or "KAPANMADI" in n for n in res.notes)
     assert sched.broker.quantities() == {}    # işlem yok
+    # F5-B2a.2: EOD'de bar-henüz-kapanmadı nedeni görünür (DATA_DRIFT'le KARIŞTIRILMAZ)
+    assert "Veri: PROVISIONAL ⚠ (bar henüz kapanmadı — sinyal kesinleşmedi)" in res.eod_summary
     sched.close()
 
 
@@ -158,6 +162,7 @@ def test_provisional_postclose_flags_false(tmp_path: Path):
     sev = [r for r in sched.journal.read_all() if r["type"] == "signal_eval"]
     assert sev and sev[-1]["provisional"] is False
     assert not any("PROVISIONAL" in n for n in res.notes)
+    assert "Veri: FINAL ✓" in res.eod_summary
     sched.close()
 
 
@@ -299,6 +304,8 @@ def test_data_drift_blocks_finalization_and_resync_fixes(tmp_path: Path):
     assert any("VERİ KAYMASI" in n for n in res.notes)
     events = [r for r in sched.journal.read_all() if r.get("category") == "DATA_DRIFT"]
     assert events
+    # F5-B2a.2: kök neden EOD'de AÇIKÇA görünür (operatör artık "temiz" sanamaz)
+    assert "Veri: PROVISIONAL ⚠ (DATA_DRIFT — sinyal kesinleşmedi)" in res.eod_summary
 
     # resync: tam tarihçe yeniden yazılır (adjusted değerler); sonra drift YOK
     rep = sched.resync(BDAYS[-1].date())
