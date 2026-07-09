@@ -1,7 +1,24 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-09T20:45:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-09T21:05:00+03:00 (Europe/Istanbul)
+Şu an: **DRIFT ÇÖZÜLDÜ + EOD görünürlük düzeltmesi TAMAM — launchd (G1) hâlâ
+KURULMADI, K1.5 hâlâ 1/2.** 2026-07-09 akşam cycle'ındaki 10-bar DATA_DRIFT
+(kök neden: yfinance geç bar-revizyonu, 07-08 ASELS emsali — temettü/split İZİ YOK)
+`--resync` ile giderildi (kompozit parite max_abs_diff=1.74e-05, ≈0); resync SONRASI
+07-08 VE 07-09 rejim kararları (regime_on=true, ikisi de) DEĞİŞMEDİ → "K1.5 1/2
+(07-08) geçerliliğini korur". Ayrı teşhis: Telegram CRITICAL alarmı zaten
+gönderiliyordu (kod yolu koşulsuz) ama **EOD özeti veri-finallik durumunu hiç
+göstermiyordu** (tasarım değil, eksik) — operatör bugün EOD'yi "temiz" okudu, journal
+`provisional=true`'ydu. **FIX (yalnız notify-katmanı):** `build_eod_summary()`'ye
+`data_final`/`data_final_reason`; EOD'de artık "Veri: FINAL ✓" veya "Veri: PROVISIONAL
+⚠ (…)" satırı var; karar/sinyal kodu DOKUNULMADI; 9 yeni/genişletilmiş test. Bu fix
+K1.5 sayacını SIFIRLAMAZ (ölçülen boru hattı değişmedi). 2026-07-09 akşam koşusu
+resmi K1.5 kaydı: **TEMİZ DEĞİL** (savunma katmanı doğru çalıştı) → sayaç 1/2'de;
+sıradaki deneme 2026-07-10 akşam. Detay: aşağı "DRIFT ÇÖZÜMÜ + ALARM-GÖRÜNÜRLÜK
+TEŞHİSİ + K1.5 kaydı" bölümü.
+
+--- Önceki kayıt (2026-07-09T20:45, K1.5 2/2 FAIL tespiti — bu turda çözüldü) ---
 Şu an: **K1.5 2/2 denemesi (2026-07-09) FAIL — launchd (G1) KURULMADI.** Bugünün tek
 akşam cycle'ında (17:32:38Z/20:32 Istanbul) DATA_DRIFT (10 bar sapması, resync
 yapılmamış) + `provisional=true` bulundu → görev kuralı gereği kurulum adımı
@@ -771,6 +788,90 @@ denetlenmeli). Kod/config/launchd değişikliği YOK; yalnız STATUS kaydı.
 Aynı cycle'da `CASH_RATE` WARN: FRED serisi 130 gün bayat, son değer %35.5 ile
 sürülüyor (kaynak tarihi 2026-03-01). observe modunda / rejim-ON'da etkisi sıfır
 (nakit faizi yalnız active/pozisyon-nakit döneminde equity hesabına girer).
+
+## DRIFT ÇÖZÜMÜ + ALARM-GÖRÜNÜRLÜK TEŞHİSİ + K1.5 kaydı (2026-07-09, aynı gün — takip turu)
+
+**1) Drift çözümü (10 bar, 07-08 ASELS emsali):**
+- **Sapan barların tam listesi** (`detect_drift`, resync ÖNCESİ, hepsi 2026-07-08 tarihli,
+  `stored`→`fresh`): THYAO 336.00→332.00 (−%1.19), GARAN 131.60→130.40 (−%0.91), ASELS
+  381.00→377.00 (−%1.05), AKBNK 71.45→70.65 (−%1.12), KCHOL 185.80→184.00 (−%0.97),
+  SAHOL 90.75→90.00 (−%0.83), TUPRS 259.50→256.50 (−%1.16), TOASO 299.50→297.75 (−%0.58),
+  SISE 41.90→41.62 (−%0.67), ARCLK 97.55→96.80 (−%0.77). AKBNK+SISE+ARCLK/eksiği hariç
+  evrenin **10/12'si**, hepsi **AYNI tek gün**, hepsi **AYNI yönde** (stored>fresh) küçük
+  (~%0.6-1.2) sapma.
+- **Kök neden notu:** `yfinance` `actions` (Dividends/Stock Splits) 10 sembolün TÜMÜNDE
+  2026-06-15…2026-07-09 penceresinde TARANDI — hiçbirinde kayıt yok → temettü/split
+  ayarlaması DEĞİL. 07-08 ASELS vakasıyla (`PHASE5B2A_REVIEW.md` B2a.1 Eki) KIYAS: o vaka
+  3 sembol/1 gün/karışık-işaretli küçük yüzdelerdi ve "gün-içi önbelleklenmiş kapanışın gün
+  sonunda resmi kapanışla güncellenmesi" (geç bar revizyonu) olarak teşhis edilmişti. Bugünkü
+  desen AYNI mekanizmanın DAHA GENİŞ hali: 10/12 sembol, tek gün (07-08 — dünkü koşunun o an
+  en-güncel barı), tutarlı TEK yönde (~%1 aşağı) — BIST'in o günkü resmi/nihai kapanış
+  baskısının yfinance'e geç yansımasıyla tutarlı; evren-çapında tek-yönlü hareket dağınık
+  temettü/split izini DEĞİL, ortak bir geç-revizyon partisini işaret ediyor.
+- **`--resync` uygulandı:** yedek `runtime/paper/backups/live_history_20260709T175137Z.sqlite`;
+  66,180 bar yeniden yazıldı; **10 sembolde 1'er bar değişti** (yukarıdaki liste, tam-tarihçe
+  taramasında ek sembol YAKALANMADI — 07-08 vakasının aksine burada alarm zaten 10/12'yi
+  kapsıyordu). **Kompozit parite: `max_abs_diff=1.740e-05`** (5511 ortak gün) — kompozit
+  ölçeği (~570-700 TL) göz önüne alındığında göreli ~2.5e-8, pratikte ≈0 (07-08 vakasının
+  5.42e-05/~7.7e-8'iyle aynı büyüklük mertebesi — beklenen aralık).
+- **Resync SONRASI yeniden hesaplama (2026-07-08 VE 2026-07-09):** her iki gün de
+  `provisional=false` (DATA_DRIFT temizlendi, veri tam, zaman-final) VE **regime_on=true,
+  her iki günde de DEĞİŞMEDİ** (07-08: composite 699.82→692.85 resync ile hafif değişti ama
+  karar aynı kaldı, ON; 07-09: composite 671.775→671.775 pratik-özdeş, ON). **→ "K1.5 1/2
+  (07-08) geçerliliğini korur"** (karar değişmedi, yalnız veri hassasiyeti düzeldi).
+  Journal'a drift-çözüm kaydı zaten `resync()` içinde otomatik düşüyor (`RESYNC` kategorisi,
+  07-08 emsal formatıyla birebir — INFO "başladı" + CRITICAL "bitti: N bar; kompozit parite
+  max_abs_diff=…") — ek bir kayıt gerekmedi.
+
+**2) Alarm-görünürlük teşhisi:**
+- **Telegram'a AYRI CRITICAL alarmı gönderildi mi?** Kod yolu: `_alarm()` KOŞULSUZ
+  `self.notifier.send(...)` çağırıyor (main.py:169-171) — DATA_DRIFT alarmı bu yoldan geçti
+  (17:32:41-42). `heartbeat_status.json` aynı ts'de `telegram.state=ACTIVE`; journal'da
+  `TELEGRAM` kategorisinde HİÇBİR WARN yok (gönderim hatası olsaydı `TelegramNotifier.send`
+  içinde loglanırdı) → **alarmın gerçekten gönderildiğine dair dolaylı ama tutarlı kanıt.**
+  Dürüst çekince: `send()` BAŞARI durumunu hiçbir yere kalıcı yazmıyor (yalnız hata WARN
+  düşüyor) — pozitif dispatch-kanıtı journal'da YOK, bu ayrı, küçük bir gözlenebilirlik
+  boşluğu (bu turun kapsamı dışı; görev yalnız "gönderilmiyorsa ekle" dedi — gönderiliyor,
+  o yüzden bu maddede kod değişikliği YAPILMADI).
+- **EOD'de drift/provisional görünmemesi: TASARIM DEĞİL, EKSİKti.** `run_cycle` içinde
+  `final` (=time_final and data_complete and not drift) hesaplanıyordu ama
+  `build_eod_summary` çağrısına HİÇ geçirilmiyordu — EOD metni yalnız Rejim/Pozisyon/Equity/
+  faiz/breaker/Telegram gösteriyordu, veri-finallik durumuna dair SIFIR iz yoktu. Bu yüzden
+  operatör bugün EOD'yi (Telegram'a giden asıl özet) "temiz" okudu, oysa journal aynı
+  cycle'ı `provisional=true` olarak kaydetmişti — **gözetimsiz (launchd) dönem öncesi bu fark
+  kapatılmalı**, çünkü launchd sonrası kimse günlük olarak journal'ı elle açıp
+  `provisional` alanını kontrol etmeyecek; tek görülen şey EOD/Telegram metni olacak.
+- **FIX (yalnız notify-katmanı):** `notify/eod_summary.py` `build_eod_summary()`'ye iki
+  opsiyonel parametre eklendi: `data_final: Optional[bool]`, `data_final_reason:
+  Optional[str]`. `data_final` verilmişse EOD'ye tek satır: `data_final=True` →
+  `"Veri: FINAL ✓"`; `False` → `"Veri: PROVISIONAL ⚠ ({reason})"` (reason yoksa jenerik
+  "sinyal kesinleşmedi"). `main.py` `run_cycle` çağrı noktasında `final` + nedene göre
+  sıralı bir metin (`DATA_DRIFT — sinyal kesinleşmedi` > `veri eksik — sinyal
+  kesinleşmedi` > `bar henüz kapanmadı — sinyal kesinleşmedi`) geçiriliyor — `strategy/
+  regime_core.py`, karar/sinyal kodu, `final`/`drift`/`data_complete` HESABI DOKUNULMADI;
+  yalnız zaten hesaplanan değerler EOD metnine TAŞINDI. 9 yeni/genişletilmiş test
+  (`tests/test_notify.py` 4 yeni, `tests/test_scheduler.py` 4 mevcut teste satır eklendi)
+  — FINAL/PROVISIONAL+DATA_DRIFT/PROVISIONAL+bar-kapanmadı/parametre-verilmezse-sessiz
+  (geriye uyumluluk) senaryoları.
+- **Bu değişiklik K1.5 sayacını SIFIRLAMAZ:** ölçülen boru hattı (data→sinyal→karar→journal)
+  DEĞİŞMEDİ; yalnızca zaten var olan `final` durumu EOD METNİNE eklendi (bildirim katmanı,
+  karar katmanı değil). K1.5'in ölçtüğü şey journal'daki `provisional` alanı ve gerçek
+  DATA_DRIFT/Telegram/EOD-tutarlılık davranışıdır — bunların hiçbiri bu fix'le değişmedi,
+  yalnız operatörün GÖRDÜĞÜ metin zenginleşti.
+
+**3) K1.5 kaydı (nihai, bu tur):** 2026-07-09 akşam koşusu: **TEMİZ DEĞİL** (DATA_DRIFT,
+provisional) — **savunma katmanı doğru çalıştı** (tespit + kesinleştirmeme + red; sinyal
+finalize edilmedi, observe modda zaten işlem etkisi yoktu). **Sayaç 1/2'de.** Sıradaki
+deneme: **2026-07-10 akşam** (farklı, bağımsız bir gün — bugünkü resync bu günü
+"düzeltilmiş" say(dır)maz, kural `--refresh --cycle`'ın kendi normal akışında DATA_DRIFT'siz
++ provisional=false gelmesini gerektiriyor). CASH_RATE bayatlığı zaten kayıtlı (#18).
+
+**İzolasyon/değişmezler:** `strategy/regime_core.py`, karar/risk/motor kodu DOKUNULMADI;
+`config/regime_core.yaml`, `mode: paper` DEĞİŞMEDİ. Tek olası kod değişikliği (izin verilen)
+notify-katmanı (`notify/eod_summary.py` + `main.py` çağrı noktası) — uygulandı. v7.1-golden
+3/3 (aşağı bkz.). Faz 6/go_live/launchd/real adımı YOK; iki durma noktası kullanıcıda.
+launchd (G1) bu turda da KURULMADI — bir sonraki temiz koşu (2026-07-10 veya sonrası)
+bekleniyor; önceki turun 2-4. maddeleri (kurulum/doğrulama/STATUS "G1 TAMAM") aynen geçerli.
 
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
