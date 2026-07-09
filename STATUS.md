@@ -1,7 +1,15 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-09T10:15:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-09T20:45:00+03:00 (Europe/Istanbul)
+Şu an: **K1.5 2/2 denemesi (2026-07-09) FAIL — launchd (G1) KURULMADI.** Bugünün tek
+akşam cycle'ında (17:32:38Z/20:32 Istanbul) DATA_DRIFT (10 bar sapması, resync
+yapılmamış) + `provisional=true` bulundu → görev kuralı gereği kurulum adımı
+atlandı, yalnız bulgu raporlandı ve STATUS'a işlendi (bkz. "K1.5 Mekanik Teyit —
+2/2 DENEMESİ: FAIL" bölümü). K1.5 hâlâ 1/2; G1 launchd kurulumu farklı, temiz bir
+günün cycle'ı bekliyor. Kod/config/launchd DEĞİŞMEDİ.
+
+--- Önceki kayıt (2026-07-09T10:15, değişmedi) ---
 Şu an: **D4-US baş danışman kararıyla KESİN RED (KALICI KAYIT 22) — US AKTİF AİLE
 ARAMASI ASKIDA.** D4US-S1 (KALICI KAYIT 20+21) mühürlü tabloda 1/4 idi; baş danışman
 kaydı bunu onayladı (kriter 2'nin 0.03pp'lik dar farkı kural gereği FAIL, sonucu
@@ -736,6 +744,34 @@ manuel `--refresh --cycle` çağrısı, `runtime/paper/decision_journal.jsonl` +
 **Dördü de sağlandı → K1.5 temiz koşu 1/2 (2026-07-08).** İkinci temiz koşu (2/2) için
 farklı bir güne ait bağımsız bir gözlem gerekir; kod değişikliği YAPILMADI.
 
+## K1.5 Mekanik Teyit — 2/2 DENEMESİ: FAIL (2026-07-09) — launchd KURULMADI
+2026-07-09 akşam koşusu denetlendi (tek cycle bugün: `--refresh --cycle`,
+`decision_journal.jsonl` + `heartbeat_status.json`'da 2026-07-09T17:32:38-42Z /
+20:32 Istanbul damgalı). Dört kalem:
+- **(a) DATA_DRIFT yok** — **FAIL.** 17:32:41Z'de `CRITICAL DATA_DRIFT`: 10 tarihsel
+  bar kaydı sapması (örn. THYAO 2026-07-08: stored 336.0 vs fresh 332.0, %1.19).
+  Günün tek cycle'ı bu; ardından **`--resync` UYGULANMADI** (07-08'in aksine — o gün
+  drift erken bir cycle'daydı ve günün son cycle'ından önce giderilmişti).
+- **(b) provisional yok** — **FAIL.** Bu cycle'ın `signal_eval` kaydı
+  `"provisional": true` — kod yolu gereği (`main.py`: `final = time_final and
+  data_complete and not drift`) DATA_DRIFT tek başına `final=False` yapıyor; (a)
+  ile aynı kök neden, bağımsız ikinci bulgu değil.
+- **(c) TELEGRAM: ACTIVE** — PASS (`heartbeat_status.json` aynı ts:
+  `telegram.state="ACTIVE"`).
+- **(d) EOD tutarlılığı** — denetlenmedi (kural gereği: ilk FAIL'de dur).
+**Sonuç: 4 kalemden 2'si FAIL → bu cycle K1.5 için "temiz koşu" SAYILMAZ.** Kural
+gereği (görev talimatı) **launchd KURULMADI** — madde 2/3/4 (G1 kurulumu, doğrulama,
+STATUS "G1 TAMAM" kaydı) bu turda YAPILMADI. K1.5 hâlâ **1/2**; ikinci temiz koşu
+için ayrı, bağımsız bir güne ait denetim gerekiyor (bugünkü drift giderilip yarının
+cycle'ı temiz gelirse ya da operatör bugün elle `--resync` çalıştırıp aynı gün içinde
+DEĞİL — kural "farklı bir gün" diyor, bkz. 1/2 kaydı — yeni bir günün cycle'ı
+denetlenmeli). Kod/config/launchd değişikliği YOK; yalnız STATUS kaydı.
+
+**Ek not (K1.5 kalemi DEĞİL, engel DEĞİL — bilinen sorun #18/F5-B1'e bağlı):**
+Aynı cycle'da `CASH_RATE` WARN: FRED serisi 130 gün bayat, son değer %35.5 ile
+sürülüyor (kaynak tarihi 2026-03-01). observe modunda / rejim-ON'da etkisi sıfır
+(nakit faizi yalnız active/pozisyon-nakit döneminde equity hesabına girer).
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
@@ -747,8 +783,10 @@ farklı bir güne ait bağımsız bir gözlem gerekir; kod değişikliği YAPILM
 (kullanıcı eylemi: launchd kurulumu) → Faz 6 başlangıç kriterleri.** US hattı ASKIDA
 (aşağıdaki iki madde) — yeniden açılma yalnız kullanıcı kararıyla.
 
-- **[K1.5] ikinci temiz koşu (2/2) bekleniyor** — farklı bir güne ait bağımsız bir
-  gözlemle tamamlanacak (bkz. "K1.5 Mekanik Teyit" bölümü). **Aktif kuyruğun ilk adımı.**
+- **[K1.5] ikinci temiz koşu (2/2) bekleniyor — 2026-07-09 denemesi FAIL oldu**
+  (DATA_DRIFT + provisional, bkz. "K1.5 Mekanik Teyit — 2/2 DENEMESİ: FAIL" bölümü);
+  launchd bu yüzden KURULMADI. Farklı bir güne ait, DATA_DRIFT'siz + provisional=false
+  bir cycle ile tekrar denenecek. **Aktif kuyruğun ilk adımı.**
 - **[G1, kullanıcı eylemi] launchd servis kurulumu** — K1.5 2/2 tamamlanınca sırada;
   bot + watchdog servislerinin gerçek launchd altında koşması (bkz. `deploy/*.plist`,
   `OPERATOR_GUIDE.md`). Faz 6 resmi başlangıcı bu + go_live kararına bağlı.
