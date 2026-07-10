@@ -1,7 +1,45 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-09T21:05:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-10T10:20:00+03:00 (Europe/Istanbul)
+Şu an: **DÖNEMSEL KARŞILAŞTIRMA RAPORU (PERIOD_COMPARISON.md) TAMAMLANDI —
+BİLGİLENDİRME, kriter/kabul/karar YOK, hiçbir mühürlü eşik etkilenmedi.**
+Yeni araç `tools/period_comparison.py` (+ `tools/period_comparison_report.py`):
+mühürlü S1b konfigürasyonuyla (N=200/b=%1/M=3, `config/regime_core.yaml`,
+`backtest/regime_core.py` + `tools/run_regime_core.py` — YALNIZ import, kod
+kopyalama/değiştirme YOK) D1 equity eğrisini 2005-01-03→2026-07-08'e kadar
+yeniden üretti. Frozen S1b snapshot'ı (`data/snapshots/2026-07-06`) son barı
+~07-02'de bitiyordu; eksik kuyruk (07-03→07-08, 12 sembol + USDTRY) canlı
+yfinance çekimiyle tamamlandı ve `data/snapshots/aux_cmp/2026-07-10/` altına
+sha256 manifest'li dondu (mevcut hiçbir snapshot değiştirilmedi; örtüşen
+barlarda kaynak-tutarlılık farkı **0.00e+00**, 12/12 sembol — bu turda
+DATA_DRIFT YOK). Pencereler (1y/3y/5y/10y/tam-dönem) için: D1 vs 12-sembol
+sepet al-tut vs XU100 (bilgi) vs TRY faizi (haircut'lı S1b modeli + ham) vs
+USD al-tut vs best-effort altın/TÜFE (TÜFE: FRED TURCPIALLMINMEI, son gözlem
+2025-04-01, bilinen ~15 aylık gecikme — rapor bunu açıkça işaretliyor) + USD
+paneli (D1/sepet USD-terim CAGR/maxDD; tam-dönem D1 USD CAGR +8.53%, S1b'nin
+kendi +%8.70 bulgusuna çok yakın/tutarlı — kısa "DÜRÜST DEĞERLENDİRME" tutarlılık
+notu raporda) + kriz-yılı ayrıştırması (2008/2013/2018/2021-23, D1 vs sepet vs
+faiz). Bir yan-bulgu-düzeltmesi: `data.historical.build_gold_try_proxy()`
+GC=F (~04:00 UTC) ile USDTRY=X (~00:00/23:00 UTC) barlarını saat-hizasız ham
+index'te iç-birleştirdiği için 0 satır üretiyordu (mevcut, DEĞİŞTİRİLMEYEN bir
+ön-koşul kusuru — fonksiyonun kendisi DOKUNULMADI); best-effort altın serisi
+bu yüzden yerel olarak `normalize_bist_dates` (mevcut, reuse) ile takvim-günü
+hizalı ayrıca birleştirildi (yalnızca bu BİLGİ turunun yerel mantığı).
+`freeze_aux_cmp()` aynı `run_tag` için birden fazla çağrıda (D1 evreni + USDTRY)
+manifest'i ÜZERİNE YAZMAK yerine BİRLEŞTİRİR (`files`/`groups`) — ilk sürümde
+bulunup düzeltilen bir kayıp-kayıt riski, testle sabitlendi. 8 yeni test
+(`tests/test_period_comparison.py`): freeze/manifest/sha256 + merge, pencere
+sınırları (tam/kısmi kapsama), forward-fill, switch/regime-ratio, extend_one
+(no-op + mock canlı çekim). Tam süit **552 passed**, v7.1-golden 3/3 bayt-bayt.
+Strateji/motor/risk/karar kodu (`strategy/
+regime_core.py`, `backtest/regime_core.py`, `config/regime_core.yaml`, `mode:
+paper`, canlı bot modülleri) DOKUNULMADI; hiçbir grid/varyant seçimi YAPILMADI.
+Faz 6/go_live/launchd/real'e adım YOK; iki durma noktası kullanıcıda; K1.5
+2/2 doğrulaması (bir sonraki temiz gün) hâlâ aktif kuyruğun ilk adımı — bu
+tur onu NE ilerletir NE geciktirir (paralel, bağımsız bir bilgi turu).
+
+--- Önceki kayıt (2026-07-09T21:05, DRIFT çözümü + EOD görünürlük — bu turdan ÖNCE tamamlandı) ---
 Şu an: **DRIFT ÇÖZÜLDÜ + EOD görünürlük düzeltmesi TAMAM — launchd (G1) hâlâ
 KURULMADI, K1.5 hâlâ 1/2.** 2026-07-09 akşam cycle'ındaki 10-bar DATA_DRIFT
 (kök neden: yfinance geç bar-revizyonu, 07-08 ASELS emsali — temettü/split İZİ YOK)
