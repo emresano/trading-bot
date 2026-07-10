@@ -1,0 +1,123 @@
+{
+  "created_at_utc": "2026-07-10T07:19:00.234280+00:00",
+  "files": {
+    "THYAO": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "bb4cdf536c997c5b6a4a15d185f158459fe88d0e654f7cd351ea2c0170f366f8",
+      "bytes": 4813
+    },
+    "GARAN": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "3af16fd84f2e65c5dbeaa08c8776d79f02713162c465145d2d4969ec669ae347",
+      "bytes": 4816
+    },
+    "ASELS": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "e22df3b77c5b829d12619b06c848c5c53800a3c39a6913f35422059e0b407af9",
+      "bytes": 4813
+    },
+    "AKBNK": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "a7d00f44b11c6b8af16447e76b9743208ba99deb78723802c502030cac634112",
+      "bytes": 4818
+    },
+    "KCHOL": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "6eea05cbfb86949027fec012b84ea6d99d7f73009ec792c6c980a945e6a5db84",
+      "bytes": 4820
+    },
+    "SAHOL": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "840b003f1a671bfcadbb94cb47e44350206891918f9b7368c655114d0d4e1bf5",
+      "bytes": 4817
+    },
+    "EREGL": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "58a9b52deb504176d70b1c5a30e5aa8c1a9f6de7463a2d9f3c60812765da0105",
+      "bytes": 4821
+    },
+    "TUPRS": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "c6c65ff6ef399552998182e816213958896d9754650be34d39af853d13b057e0",
+      "bytes": 4816
+    },
+    "TCELL": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "7c643a18f25813f13fde7ecc1a4cf53d1e2e77c6616b84e2afc8258d6b3df916",
+      "bytes": 4816
+    },
+    "TOASO": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "399eaf65fdd0699c74c18c7c25a1948fe7004b0589fafb2156a37247c5233919",
+      "bytes": 4812
+    },
+    "SISE": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "02b7ed6336e48342645091aaea961f7e627d6e22800127a4ed3eed2cc24c27c6",
+      "bytes": 4821
+    },
+    "ARCLK": {
+      "rows": 3,
+      "start": "2026-07-05 21:00:00+00:00",
+      "end": "2026-07-07 21:00:00+00:00",
+      "sha256": "c69bbfbc8e84e64cdb57db926308cdd33e56b6280b97e8afad05bb61852b56a1",
+      "bytes": 4818
+    },
+    "USDTRY": {
+      "rows": 2,
+      "start": "2026-07-06 23:00:00+00:00",
+      "end": "2026-07-07 23:00:00+00:00",
+      "sha256": "2a6719e085304d8b5d97a2b7e59a6523c98c976c66eedae04ced2f8a0aa3dbb9",
+      "bytes": 4759
+    }
+  },
+  "groups": [
+    {
+      "scope": "D1 12-sembol evreni — frozen S1b snapshot'ının (2026-07-06) EKSİK kuyruğu, yalnızca 2026-07-08'e kadar (period_comparison.py, BİLGİ turu)",
+      "source": "yfinance (data.historical.download_bars, auto_adjust=True)",
+      "symbols": [
+        "AKBNK",
+        "ARCLK",
+        "ASELS",
+        "EREGL",
+        "GARAN",
+        "KCHOL",
+        "SAHOL",
+        "SISE",
+        "TCELL",
+        "THYAO",
+        "TOASO",
+        "TUPRS"
+      ]
+    },
+    {
+      "scope": "USDTRY bilgilendirici seri — frozen aux snapshot'ının (2026-07-06) EKSİK kuyruğu, yalnızca 2026-07-08'e kadar (period_comparison.py, BİLGİ turu)",
+      "source": "yfinance (USDTRY=X)",
+      "symbols": [
+        "USDTRY"
+      ]
+    }
+  ]
+}
