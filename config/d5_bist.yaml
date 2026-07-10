@@ -1,0 +1,62 @@
+# config/d5_bist.yaml
+# D5-BIST CHALLENGER — "D1 + fırsat-maliyeti (mutlak-momentum / faiz) kapısı"
+# STATUS.md KALICI KAYIT 23. Offline araştırma spike'ı — ÜRETİM DEĞİL.
+#
+# ============================ TASARIM MÜHRÜ (koşumdan ÖNCE) ============================
+# Bu dosya `D5_CRITERIA.md` ile birlikte, HERHANGİ bir D5 strateji koşumundan ÖNCE
+# commit'lenmiştir. Commit sırası kanıttır: bu commit'te `backtest/regime_core_gated.py`
+# (kapı + kapılı simülatör) HENÜZ YOKTUR.
+#
+# ============================ DRIFT-KARŞITI DEVRALMA ============================
+# D1'in mühürlü sabitleri (symbols, N/b/M, maliyetler, initial_equity, snapshot,
+# walk_forward, monte_carlo, cash_yield) BURAYA KOPYALANMAZ — `inherit_from` ile
+# `config/regime_core.yaml`'dan OKUNUR. Böylece N/b/M=200/0.01/3'ün AYNEN kaldığı
+# yapısal olarak garanti edilir (elle senkronizasyon hatası imkânsız).
+# `config/regime_core.yaml` bu turda SALT-OKUNUR (DEĞİŞTİRİLMEZ).
+
+inherit_from: "config/regime_core.yaml"
+
+# ============================ D5'İN TEK EK YAPISAL KATMANI ============================
+# Sepet-düzeyi fırsat-maliyeti kapısı. D1 mekaniği (kompozit, rejim sinyali, t+1
+# kapanış yürütmesi, tam-lot eşit bölme, maliyetler, nakit tahakkuku) AYNEN korunur;
+# tek fark: efektif pozisyon = rejim_ON **VE** kapı_AÇIK.
+gate:
+  # Trailing pencere: 252 İŞLEM GÜNÜ (≈ 12 ay). Kararın gerekçesi D5_CRITERIA.md §1.2:
+  # dual-momentum literatürünün (Antonacci "GEM", Faber "GTAA") 12-aylık varsayılanı —
+  # sonuçtan BAĞIMSIZ, koşumdan önce sabit. Taranmaz.
+  lookback_bars: 252
+
+  # Kapı asimetrisi = D1'in KENDİ asimetrisi (giriş teyitli, çıkış hızlı):
+  # yatırıma izin için 3 gün üst üste `hisse > faiz`; kapanış TEK gün `hisse <= faiz`.
+  confirm_days: 3
+  close_days: 1
+
+  # SİNYAL eşiği HAM TRY_ON_RATE ile kurulur (haircut YOK). Nakit TAHAKKUKU ise
+  # haircut'lı kalır (S1b: 200bp) — bkz. D5_CRITERIA.md §1.4. Emsal:
+  # D4US_CRITERIA.md §1.5 ("T-bill oranı = ham DGS3MO, haircut YOK — sinyal eşiği,
+  # nakit-bacağı getirisi değil").  [kullanıcı talimatında bu emsal §1.7 olarak anıldı]
+  signal_rate_haircut_bps: 0
+
+  # Isınma: kompozitin ilk `lookback_bars` barında kapı DEĞERLENDİRİLEMEZ → KAPALI
+  # sayılır (muhafazakâr; look-ahead yok — genişleyen-pencere yaklaşıklığı KULLANILMAZ).
+  # Bu kural koşumdan ÖNCE mühürlüdür; bedeli (D1'in 2005-10-12 ilk ENTER'ının
+  # kaçırılması) raporda AÇIKÇA ölçülür ve gizlenmez.
+  warmup_gate_closed: true
+
+# ============================ BİLGİ-ONLY ANALİZ PARAMETRELERİ ============================
+# Aşağıdakiler KRİTER DEĞİLDİR; hiçbiri seçim/ayar aracı olarak kullanılmaz.
+
+# (e) Komşuluk — GÖZLEMSEL süreklilik kontrolü. 3×2 = 6 kombinasyon.
+# Mühürlü nokta: lookback=252, confirm=3.
+neighborhood:
+  lookback_bars: [126, 252, 378]
+  confirm_days: [1, 3]
+
+# (b) Pencere kıyasları — bugünden geriye doğru.
+comparison_windows_years: [1, 3, 5, 10]
+
+# (c) Kriz / testere yılları.
+crisis_years: [2008, 2013, 2018, 2021, 2022, 2023, 2024, 2025, 2026]
+
+# Çıktı kökü.
+out_dir: "runtime/d5_bist"
