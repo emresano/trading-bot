@@ -1,15 +1,15 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-10T13:40:00+03:00 (Europe/Istanbul)
-Şu an: **D5-BIST CHALLENGER SPIKE TAMAMLANDI (KALICI KAYIT 23+24) — mühürlü
-tablo 2/4 → mekanik RED (HÜKÜM DEĞİL; karar kullanıcının/baş danışmanın).**
-Kapı (trailing 252g hisse-getirisi vs ham TRY faizi) Sharpe'ı ve OOS aylık-Sharpe'ı
-iyileştirdi (1.274>1.215; 1.161>1.068) ama **CAGR'ı düşürdü** (%27.15<%28.21) ve
-— asıl kritik — **realize max DD'yi DERİNLEŞTİRDİ** (-%35.22 vs -%28.43), çünkü
-kapı toparlanmalara katılımı bastırıp D1'in iki ayrı DD epizodunu tek, daha derin
-bir epizoda kaynaştırıyor. Rapor: `D5_BIST_S1.md`. D1 paper hattı, `mode: paper`,
-N/b/M ve TÜM canlı modüller DOKUNULMADI; aktif kuyruk (K1.5 2/2 → G1) etkilenmedi.
+Son güncelleme: 2026-07-10T14:10:00+03:00 (Europe/Istanbul)
+Şu an: **D5-BIST RED baş danışman kararıyla ONAYLANDI (KALICI KAYIT 25) — BIST
+STRATEJİ ARAŞTIRMASI KAPANDI.** Mühürlü tablo 2/4 (KALICI KAYIT 23+24, `D5_BIST_S1.md`)
+kalıcı hüküm kazandı: kalan iki kriter (CAGR, maxDD) botun varlık sebebiydi. Kampanya
+bulgusu (4. bağımsız gözlem): mutlak-momentum kapıları fırsat-maliyeti değil
+toparlanma-gecikmesi filtresidir. **D1 değişmeden Faz 6'ya gider** — karlılık talepleri
+artık yürütme kalitesi (Faz 6 → real) üzerinden karşılanır. Aktif kuyruk AYNEN: K1.5
+2/2 → G1 (kullanıcı: launchd) → Faz 6 başlangıç kriterleri. Kod/koşum değişikliği YOK
+— yalnız STATUS kaydı; tam süit 574 passed, golden 3/3.
 
 --- Önceki kayıt (2026-07-10T10:55, PERIOD_COMPARISON doğrulama mini-turu) ---
 Şu an: **PERIOD_COMPARISON DOĞRULAMA MİNİ-TURU TAMAMLANDI — "sepet al-tut"
@@ -948,6 +948,32 @@ BİT-BİT özdeş (test). Spike iki koşumda BAYT-BAYT aynı (determinizm). v7.1
 3/3; tam süit **574 passed** (556 + 18 yeni). Faz 6/go_live/launchd/real'e adım YOK; iki
 durma noktası kullanıcıda. **Kabul kararı kullanıcının/baş danışmanın; otomatik geçiş YOK.**
 
+## KALICI KAYIT 25 — D5-BIST baş danışman hüküm kaydı: RED onaylandı, BIST strateji araştırması KAPANDI (2026-07-10)
+**Baş danışman kaydı (2026-07-10):** D5-BIST RED onaylandı (mühürlü tablo 2/4; kalan
+iki kriter — CAGR ve maxDD — turun amacı ve botun varlık sebebiydi). Kapı ailesi
+(trailing-getiri-vs-faiz mutlak kapısı) BIST tarihçesinde TÜM varyantlarıyla **KAPALI**;
+ikinci bakış yok.
+
+**KAMPANYA BULGUSU (dördüncü bağımsız gözlem — D2-US 2009, D4-US ablasyon, D5
+2009/2013-15):** mutlak-momentum kapıları pratikte fırsat-maliyeti filtresi DEĞİL,
+**TOPARLANMA-GECİKMESİ filtresidir**; trailing getiri "cazip değil" ile "dipten
+çıkıyor"u ayırt edemez. D5'in in-sample kirlenme deseni (fikri doğuran pencerelerde
+kazanıp dışında kaybetmesi) **sonuç-bilgili tasarım riskinin ölçülmüş örneği** olarak
+emsal kabul edilir.
+
+**KARAR: BIST strateji araştırması KAPANDI** — D1 değişmeden Faz 6'ya gider; karlılık
+iyileştirme talepleri bundan sonra yürütme kalitesi (Faz 6 → real) üzerinden
+karşılanır. #18 önceliklendirmesi (faiz-eşikli tasarımlar için birinci-derece) AYNEN
+kalır.
+
+**Aktif kuyruk teyidi (değişmedi):** K1.5 2/2 doğrulaması → G1 (kullanıcı eylemi:
+launchd kurulumu) → Faz 6 başlangıç kriterleri.
+
+Kod/koşum/snapshot değişikliği YOK bu turda — yalnız STATUS.md kaydı. `mode: paper` +
+D1 paper hattı + TÜM canlı bot modülleri + tüm strateji-araştırma araçları/snapshot'ları
+DOKUNULMADI. v7.1-golden 3/3; tam süit değişmedi (574 passed). Faz 6/real/launchd/
+go_live'a adım YOK; iki durma noktası kullanıcıda.
+
 ## K1.5 Mekanik Teyit — 1/2 (2026-07-08)
 2026-07-08 akşam koşusu denetlendi (not: launchd servisleri bu makinede henüz kurulu
 DEĞİL — `launchctl list` boş, `runtime/paper/logs/` yok; "akşam koşusu" = günün son
@@ -1094,16 +1120,20 @@ bekleniyor; önceki turun 2-4. maddeleri (kurulum/doğrulama/STATUS "G1 TAMAM") 
   eki), tam süit 378 passed, git push. Tag: `regime-core-d1-prod`.
 
 ## Sırada
-**Aktif kuyruk sırası (KALICI KAYIT 22 ile netleşti, KAYIT 24 onu DEĞİŞTİRMEDİ):
+**Aktif kuyruk sırası (KALICI KAYIT 22 ile netleşti, KAYIT 24/25 onu DEĞİŞTİRMEDİ):
 K1.5 2/2 doğrulaması → G1 (kullanıcı eylemi: launchd kurulumu) → Faz 6 başlangıç
 kriterleri.** US hattı ASKIDA (aşağıdaki iki madde) — yeniden açılma yalnız kullanıcı
-kararıyla.
+kararıyla. **BIST strateji araştırması KAPANDI** (KALICI KAYIT 25) — D1 değişmeden
+Faz 6'ya gider.
 
-- **[D5-BIST — mekanik RED, kullanıcı/baş danışman kaydı bekleniyor]** D5-BIST
-  challenger spike'ı mühürlü tabloda **2/4** ile kaldı (KALICI KAYIT 24,
-  `D5_BIST_S1.md`). **İkinci ölçüm-bakışı YOK** (mühürde kapalı). BIST tarihçesine D5
-  bakış sayacı: **1 kullanıldı**; kapı ailesinin TÜM varyantları (farklı pencere/teyit/
-  haircut) bu tarihçede **KAPALI**. D1 paper hattı ve aktif kuyruk bu turdan etkilenmedi.
+- **[D5-BIST — KESİN RED, baş danışman onayıyla KAPANDI]** D5-BIST challenger
+  spike'ı mühürlü tabloda **2/4** ile kaldı (KALICI KAYIT 24, `D5_BIST_S1.md`); baş
+  danışman kaydı (2026-07-10) RED'i onayladı ve **BIST strateji araştırmasını
+  kapattı** (KALICI KAYIT 25) — kampanya bulgusu: mutlak-momentum kapıları
+  fırsat-maliyeti değil toparlanma-gecikmesi filtresidir (4. bağımsız gözlem).
+  **İkinci ölçüm-bakışı YOK** (mühürde kapalı). BIST tarihçesine D5 bakış sayacı:
+  **1 kullanıldı**; kapı ailesinin TÜM varyantları (farklı pencere/teyit/haircut) bu
+  tarihçede **KAPALI**. D1 paper hattı ve aktif kuyruk bu turdan etkilenmedi.
 
 - **[K1.5] ikinci temiz koşu (2/2) bekleniyor — 2026-07-09 denemesi FAIL oldu**
   (DATA_DRIFT + provisional, bkz. "K1.5 Mekanik Teyit — 2/2 DENEMESİ: FAIL" bölümü);
