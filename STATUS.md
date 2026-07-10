@@ -1,7 +1,13 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-10T10:55:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-10T12:05:00+03:00 (Europe/Istanbul)
+Şu an: **D5-BIST CHALLENGER turu AÇILDI (KALICI KAYIT 23) — offline araştırma
+spike'ı; D1 paper hattı ve TÜM canlı modüller dokunulmaz.** Sıra: (0) açılış
+kaydı → (1) `D5_CRITERIA.md` MÜHÜR (koşumdan ÖNCE) → (2) spike + testler +
+zorunlu analizler → (3) `D5_BIST_S1.md` + kapanış. HÜKÜM YOK.
+
+--- Önceki kayıt (2026-07-10T10:55, PERIOD_COMPARISON doğrulama mini-turu) ---
 Şu an: **PERIOD_COMPARISON DOĞRULAMA MİNİ-TURU TAMAMLANDI — "sepet al-tut"
 metodolojisi netleştirildi + "Son 1 Yıl bilmecesi" sayısal ayrıştırıldı.**
 Bir önceki turda D1 (+45.3%) ile "sepet" (+105.8%) arasındaki büyük Son-1-Yıl
@@ -809,6 +815,54 @@ Kod/koşum/snapshot değişikliği YOK bu turda — yalnız STATUS.md kaydı. İ
 (canlı bot modülleri + S1/S1b/E4/D2US/D4US araçları + tüm snapshot'lar dokunulmadı);
 v7.1-golden 3/3; tam süit değişmedi (541 passed). Faz 6/real/launchd/go_live'a adım YOK;
 iki durma noktası kullanıcıda.
+
+## KALICI KAYIT 23 — D5-BIST CHALLENGER turu AÇILDI (2026-07-10, açılış kaydı)
+**Kullanıcı kararı (2026-07-10):** D1'e karşı TEK yapısal ek katman test edilir —
+"D1 + fırsat-maliyeti (mutlak-momentum / faiz) kapısı" = **D5-BIST**. Offline
+araştırma spike'ı; **üretim DEĞİL, HÜKÜM YOK.**
+
+### DÜRÜST KAYNAK BEYANI (sonuç-bilgili tasarım — bu turun en önemli çekincesi)
+Fikir, `PERIOD_COMPARISON.md`'nin **son-3-yıl gözleminden doğdu**: D1'in bu
+pencerede TL nakit faizinin gerisinde kaldığı görüldükten SONRA "hisse ≤ faiz
+ise nakitte kal" kapısı tasarlandı. Bu, tanımı gereği **sonuç-bilgili (result-
+informed) bir tasarımdır** ve BIST tarihçesine bu proje boyunca defalarca
+bakılmıştır. Dolayısıyla:
+- **In-sample kirlenme riski KABUL EDİLEREK** challenger protokolü uygulanır:
+  mühürlü kriterler "sepeti yenmek" değil, **D1'in KENDİSİNİ yenmek**tir
+  (kendi kabul edilmiş ailemiz eşiktir — çıta yukarı çekilmiştir, aşağı değil).
+- Sonuç **OOS-ağırlıklı okunur**: tam-dönem tablosu in-sample kirlenmiş sayılır;
+  walk-forward OOS kriteri (3a) daha yüksek kanıt değeri taşır.
+- **Kabul bile canlıya alma demek DEĞİLDİR.** ADAY çıksa dahi, önce ayrı bir
+  gölge/paralel gözlem dönemi + ayrı kullanıcı kararı gerekir
+  (tek-davranış-değişikliği disiplini, CLAUDE.md Bölüm 0.2 + disiplin #10).
+
+### Tur disiplini (D4US-S1 izolasyonu AYNEN + ek)
+- **DOKUNULMAZ:** `mode: paper`, D1 paper hattı ve TÜM canlı bot modülleri
+  (`strategy/regime_core.py`, `execution/`, `safety/`, `data/live_*`, `notify/`,
+  `main.py`, `config/config.yaml`, `config/regime_core.yaml`), S1/S1b/E4/D2US/D4US
+  araçları (`backtest/regime_core*.py`, `backtest/xsec_momentum.py`,
+  `backtest/dual_momentum_etf.py`, `tools/run_regime_core*.py`, `tools/e4_common.py`,
+  `tools/run_xsec_momentum_us2.py`, `tools/run_dual_momentum_etf.py`,
+  `config/regime_core*.yaml`, `config/momentum_us2.yaml`,
+  `config/dual_momentum_etf.yaml`) + **TÜM snapshot'lar**.
+- **D1'in mühürlü parametreleri (N/b/M = 200/0.01/3) AYNEN kalır** — hiçbir
+  parametre ayarı yok; test edilen TEK EK yapısal katman kapının kendisidir.
+- **Yeni, BAĞIMSIZ modüller:** `backtest/regime_core_gated.py`,
+  `tools/run_d5_bist.py`, `config/d5_bist.yaml`, `tests/test_d5_bist.py`.
+  Mevcut loader/maliyet/S1b araçları **YALNIZ import** edilir (drift imkânsız).
+- **Veri:** S1b frozen snapshot (`data/snapshots/2026-07-06`) + S1b'nin tarihsel
+  `TRY_ON_RATE` serisi (`data/snapshots/aux/2026-07-07/`) **AYNEN**. Yeni indirme
+  YOK → D1 baseline'ıyla bit-bit kıyaslanabilirlik.
+- **Grid/varyant seçimi YASAK** (disiplin #3): tasarım TEK paket, koşumdan ÖNCE
+  mühürlenir. Komşuluk/MC/ablasyon YALNIZ bilgi.
+- **İkinci ölçüm-bakışı YOK** (D2US/D4US emsali) — mühre yazılır.
+- BIST v7.1-golden her commit 3/3 bayt-bayt. Her madde AYRI commit + push.
+- Faz 6/go_live/launchd/real adımı YOK; iki durma noktası kullanıcıda.
+
+Sıra: (0) bu kayıt → (1) `config/d5_bist.yaml` + D1-baseline yeniden üretimi +
+`D5_CRITERIA.md` MÜHÜR (strateji kodu HENÜZ YOKKEN — commit sırası kanıttır) →
+(2) spike koşumu + birim testleri + mekanik tablo + zorunlu analizler (a-g) →
+(3) `D5_BIST_S1.md` + kapanış kaydı. **DUR.**
 
 ## K1.5 Mekanik Teyit — 1/2 (2026-07-08)
 2026-07-08 akşam koşusu denetlendi (not: launchd servisleri bu makinede henüz kurulu
