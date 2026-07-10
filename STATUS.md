@@ -1,11 +1,15 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-10T12:05:00+03:00 (Europe/Istanbul)
-Şu an: **D5-BIST CHALLENGER turu AÇILDI (KALICI KAYIT 23) — offline araştırma
-spike'ı; D1 paper hattı ve TÜM canlı modüller dokunulmaz.** Sıra: (0) açılış
-kaydı → (1) `D5_CRITERIA.md` MÜHÜR (koşumdan ÖNCE) → (2) spike + testler +
-zorunlu analizler → (3) `D5_BIST_S1.md` + kapanış. HÜKÜM YOK.
+Son güncelleme: 2026-07-10T13:40:00+03:00 (Europe/Istanbul)
+Şu an: **D5-BIST CHALLENGER SPIKE TAMAMLANDI (KALICI KAYIT 23+24) — mühürlü
+tablo 2/4 → mekanik RED (HÜKÜM DEĞİL; karar kullanıcının/baş danışmanın).**
+Kapı (trailing 252g hisse-getirisi vs ham TRY faizi) Sharpe'ı ve OOS aylık-Sharpe'ı
+iyileştirdi (1.274>1.215; 1.161>1.068) ama **CAGR'ı düşürdü** (%27.15<%28.21) ve
+— asıl kritik — **realize max DD'yi DERİNLEŞTİRDİ** (-%35.22 vs -%28.43), çünkü
+kapı toparlanmalara katılımı bastırıp D1'in iki ayrı DD epizodunu tek, daha derin
+bir epizoda kaynaştırıyor. Rapor: `D5_BIST_S1.md`. D1 paper hattı, `mode: paper`,
+N/b/M ve TÜM canlı modüller DOKUNULMADI; aktif kuyruk (K1.5 2/2 → G1) etkilenmedi.
 
 --- Önceki kayıt (2026-07-10T10:55, PERIOD_COMPARISON doğrulama mini-turu) ---
 Şu an: **PERIOD_COMPARISON DOĞRULAMA MİNİ-TURU TAMAMLANDI — "sepet al-tut"
@@ -864,6 +868,86 @@ Sıra: (0) bu kayıt → (1) `config/d5_bist.yaml` + D1-baseline yeniden üretim
 (2) spike koşumu + birim testleri + mekanik tablo + zorunlu analizler (a-g) →
 (3) `D5_BIST_S1.md` + kapanış kaydı. **DUR.**
 
+## KALICI KAYIT 24 — D5-BIST CHALLENGER spike TAMAMLANDI (2026-07-10, kapanış kaydı)
+D5-BIST ("D1 + fırsat-maliyeti/faiz kapısı") tek-tur değerlendirme spike'ı tamamlandı
+(bkz. `D5_BIST_S1.md`, `D5_CRITERIA.md`). Tasarım koşumdan ÖNCE TEK paket olarak
+mühürlendi (commit `5376aad`; o commit'te `backtest/regime_core_gated.py` HENÜZ YOKTU
+— commit sırası kanıttır). Grid/varyant seçimi YAPILMADI.
+
+**Mühürleme:** referans **D1'in KENDİSİ** (sepet/endeks DEĞİL — challenger turu; çıta
+yukarı çekildi). D1, aynı frozen veriyle deterministik yeniden üretildi ve S1b
+kayıtlarına karşı **9/9 alanda BİREBİR (Δ=0.0)** doğrulandı. Mühürlü 4 kriter:
+(1) Sharpe>1.2152648; (2) CAGR>0.2821140; (3a) OOS aylık-Sharpe>1.0677568;
+(3b) |maxDD|≤%28.4278. Kural: TAMAMI→ADAY; biri kalırsa RED, dar-fark YOK, ikinci
+ölçüm-bakışı YOK.
+
+**MEKANİK SONUÇ:** D5 ana: CAGR %27.150, Sharpe 1.27376, maxDD -%35.224, 69 anahtarlama,
+OOS aylık-Sharpe 1.16089, OOS maxDD -%35.633, MC dd_p5 -%39.88. **MÜHÜRLÜ TABLO:
+(1) PASS (+0.0585); (2) FAIL (-1.061pp); (3a) PASS (+0.0931); (3b) FAIL (-6.796pp)
+→ 2/4.** → önceden mühürlenen kurala göre **D5-BIST kabul adayı DEĞİL** (HÜKÜM değil;
+karar kullanıcının/baş danışmanın).
+
+**KRİTİK BULGU — kapı realize drawdown'ı DERİNLEŞTİRDİ.** Kapı maruziyeti yalnızca
+AZALTABİLDİĞİ halde (`effective_on ⊆ regime_on`, testle çapalanmış) maxDD -%28.43 →
+-%35.22'ye kötüleşti. Mekanizma **toparlanma bastırması**: D1'in iki AYRI epizodu
+(2013-05→11 ve 2015-05→2016-02) D5'te TEK, daha derin bir epizoda KAYNAŞIYOR
+(2013-05-22→2016-01-08, toparlanma 2017-07-11) çünkü D5 aradaki toparlanmaya katılıp
+yeni zirve YAPAMIYOR. Ölçüm (2013-11-11→2015-05-19 bacağı): kompozit +%55.6, D1 equity
++%45.8, **D5 yalnız +%20.0**. En uzun kesintisiz sualtı: D5 1078 işlem günü vs D1 514.
+Trailing-12ay mutlak momentum tanımı gereği dip sonrası geç açılır; TL'nin çift haneli
+faiz eşiği gecikmeyi UZATIR.
+
+**Zorunlu analizler:** (a) **ÖNCEDEN yazılan beklenti KISMEN ÇÜRÜDÜ** — kapı 2005-2020'de
+"seyrek" olmadı (2007 %33.5, 2009 %35.2, 2012 %33.3, 2019 %22.3, 2020 %25.4 bağladı);
+**2022-2023'te kapı %100 AÇIK, 0 gün bağladı** (fikri doğuran gözlemin iki yılına hiç
+dokunmuyor); 2024-25 yoğun (%26.5/%54.2) kısmı doğrulandı. Düşük-faiz yıllarında da yoğun
+bağlaması → bu katman pratikte "fırsat-maliyeti filtresi" değil, **toparlanma-gecikmesi
+filtresi**. (b) pencere kıyasları **in-sample kirlenmeyi ÖLÇTÜ**: D5, 3y/5y/10y'de D1'i
+geçiyor (fikrin doğduğu dönem) ama **Son-1-Yıl'da (%30.2 vs %46.5) ve tam dönemde
+kaybediyor**. (c) yıllık: en büyük bedel **2009 −70.5pp**, en büyük katkı **2024 +43.1pp**;
+ayrıca 2014 −23.9pp, 2020 +29.9pp, 2018 +10.8pp. (d) turnover 69 vs 67; maliyet sürüklemesi
+farkı **0.013pp/yıl** = CAGR açığının %1.2'si → **zayıflık maliyet kaynaklı DEĞİL, maruziyet
+kaybı kaynaklı**. (e) komşuluk uçurumsuz AMA **mühürlü nokta Sharpe ZİRVESİ** (overfitting
+şüphesi, mühürde önceden böyle tanımlanmıştı); yine de **6 noktanın HİÇBİRİ kriter 2'yi
+geçmiyor** (en yüksek CAGR %27.75) → karar tek parametreye bağlı değil. (f) MC: D5 dd_p5
+-%39.88 D1'in -%44.68'inden İYİ — **ama bu MC'nin permütasyonla patika-bağımlılığını yok
+etmesindendir; kapının zararı tam da patika-bağımlıdır** → bu ailede MC gerçek DD riskini
+sistematik olarak iyi gösterir. (§10) **Isınma artefaktı DEĞİL**: ortak ısınma-sonrası
+pencerede (2005-12-21 renorm, koşumdan ÖNCE mühürlü yan-ölçüm) maxDD kötüleşmesi
+(-6.80pp) AYNEN duruyor.
+
+**DERS (metodoloji, kayda geçer):** `D5_CRITERIA.md` §0.2 sonucun "OOS-ağırlıklı" okunacağını
+mühürlemişti ve **3a geçti**. Ancak bu walk-forward'da **hiçbir parametre optimize edilmiyor**
+→ "OOS", aynı sabit stratejinin aynı 21 yılın dilimlerinde ölçülmesidir ve **tasarım-kökeni
+kirlenmesine karşı KORUMA SAĞLAMAZ**. Üstelik OOS'un diğer yarısı D5 aleyhinedir (OOS maxDD
+-%35.63 vs -%24.55). Bu düzeltme sonucu DEĞİŞTİRMİYOR (kriter 2+3b zaten kaldı) — bu yüzden
+"sonuca göre yorum" değil, gelecek turlar için bir derstir: **sonuç-bilgili tasarımlarda
+tek meşru koruma ileri-zaman yeni örneklemdir.**
+
+**DÖRT-AİLE META BULGUSU (güncelleme):** D1-US/D2-US/D4-US üçünde de 3b (DD-kesme) PASS,
+1/3a FAIL idi. **D5-BIST bu örüntüyü KIRIYOR ama ters yönde:** Sharpe'ta referansını geçen
+İLK aile oldu, buna karşılık **3b'de KALAN ilk aile** — savunma katmanı eklendiği halde
+realize DD derinleşti. Yapısal ders (üçüncü teyit): trailing-12ay mutlak momentum çöküşü
+keser, toparlanmayı kaçırır; BIST'te bu, D1'in en güçlü özelliğini (hızlı yeniden-giriş →
+epizot sıfırlanması) bozdu.
+
+**Operasyonel kayıt (#18):** Backtest'te `TRY_ON_RATE` tarihsel olarak tamdır; **canlıda
+kapı BAYAT faizle karar verirdi** (FRED/OECD ~130 gün gecikmeli; son gerçek gözlem
+2026-03-01, sonrası ffill). Sonuç RED olduğu için ön koşul devreye girmedi; **kayda geçer:
+faiz-EŞİKLİ herhangi bir kapı ileride kabul edilirse, #18'in çözümü canlıya almanın ÖN
+KOŞULudur.** Ayrıca: eşikte seri-tanım hatası birinci derecedendir (tahakkukta ikinci
+derecedendir) — faiz-eşikli her tasarım için yapısal kırılganlık.
+
+**İzolasyon:** `mode: paper` + D1 paper hattı + TÜM canlı bot modülleri + S1/S1b/E4/D2US/D4US
+araçları + `config/regime_core.yaml` (salt-okunur) + TÜM snapshot'lar DOKUNULMADI. Yeni
+BAĞIMSIZ: `backtest/regime_core_gated.py`, `tools/run_d5_bist.py`, `config/d5_bist.yaml`,
+`tests/test_d5_bist.py`. D1 sabitleri kopyalanmadı, `inherit_from` ile DEVRALINDI (N/b/M
+sapması yapısal olarak imkânsız). `run_regime_core`/`compute_cash_only_curve`/loader'lar
+YALNIZ import edilerek reuse. **Sadakat çapası:** `gate_cfg=None` → `run_regime_core` ile
+BİT-BİT özdeş (test). Spike iki koşumda BAYT-BAYT aynı (determinizm). v7.1-golden her commit
+3/3; tam süit **574 passed** (556 + 18 yeni). Faz 6/go_live/launchd/real'e adım YOK; iki
+durma noktası kullanıcıda. **Kabul kararı kullanıcının/baş danışmanın; otomatik geçiş YOK.**
+
 ## K1.5 Mekanik Teyit — 1/2 (2026-07-08)
 2026-07-08 akşam koşusu denetlendi (not: launchd servisleri bu makinede henüz kurulu
 DEĞİL — `launchctl list` boş, `runtime/paper/logs/` yok; "akşam koşusu" = günün son
@@ -1010,9 +1094,16 @@ bekleniyor; önceki turun 2-4. maddeleri (kurulum/doğrulama/STATUS "G1 TAMAM") 
   eki), tam süit 378 passed, git push. Tag: `regime-core-d1-prod`.
 
 ## Sırada
-**Aktif kuyruk sırası (KALICI KAYIT 22 ile netleşti): K1.5 2/2 doğrulaması → G1
-(kullanıcı eylemi: launchd kurulumu) → Faz 6 başlangıç kriterleri.** US hattı ASKIDA
-(aşağıdaki iki madde) — yeniden açılma yalnız kullanıcı kararıyla.
+**Aktif kuyruk sırası (KALICI KAYIT 22 ile netleşti, KAYIT 24 onu DEĞİŞTİRMEDİ):
+K1.5 2/2 doğrulaması → G1 (kullanıcı eylemi: launchd kurulumu) → Faz 6 başlangıç
+kriterleri.** US hattı ASKIDA (aşağıdaki iki madde) — yeniden açılma yalnız kullanıcı
+kararıyla.
+
+- **[D5-BIST — mekanik RED, kullanıcı/baş danışman kaydı bekleniyor]** D5-BIST
+  challenger spike'ı mühürlü tabloda **2/4** ile kaldı (KALICI KAYIT 24,
+  `D5_BIST_S1.md`). **İkinci ölçüm-bakışı YOK** (mühürde kapalı). BIST tarihçesine D5
+  bakış sayacı: **1 kullanıldı**; kapı ailesinin TÜM varyantları (farklı pencere/teyit/
+  haircut) bu tarihçede **KAPALI**. D1 paper hattı ve aktif kuyruk bu turdan etkilenmedi.
 
 - **[K1.5] ikinci temiz koşu (2/2) bekleniyor — 2026-07-09 denemesi FAIL oldu**
   (DATA_DRIFT + provisional, bkz. "K1.5 Mekanik Teyit — 2/2 DENEMESİ: FAIL" bölümü);
@@ -1112,6 +1203,11 @@ engine-seviyesi SHORT execution (short-gate sonrası).
     farkı), 2023 boşluğu EVDS'de 12/12 DOLU, 2022-10 %9.0 baseline artefaktı teyit. Snapshot
     DEĞİŞMEDİ. Bu madde artık "veri yok" DEĞİL, "tanım-uyumlu seri + S1b yeniden ölçüm turu"
     bekliyor. Real öncesi tamamlanmalı.
+    **D5 eki (KALICI KAYIT 24):** faizi **EŞİK** olarak kullanan herhangi bir tasarımda bu
+    madde birinci-derece kritiktir (nakit tahakkukunda ikinci-derece): seri-tanım farkı
+    (~2-6 puan) karar sınırını kaydırır, canlı besleme ~130 gün bayattır (son gerçek gözlem
+    2026-03-01, sonrası ffill). **Faiz-eşikli bir kapı ileride kabul edilirse #18'in çözümü
+    canlıya almanın ÖN KOŞULudur.** (D5 bu turda RED aldığı için ön koşul devreye girmedi.)
 19. **[üretim-turu kuyruğu] D1 nakit bacağının GERÇEK enstrümanı** netleştirilecek
     (AlgoLab para piyasası fonu/repo süpürme; oran/likidite/vade). Şu anki
     %0/faizli model yalnızca bir yaklaşıklık.
