@@ -14,9 +14,13 @@ D1'in frozen S1b snapshot'ı (`data/snapshots/2026-07-06`) son barı ~2026-07-02
 - **Determinizm çekincesi (dürüstçe):** en güncel 1-2 günün bar verisi yfinance'in geç revizyon davranışına (STATUS.md K4/DATA_DRIFT — bilinen, tekrarlayan bir olgu) tabidir; bu rapor birkaç gün sonra yeniden koşulursa en son 1-2 günün kapanışı hafifçe değişebilir. 2005→(frozen snapshot son barı) kısmı TAM DETERMİNİSTİKTİR (S1b'nin kendi mühürlü kaynağı).
 - Hayalet-bar filtresi (mevcut, reuse): 1 bar elendi (`EREGL` 2024-04-09 — bilinen, STATUS.md KALICI KAYIT 7'de belgeli EREGL 2024-04-09 hayalet barı).
 
-- Altın (best-effort): GC=F×USDTRY=X/31.1035 (gram altın TL), 5394 gün
+- Altın (best-effort): GC=F×USDTRY=X/31.1035 (gram altın TL), 5393 gün
 - TÜFE (best-effort): FRED TURCPIALLMINMEI, son gözlem 2025-04-01 (bilinen gecikme)
   Son gerçek gözlemden `Üretim tarihi`ne kadarki tüm günler forward-fill (son bilinen seviyeyle sabit) taşınmıştır — bu nedenle AŞAĞIDAKİ HER pencerenin TÜFE CAGR'ı, gerçek enflasyonu (özellikle son ~15 ay) HAFİFE ALIR/AŞAĞI SAPTIRIR; yalnızca 1 yıllık pencerede bu tamamen sıfıra düşecek kadar belirgindir (ayrıca işaretlendi).
+
+## Metodoloji Notu — "Sepet Al-Tut" Satırı Nasıl Kuruluyor?
+
+Tablolardaki **"sepet"** satırı, `backtest/regime_core.py::build_composite()`'in (mühürlü, S1b'nin kendi tanımı — REUSE, değiştirilmedi) ürettiği TEK bir seridir: 12 sembolün ortak ilk tarihine (t0=2005-01-03) eşit-DOLAR yatırılmış, o günden bugüne kadar **BİR KEZ BİLE yeniden dengelenmemiş** bir al-tut portföyüdür — pencere tabloları bu TEK seriyi yalnızca pencere sınırlarına göre KESER, o pencerenin başında ağırlıkları SIFIRLAMAZ. 21 yıllık sürüklenme nedeniyle en çok kazanan sembol(ler) zamanla portföyün ezici çoğunluğunu oluşturabilir (aşağıdaki pencere notlarında payı gösterilir) — bu yüzden "sepet" satırının KISA pencerelerdeki (örn. son 1 yıl) getirisi, aslında o dönemde **neredeyse tek bir sembolün** performansını yansıtıyor olabilir, 12 sembolün dengeli ortalamasını DEĞİL. Bunu netleştirmek için yeni bir **"sepet — PENCERE-BAŞI eşit ağırlık"** satırı eklendi: AYNI `build_composite()` fonksiyonu, yalnızca o pencerenin başlangıç tarihine kısıtlanmış kapanış serileriyle çağrılır (iç t0 = pencere başlangıcı) — yani "o pencerenin başında 12 sembole taze eşit-ağırlıklı girseydim, dengelemeden sonuna kadar tutsaydım" sorusuna cevap verir. D1'in kendi ENTER mantığı da (her girişte equity 12'ye eşit bölünür, sonraki tutma boyunca dengelenmez) AYNI ilkeyi izler — bu yüzden D1 ile PENCERE-BAŞI satırı, 2005-ağırlıklı satırdan çok daha adil bir kıyastır.
 
 ## Pencere Tabloları
 
@@ -27,13 +31,16 @@ D1'in frozen S1b snapshot'ı (`data/snapshots/2026-07-06`) son barı ~2026-07-02
 | Seri | Toplam Getiri | CAGR | Max DD |
 |---|---:|---:|---:|
 | D1 (rejim-filtreli çekirdek, mühürlü S1b) | +45.31% | +45.35% | -13.62% |
-| 12-sembol eşit-ağırlık sepet al-tut (TRY, maliyetsiz) | +105.80% | +105.90% | -16.21% |
+| 12-sembol sepet al-tut — 2005 AĞIRLIKLI, HİÇ dengelenmemiş (TRY, maliyetsiz) | +105.80% | +105.90% | -16.21% |
+| 12-sembol sepet al-tut — PENCERE-BAŞI eşit ağırlık, dengelenmeden tutulan | +34.55% | +34.57% | -13.45% |
 | XU100 al-tut (BİLGİ — fiyat endeksi, temettü hariç) | +39.57% | +39.73% | -13.01% |
 | TRY faizi — haircut'lı (200bp, S1b'nin kendi mühürlü modeli) | +42.10% | +42.14% | 0.00% |
 | TRY faizi — haircut'sız (ham, 'mevduat proxy'si') | +44.97% | +45.01% | 0.00% |
 | USD al-tut (USDTRY değişimi, TRY-terim) | +17.12% | +17.13% | -0.32% |
 | Gram altın (TRY, best-effort) | +44.17% | +44.21% | -20.31% |
 | TÜFE (FRED, best-effort — bkz. gecikme notu) | +0.00% | +0.00% | 0.00% |
+
+*(2005-ağırlıklı sepetin bu pencere başındaki payı: `ASELS` tek başına %58.3 — 21 yıllık sürüklenmiş ağırlıkla pencere-başı eşit-ağırlıklı satır arasındaki fark büyüdükçe bu pay da büyür.)*
 
 **D1 − faiz(haircut'lı) farkı (CAGR, pp):** +3.21pp (D1 faizin üzerinde).
 
@@ -48,13 +55,16 @@ D1'in frozen S1b snapshot'ı (`data/snapshots/2026-07-06`) son barı ~2026-07-02
 | Seri | Toplam Getiri | CAGR | Max DD |
 |---|---:|---:|---:|
 | D1 (rejim-filtreli çekirdek, mühürlü S1b) | +161.38% | +37.82% | -22.53% |
-| 12-sembol eşit-ağırlık sepet al-tut (TRY, maliyetsiz) | +409.32% | +72.20% | -18.27% |
+| 12-sembol sepet al-tut — 2005 AĞIRLIKLI, HİÇ dengelenmemiş (TRY, maliyetsiz) | +409.32% | +72.20% | -18.27% |
+| 12-sembol sepet al-tut — PENCERE-BAŞI eşit ağırlık, dengelenmeden tutulan | +218.47% | +47.22% | -22.75% |
 | XU100 al-tut (BİLGİ — fiyat endeksi, temettü hariç) | +126.30% | +31.35% | -22.86% |
 | TRY faizi — haircut'lı (200bp, S1b'nin kendi mühürlü modeli) | +224.03% | +48.07% | 0.00% |
 | TRY faizi — haircut'sız (ham, 'mevduat proxy'si') | +244.02% | +51.06% | 0.00% |
 | USD al-tut (USDTRY değişimi, TRY-terim) | +79.25% | +21.51% | -4.78% |
 | Gram altın (TRY, best-effort) | +279.07% | +56.03% | -20.31% |
 | TÜFE (FRED, best-effort — bkz. gecikme notu) | +105.65% | +27.22% | 0.00% |
+
+*(2005-ağırlıklı sepetin bu pencere başındaki payı: `ASELS` tek başına %28.1 — 21 yıllık sürüklenmiş ağırlıkla pencere-başı eşit-ağırlıklı satır arasındaki fark büyüdükçe bu pay da büyür.)*
 
 **D1 − faiz(haircut'lı) farkı (CAGR, pp):** -10.25pp (D1 faizin altında).
 
@@ -65,13 +75,16 @@ D1'in frozen S1b snapshot'ı (`data/snapshots/2026-07-06`) son barı ~2026-07-02
 | Seri | Toplam Getiri | CAGR | Max DD |
 |---|---:|---:|---:|
 | D1 (rejim-filtreli çekirdek, mühürlü S1b) | +1457.78% | +73.19% | -22.78% |
-| 12-sembol eşit-ağırlık sepet al-tut (TRY, maliyetsiz) | +2643.17% | +93.95% | -25.97% |
+| 12-sembol sepet al-tut — 2005 AĞIRLIKLI, HİÇ dengelenmemiş (TRY, maliyetsiz) | +2643.17% | +93.95% | -25.97% |
+| 12-sembol sepet al-tut — PENCERE-BAŞI eşit ağırlık, dengelenmeden tutulan | +1567.15% | +75.56% | -22.80% |
 | XU100 al-tut (BİLGİ — fiyat endeksi, temettü hariç) | +929.53% | +59.47% | -22.86% |
 | TRY faizi — haircut'lı (200bp, S1b'nin kendi mühürlü modeli) | +304.12% | +32.23% | 0.00% |
 | TRY faizi — haircut'sız (ham, 'mevduat proxy'si') | +346.61% | +34.90% | 0.00% |
 | USD al-tut (USDTRY değişimi, TRY-terim) | +439.86% | +40.11% | -34.93% |
 | Gram altın (TRY, best-effort) | +1121.23% | +64.96% | -34.41% |
 | TÜFE (FRED, best-effort — bkz. gecikme notu) | +446.01% | +40.43% | 0.00% |
+
+*(2005-ağırlıklı sepetin bu pencere başındaki payı: `ASELS` tek başına %37.0 — 21 yıllık sürüklenmiş ağırlıkla pencere-başı eşit-ağırlıklı satır arasındaki fark büyüdükçe bu pay da büyür.)*
 
 **D1 − faiz(haircut'lı) farkı (CAGR, pp):** +40.97pp (D1 faizin üzerinde).
 
@@ -82,13 +95,16 @@ D1'in frozen S1b snapshot'ı (`data/snapshots/2026-07-06`) son barı ~2026-07-02
 | Seri | Toplam Getiri | CAGR | Max DD |
 |---|---:|---:|---:|
 | D1 (rejim-filtreli çekirdek, mühürlü S1b) | +3269.86% | +42.16% | -23.96% |
-| 12-sembol eşit-ağırlık sepet al-tut (TRY, maliyetsiz) | +7343.83% | +53.89% | -40.66% |
+| 12-sembol sepet al-tut — 2005 AĞIRLIKLI, HİÇ dengelenmemiş (TRY, maliyetsiz) | +7343.83% | +53.89% | -40.66% |
+| 12-sembol sepet al-tut — PENCERE-BAŞI eşit ağırlık, dengelenmeden tutulan | +3653.00% | +43.70% | -32.70% |
 | XU100 al-tut (BİLGİ — fiyat endeksi, temettü hariç) | +1690.88% | +33.48% | -31.82% |
 | TRY faizi — haircut'lı (200bp, S1b'nin kendi mühürlü modeli) | +576.77% | +21.08% | 0.00% |
 | TRY faizi — haircut'sız (ham, 'mevduat proxy'si') | +726.61% | +23.52% | 0.00% |
 | USD al-tut (USDTRY değişimi, TRY-terim) | +1497.45% | +31.93% | -34.93% |
 | Gram altın (TRY, best-effort) | +4693.64% | +47.26% | -34.41% |
 | TÜFE (FRED, best-effort — bkz. gecikme notu) | +976.94% | +26.83% | -1.84% |
+
+*(2005-ağırlıklı sepetin bu pencere başındaki payı: `ASELS` tek başına %32.5 — 21 yıllık sürüklenmiş ağırlıkla pencere-başı eşit-ağırlıklı satır arasındaki fark büyüdükçe bu pay da büyür.)*
 
 **D1 − faiz(haircut'lı) farkı (CAGR, pp):** +21.09pp (D1 faizin üzerinde).
 
@@ -99,7 +115,8 @@ D1'in frozen S1b snapshot'ı (`data/snapshots/2026-07-06`) son barı ~2026-07-02
 | Seri | Toplam Getiri | CAGR | Max DD |
 |---|---:|---:|---:|
 | D1 (rejim-filtreli çekirdek, mühürlü S1b) | +20175.69% | +28.01% | -28.43% |
-| 12-sembol eşit-ağırlık sepet al-tut (TRY, maliyetsiz) | +69184.56% | +35.54% | -64.22% |
+| 12-sembol sepet al-tut — 2005 AĞIRLIKLI, HİÇ dengelenmemiş (TRY, maliyetsiz) | +69184.56% | +35.54% | -64.22% |
+| 12-sembol sepet al-tut — PENCERE-BAŞI eşit ağırlık, dengelenmeden tutulan | +69184.56% | +35.54% | -64.22% |
 | XU100 al-tut (BİLGİ — fiyat endeksi, temettü hariç) | +5566.51% | +20.65% | -63.43% |
 | TRY faizi — haircut'lı (200bp, S1b'nin kendi mühürlü modeli) | +1507.08% | +13.78% | 0.00% |
 | TRY faizi — haircut'sız (ham, 'mevduat proxy'si') | +2363.37% | +16.06% | 0.00% |
@@ -107,9 +124,21 @@ D1'in frozen S1b snapshot'ı (`data/snapshots/2026-07-06`) son barı ~2026-07-02
 | Gram altın (TRY, best-effort) | +33002.81% | +30.97% | -34.41% |
 | TÜFE (FRED, best-effort — bkz. gecikme notu) | +2558.07% | +16.47% | -1.84% |
 
+*(2005-ağırlıklı sepetin bu pencere başındaki payı: `THYAO` tek başına %8.3 — 21 yıllık sürüklenmiş ağırlıkla pencere-başı eşit-ağırlıklı satır arasındaki fark büyüdükçe bu pay da büyür.)*
+
 **D1 − faiz(haircut'lı) farkı (CAGR, pp):** +14.23pp (D1 faizin üzerinde).
 
 **İşlem/rejim özeti:** bu pencerede 67 anahtarlama (ENTER/EXIT), rejim-ON gün oranı 72.5%.
+
+## Son 1 Yıl Bilmecesi: Sayısal Ayrıştırma
+
+D1 bu pencerede **+45.31%** getirdi, 2005-ağırlıklı sepet ise **+105.80%** — aradaki fark +60.5pp, oysa D1 bu pencerede **0 anahtarlama** yaptı ve rejim **%100 ON** kaldı (yani ikisi de saf al-tut, tek bir işlem/maliyet farkı YOK). Fark TAMAMEN ağırlık yapısından kaynaklanıyor:
+
+1. **Ağırlık-sürüklenmesi etkisi (+71.2pp):** 2005-ağırlıklı sepette `ASELS` tek başına payın **%58.3**'ini oluşturuyor (21 yıllık sürüklenme) — pencere-başında TAZE eşit-ağırlıkla girilseydi (yeni "sepet — PENCERE-BAŞI" satırı) getiri **+34.55%** olurdu. Fark (+71.2pp), `ASELS`'ın bu penceredeki performansının 2005-ağırlıklı sepeti neredeyse TEK BAŞINA sürüklediğini gösteriyor — 12 sembolün dengeli bir ortalaması DEĞİL.
+
+2. **Kalan fark (-10.8pp):** pencere-başı eşit-ağırlıklı sepet ile D1 arasında hâlâ bir fark var — bunun kaynağı D1'in ağırlıklarının pencere BAŞLANGICINDA değil, D1'in bu pencereden ÖNCEKİ son ENTER'ında (bkz. yukarı işlem özeti — pencere içinde 0 ama pencereden önce gerçekleşmiş) sabitlenmiş olmasıdır: D1 pencere başlamadan ÖNCE bir miktar ek sürüklenmeye (muhtemelen aynı yönde) zaten maruz kalmıştı, bu yüzden TAM pencere-başı-taze bir eşit-ağırlıkla birebir örtüşmez. Küçük komisyon/slipaj kalıntıları da bu kalan farka (ihmal edilebilir ölçüde) katkıda bulunur.
+
+**Kısaca:** "D1 neden sepetten çok daha az kazandı" sorusunun cevabı bir strateji zayıflığı DEĞİL — 2005-ağırlıklı 'sepet' satırının kendisi, son 1 yılda esasen tek bir sembolün (yukarıda adı geçen) getirisini yansıtan, dengesiz bir ölçüttür. Pencere-başı eşit-ağırlıklı satır, D1'in kendi ENTER mantığına çok daha yakın bir kıyas sunuyor.
 
 ## "Faizde Tutsaydım" Sorusunun Net Cevabı
 
@@ -147,6 +176,8 @@ Botun varlık sebebinin (sermaye koruma) görünür olduğu/olmadığı yıllar 
 | 2013 | -10.38% | +2.27% | +1.81% |
 | 2018 | -5.60% | -18.89% | +13.43% |
 | 2021-23 | +603.52% | +535.23% | +58.28% |
+
+*(Buradaki "Sepet" de yukarıdaki 2005-ağırlıklı, HİÇ dengelenmemiş seridir — 2008/2013 gibi t0'a yakın yıllarda ağırlık sürüklenmesi henüz sınırlıyken, 2021-23 gibi geç yıllarda "Son 1 Yıl Bilmecesi" bölümündeki aynı çarpıtma etkisi devreye girer; bu tablo yalnızca BİLGİ amaçlıdır, pencere-başı eşit-ağırlık karşılaştırması burada hesaplanmamıştır.)*
 
 2008 (küresel finansal kriz) ve 2018 (kur şoku) yıllarında D1 sepetin ciddi altındaki kaybını BÜYÜK ÖLÇÜDE ATLATIYOR (rejim filtresi nakde geçmiş) — varlık sebebi görünür. 2013'te ise D1 sepetin ALTINDA kalıyor (whipsaw/geç dönüş) — filtre her yıl işe yaramıyor, bu beklenen ve dürüst bir gözlem.
 

@@ -8,7 +8,8 @@ from pathlib import Path
 
 ROW_ORDER = [
     ("D1", "D1 (rejim-filtreli çekirdek, mühürlü S1b)"),
-    ("sepet", "12-sembol eşit-ağırlık sepet al-tut (TRY, maliyetsiz)"),
+    ("sepet", "12-sembol sepet al-tut — 2005 AĞIRLIKLI, HİÇ dengelenmemiş (TRY, maliyetsiz)"),
+    ("sepet_pencere", "12-sembol sepet al-tut — PENCERE-BAŞI eşit ağırlık, dengelenmeden tutulan"),
     ("XU100", "XU100 al-tut (BİLGİ — fiyat endeksi, temettü hariç)"),
     ("faiz_haircut", "TRY faizi — haircut'lı (200bp, S1b'nin kendi mühürlü modeli)"),
     ("faiz_ham", "TRY faizi — haircut'sız (ham, 'mevduat proxy'si')"),
@@ -45,6 +46,13 @@ def _window_table_md(table: dict) -> str:
         m = table["metrics"][key]
         lines.append(f"| {desc} | {_pct(m['total_return'])} | {_pct(m['cagr'])} | {_pct_abs(m['max_drawdown'])} |")
     lines.append("")
+    if table.get("sepet_top_symbol"):
+        lines.append(
+            f"*(2005-ağırlıklı sepetin bu pencere başındaki payı: `{table['sepet_top_symbol']}` tek "
+            f"başına %{table['sepet_top_share']*100:.1f} — 21 yıllık sürüklenmiş ağırlıkla "
+            "pencere-başı eşit-ağırlıklı satır arasındaki fark büyüdükçe bu pay da büyür.)*"
+        )
+        lines.append("")
     d1_cagr = table["metrics"]["D1"]["cagr"]
     faiz_cagr = table["metrics"]["faiz_haircut"]["cagr"]
     diff_pp = (d1_cagr - faiz_cagr) * 100
@@ -74,6 +82,52 @@ def _window_table_md(table: dict) -> str:
             "veri gecikmesinin doğal sonucudur (bkz. yukarı best-effort notu)."
         )
     lines.append("")
+    return "\n".join(lines)
+
+
+def _son_1y_bilmecesi_md(data: dict) -> str:
+    """D1 (0 anahtarlama, rejim-ON %100) ile 2005-ağırlıklı 'sepet' arasındaki büyük
+    Son-1-Yıl farkının sayısal ayrıştırması. Sayılar `data['window_tables']['son_1y']`den
+    OKUNUR (koşumdan koşuma değişebilir) — hiçbir sayı burada sabit YAZILMAZ."""
+    t = data["window_tables"]["son_1y"]
+    d1 = t["metrics"]["D1"]["total_return"]
+    sepet_drift = t["metrics"]["sepet"]["total_return"]
+    sepet_window = t["metrics"]["sepet_pencere"]["total_return"]
+    top_symbol, top_share = t["sepet_top_symbol"], t["sepet_top_share"]
+
+    gap_total = (sepet_drift - d1) * 100
+    gap_weight_drift = (sepet_drift - sepet_window) * 100
+    gap_residual = (sepet_window - d1) * 100
+
+    lines = [
+        "## Son 1 Yıl Bilmecesi: Sayısal Ayrıştırma",
+        "",
+        f"D1 bu pencerede **{_pct(d1)}** getirdi, 2005-ağırlıklı sepet ise **{_pct(sepet_drift)}** — "
+        f"aradaki fark {gap_total:+.1f}pp, oysa D1 bu pencerede **0 anahtarlama** yaptı ve rejim "
+        "**%100 ON** kaldı (yani ikisi de saf al-tut, tek bir işlem/maliyet farkı YOK). Fark "
+        "TAMAMEN ağırlık yapısından kaynaklanıyor:",
+        "",
+        f"1. **Ağırlık-sürüklenmesi etkisi ({gap_weight_drift:+.1f}pp):** 2005-ağırlıklı sepette "
+        f"`{top_symbol}` tek başına payın **%{top_share*100:.1f}**'ini oluşturuyor (21 yıllık "
+        "sürüklenme) — pencere-başında TAZE eşit-ağırlıkla girilseydi (yeni \"sepet — "
+        f"PENCERE-BAŞI\" satırı) getiri **{_pct(sepet_window)}** olurdu. Fark ({gap_weight_drift:+.1f}pp), "
+        f"`{top_symbol}`'ın bu penceredeki performansının 2005-ağırlıklı sepeti neredeyse TEK "
+        "BAŞINA sürüklediğini gösteriyor — 12 sembolün dengeli bir ortalaması DEĞİL.",
+        "",
+        f"2. **Kalan fark ({gap_residual:+.1f}pp):** pencere-başı eşit-ağırlıklı sepet ile D1 "
+        "arasında hâlâ bir fark var — bunun kaynağı D1'in ağırlıklarının pencere BAŞLANGICINDA "
+        "değil, D1'in bu pencereden ÖNCEKİ son ENTER'ında (bkz. yukarı işlem özeti — pencere "
+        "içinde 0 ama pencereden önce gerçekleşmiş) sabitlenmiş olmasıdır: D1 pencere başlamadan "
+        "ÖNCE bir miktar ek sürüklenmeye (muhtemelen aynı yönde) zaten maruz kalmıştı, bu yüzden "
+        "TAM pencere-başı-taze bir eşit-ağırlıkla birebir örtüşmez. Küçük komisyon/slipaj "
+        "kalıntıları da bu kalan farka (ihmal edilebilir ölçüde) katkıda bulunur.",
+        "",
+        "**Kısaca:** \"D1 neden sepetten çok daha az kazandı\" sorusunun cevabı bir strateji "
+        "zayıflığı DEĞİL — 2005-ağırlıklı 'sepet' satırının kendisi, son 1 yılda esasen tek bir "
+        "sembolün (yukarıda adı geçen) getirisini yansıtan, dengesiz bir ölçüttür. Pencere-başı "
+        "eşit-ağırlıklı satır, D1'in kendi ENTER mantığına çok daha yakın bir kıyas sunuyor.",
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -138,6 +192,28 @@ def write_report(data: dict, out_path: str | Path = "PERIOD_COMPARISON.md") -> P
     )
     lines.append("")
 
+    lines.append("## Metodoloji Notu — \"Sepet Al-Tut\" Satırı Nasıl Kuruluyor?")
+    lines.append("")
+    lines.append(
+        "Tablolardaki **\"sepet\"** satırı, `backtest/regime_core.py::build_composite()`'in "
+        "(mühürlü, S1b'nin kendi tanımı — REUSE, değiştirilmedi) ürettiği TEK bir seridir: 12 "
+        "sembolün ortak ilk tarihine (t0=2005-01-03) eşit-DOLAR yatırılmış, o günden bugüne kadar "
+        "**BİR KEZ BİLE yeniden dengelenmemiş** bir al-tut portföyüdür — pencere tabloları bu TEK "
+        "seriyi yalnızca pencere sınırlarına göre KESER, o pencerenin başında ağırlıkları "
+        "SIFIRLAMAZ. 21 yıllık sürüklenme nedeniyle en çok kazanan sembol(ler) zamanla portföyün "
+        "ezici çoğunluğunu oluşturabilir (aşağıdaki pencere notlarında payı gösterilir) — bu "
+        "yüzden \"sepet\" satırının KISA pencerelerdeki (örn. son 1 yıl) getirisi, aslında o dönemde "
+        "**neredeyse tek bir sembolün** performansını yansıtıyor olabilir, 12 sembolün dengeli "
+        "ortalamasını DEĞİL. Bunu netleştirmek için yeni bir **\"sepet — PENCERE-BAŞI eşit "
+        "ağırlık\"** satırı eklendi: AYNI `build_composite()` fonksiyonu, yalnızca o pencerenin "
+        "başlangıç tarihine kısıtlanmış kapanış serileriyle çağrılır (iç t0 = pencere başlangıcı) — "
+        "yani \"o pencerenin başında 12 sembole taze eşit-ağırlıklı girseydim, dengelemeden "
+        "sonuna kadar tutsaydım\" sorusuna cevap verir. D1'in kendi ENTER mantığı da (her girişte "
+        "equity 12'ye eşit bölünür, sonraki tutma boyunca dengelenmez) AYNI ilkeyi izler — bu "
+        "yüzden D1 ile PENCERE-BAŞI satırı, 2005-ağırlıklı satırdan çok daha adil bir kıyastır."
+    )
+    lines.append("")
+
     lines.append("## Pencere Tabloları")
     lines.append("")
     lines.append(
@@ -148,6 +224,8 @@ def write_report(data: dict, out_path: str | Path = "PERIOD_COMPARISON.md") -> P
     lines.append("")
     for key, label, start, end, full_cov in data["windows"]:
         lines.append(_window_table_md(data["window_tables"][key]))
+
+    lines.append(_son_1y_bilmecesi_md(data))
 
     lines.append("## \"Faizde Tutsaydım\" Sorusunun Net Cevabı")
     lines.append("")
@@ -199,6 +277,14 @@ def write_report(data: dict, out_path: str | Path = "PERIOD_COMPARISON.md") -> P
     lines.append("|---|---:|---:|---:|")
     for row in data["crisis_rows"]:
         lines.append(f"| {row['label']} | {_pct(row['D1'])} | {_pct(row['sepet'])} | {_pct(row['faiz_haircut'])} |")
+    lines.append("")
+    lines.append(
+        "*(Buradaki \"Sepet\" de yukarıdaki 2005-ağırlıklı, HİÇ dengelenmemiş seridir — 2008/2013 "
+        "gibi t0'a yakın yıllarda ağırlık sürüklenmesi henüz sınırlıyken, 2021-23 gibi geç "
+        "yıllarda \"Son 1 Yıl Bilmecesi\" bölümündeki aynı çarpıtma etkisi devreye girer; bu "
+        "tablo yalnızca BİLGİ amaçlıdır, pencere-başı eşit-ağırlık karşılaştırması burada "
+        "hesaplanmamıştır.)*"
+    )
     lines.append("")
     lines.append(
         "2008 (küresel finansal kriz) ve 2018 (kur şoku) yıllarında D1 sepetin ciddi altındaki "

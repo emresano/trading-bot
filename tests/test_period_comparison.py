@@ -7,9 +7,11 @@ import pytest
 from backtest.regime_core import Switch
 from tools.period_comparison import (
     _extend_one,
+    build_window_start_basket,
     daily_ffill,
     freeze_aux_cmp,
     switch_count_and_regime_ratio,
+    symbol_weight_shares,
     window_bounds,
 )
 
@@ -119,3 +121,51 @@ def test_extend_one_appends_fresh_bars_beyond_frozen_last_date(tmp_path, monkeyp
     assert len(combined) == 4
     assert note["max_abs_rel_diff"] == 0.0
     assert note["overlap_days"] == 2
+
+
+def _close_series(dates, closes):
+    return pd.Series(closes, index=pd.DatetimeIndex(dates, tz="UTC"))
+
+
+def test_symbol_weight_shares_reflects_21_year_drift_concentration():
+    # A: t0'dan itibaren 100x buyur; B: hic degismez -> A payi ezici cogunluk olmali
+    dates = pd.date_range("2020-01-01", periods=3, freq="D", tz="UTC")
+    closes = {
+        "A": _close_series(dates, [1.0, 50.0, 100.0]),
+        "B": _close_series(dates, [1.0, 1.0, 1.0]),
+    }
+    shares = symbol_weight_shares(closes, dates[-1])
+    assert shares["A"] == pytest.approx(100.0 / 101.0)
+    assert shares["B"] == pytest.approx(1.0 / 101.0)
+    assert shares["A"] + shares["B"] == pytest.approx(1.0)
+
+
+def test_build_window_start_basket_ignores_pre_window_drift():
+    # A pencereden ONCE 100x buyumus (B hic buyumemis) ama pencere ICINDE ikisi de
+    # AYNI oranda (x2) artiyor -> pencere-basi ESIT agirlik sepeti tam +100% vermeli
+    # (2005-agirlikli tam-surukleme sepetinden FARKLI olarak A'nin onceki devi payi
+    # bu pencerede etkisiz kalmali).
+    pre = pd.date_range("2020-01-01", periods=2, freq="D", tz="UTC")
+    win = pd.date_range("2020-01-03", periods=2, freq="D", tz="UTC")
+    all_dates = pre.append(win)
+    a_vals = [1.0, 100.0, 100.0, 200.0]
+    b_vals = [1.0, 1.0, 1.0, 2.0]
+    closes = {
+        "A": _close_series(all_dates, a_vals),
+        "B": _close_series(all_dates, b_vals),
+    }
+    basket = build_window_start_basket(closes, win[0], win[-1], initial_equity=1000.0)
+    assert basket.iloc[0] == pytest.approx(1000.0)
+    assert basket.iloc[-1] == pytest.approx(2000.0)  # ikisi de x2 -> esit-agirlik sepet de x2
+
+
+def test_build_window_start_basket_matches_build_composite_when_window_is_full_history():
+    from backtest.regime_core import build_composite
+    dates = pd.date_range("2020-01-01", periods=5, freq="D", tz="UTC")
+    closes = {
+        "A": _close_series(dates, [1.0, 2.0, 3.0, 2.0, 4.0]),
+        "B": _close_series(dates, [1.0, 1.0, 1.0, 1.0, 1.0]),
+    }
+    basket = build_window_start_basket(closes, dates[0], dates[-1], initial_equity=100.0)
+    composite, _ = build_composite(closes)
+    pd.testing.assert_series_equal(basket, composite * 100.0, check_names=False)

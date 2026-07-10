@@ -30,7 +30,7 @@ import pandas as pd
 import requests
 import yaml
 
-from backtest.regime_core import RegimeCoreConfig, compute_cash_only_curve, run_regime_core
+from backtest.regime_core import RegimeCoreConfig, build_composite, compute_cash_only_curve, run_regime_core
 from data.cleaning import load_and_clean_universe, normalize_bist_dates
 from data.historical import GOLD_GRAM_DIVISOR, download_bars, load_cached, update_cache
 from tools.run_regime_core import (
@@ -252,6 +252,39 @@ def switch_count_and_regime_ratio(switches, regime_on: pd.Series, start: pd.Time
     return n, ratio
 
 
+def build_window_start_basket(closes: dict[str, pd.Series], start: pd.Timestamp, end: pd.Timestamp,
+                              initial_equity: float) -> pd.Series:
+    """Mevcut 'sepet' satırı (`result.composite`) t0=2005'te eşit-dolar yatırılıp BİR
+    DAHA HİÇ dengelenmeden 21 yıl sürüklenen TEK bir seridir — pencereye göre
+    KESİLİR ama o pencerenin başında YENİDEN eşit-ağırlıklandırılmaz. Bu fonksiyon
+    HER pencere için AYRI, o pencerenin başında taze eşit-ağırlıklı (ve pencere
+    içinde yine dengelenmeyen) bir sepet kurar: `build_composite` (mevcut, mühürlü,
+    backtest/regime_core.py — REUSE, kopyalanmadı) her sembolü YALNIZ `start:end`
+    aralığına kısıtlanmış olarak alır, böylece iç t0 = pencere başlangıcı olur.
+    D1'in kendi ENTER mantığıyla (her girişte equity 12'ye eşit bölünür) AYNI ilke,
+    yalnızca pencere sınırında 'taze giriş' varsayımıyla."""
+    windowed_closes = {s: series.loc[start:end] for s, series in closes.items()}
+    composite, _ = build_composite(windowed_closes)
+    return composite * initial_equity
+
+
+def symbol_weight_shares(closes: dict[str, pd.Series], asof: pd.Timestamp) -> dict[str, float]:
+    """TEŞHİS amaçlı (sepet hesaplamasının KENDİSİNİ etkilemez): t0=2005'te eşit-dolar
+    yatırılıp hiç dengelenmemiş 'sepet'in `asof` tarihindeki İMA EDİLEN ağırlık
+    dağılımı — `build_composite`nin AYNI normalizasyon mantığı (her sembol t0'daki
+    kendi kapanışına göre normalize edilir), yalnızca pay olarak ifade edilir.
+    21 yıllık sürüklenmeden dolayı bazı sembollerin payı ezici çoğunluğa ulaşabilir
+    — bu 'sepet' satırının pencere-bazlı okunuşunu neden çarpıttığının kanıtıdır."""
+    t0 = max(s.index[0] for s in closes.values())
+    normalized: dict[str, float] = {}
+    for sym, series in closes.items():
+        base = float(series.loc[t0])
+        prior = series.loc[:asof]
+        normalized[sym] = float(prior.iloc[-1]) / base if len(prior) else 0.0
+    total = sum(normalized.values())
+    return {sym: v / total for sym, v in normalized.items()} if total else {}
+
+
 # --------------------------------------------------------------------------
 # Ana koşum: D1 yeniden-üretimi + karşılaştırma serileri + pencere tabloları
 # --------------------------------------------------------------------------
@@ -307,11 +340,16 @@ def run_comparison(run_tag: Optional[str] = None) -> dict:
     window_tables = {}
     for key, label, start, end, full_cov in windows:
         row = {name: series_window_metrics(s, start, end) for name, s in series_map.items()}
+        window_basket = build_window_start_basket(closes, start, end, core_cfg.initial_equity)
+        row["sepet_pencere"] = compute_summary(window_basket)
+        weights = symbol_weight_shares(closes, start)
+        top_symbol, top_share = max(weights.items(), key=lambda kv: kv[1]) if weights else (None, 0.0)
         n_sw, ratio = switch_count_and_regime_ratio(result.switches, result.regime_on, start, end)
         tufe_stale = cpi_last_real_date is not None and start > cpi_last_real_date
         window_tables[key] = {
             "label": label, "start": start, "end": end, "full_coverage": full_cov,
             "metrics": row, "n_switches": n_sw, "regime_on_ratio": ratio, "tufe_stale": tufe_stale,
+            "sepet_top_symbol": top_symbol, "sepet_top_share": top_share,
         }
 
     # --- Madde 3: USD paneli (D1 + sepet, USD-terim CAGR/maxDD) ---
@@ -337,7 +375,7 @@ def run_comparison(run_tag: Optional[str] = None) -> dict:
         })
 
     return {
-        "run_tag": run_tag, "cfg": cfg, "core_cfg": core_cfg,
+        "run_tag": run_tag, "cfg": cfg, "core_cfg": core_cfg, "closes": closes,
         "result": result, "equity": equity, "basket_equity": basket_equity,
         "xu100_equity": xu100_equity, "usdtry": usdtry, "gold": gold, "gold_note": gold_note,
         "cpi": cpi, "cpi_note": cpi_note,

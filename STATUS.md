@@ -1,7 +1,45 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-10T10:20:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-10T10:55:00+03:00 (Europe/Istanbul)
+Şu an: **PERIOD_COMPARISON DOĞRULAMA MİNİ-TURU TAMAMLANDI — "sepet al-tut"
+metodolojisi netleştirildi + "Son 1 Yıl bilmecesi" sayısal ayrıştırıldı.**
+Bir önceki turda D1 (+45.3%) ile "sepet" (+105.8%) arasındaki büyük Son-1-Yıl
+farkının kaynağı belirsizdi (0 anahtarlama + rejim-ON %100 iken). Kök neden
+bulundu: mevcut **"sepet"** satırı `build_composite()`'in (mühürlü, S1b'nin
+kendi tanımı) TEK bir serisidir — 12 sembol t0=2005'te eşit-dolar yatırılıp
+**BİR KEZ BİLE dengelenmemiş**; pencere tabloları bu seriyi yalnızca KESER,
+pencere başında ağırlıkları sıfırlamaz. 21 yıllık sürüklenme yüzünden
+`ASELS` tek başına bu pencerenin başında sepetin **%58.3**'ünü oluşturuyordu
+— "sepet"in Son-1-Yıl getirisi esasen TEK sembolün performansıydı, 12
+sembolün dengeli ortalaması değil. **Sayısal ayrıştırma:** toplam fark
++60.5pp = ağırlık-sürüklenmesi etkisi (+71.2pp, taze pencere-başı eşit-ağırlık
+sepetin getirisi +34.55% olurdu — 2005-ağırlıklı +105.8%'in çok altında) +
+kalan fark (−10.8pp, D1'in son ENTER'ı pencere başlamadan önce olduğu için
+D1'in ağırlıkları da pencere-başı-taze değil, biraz daha erken sabitlenmiş —
+küçük komisyon/slipaj kalıntısı da dahil). **Düzeltme (kod davranışı
+DEĞİŞMEDİ, yalnız rapor):** her pencereye AYRI, `build_composite()`'in AYNEN
+reuse edildiği yeni bir **"sepet — PENCERE-BAŞI eşit ağırlık"** satırı
+eklendi (`tools/period_comparison.py::build_window_start_basket()` — o
+pencerenin başlangıcına kısıtlanmış kapanış serileriyle build_composite'i
+çağırır, iç t0 = pencere başlangıcı); mevcut "sepet" satırı KALDI, etiketi
+netleşti ("2005 AĞIRLIKLI, HİÇ dengelenmemiş"). Yeni teşhis fonksiyonu
+`symbol_weight_shares()` her pencerede en büyük payı gösteriyor (rapor
+notu). PERIOD_COMPARISON.md'ye: Metodoloji Notu (item 1, tek paragraf),
+"Son 1 Yıl Bilmecesi: Sayısal Ayrıştırma" bölümü (dinamik hesaplanır, sayı
+sabit YAZILMADI), her pencere tablosuna ağırlık-payı notu, kriz-yılı
+tablosuna açıklayıcı dipnot eklendi. Tam-dönem penceresinde yeni satır ile
+eski satır BİREBİR AYNI (window start = global t0 = 2005 olduğunda iki
+yöntem matematiksel olarak özdeş — tutarlılık kanıtı, rapor içinde
+gözlemlenebilir). 3 yeni test (`symbol_weight_shares` konsantrasyon,
+`build_window_start_basket` pencere-öncesi sürüklenmeyi YOK sayması,
+tam-dönem'de `build_composite`'le birebir eşleşme) — toplam 11 test
+`tests/test_period_comparison.py`'de. Strateji/motor/risk/karar kodu
+DOKUNULMADI (yalnız rapor/teşhis katmanı); hiçbir mühürlü eşik/parametre
+etkilenmedi. Faz 6/go_live/launchd/real'e adım YOK; iki durma noktası
+kullanıcıda.
+
+--- Önceki kayıt (2026-07-10T10:20, PERIOD_COMPARISON ilk sürüm) ---
 Şu an: **DÖNEMSEL KARŞILAŞTIRMA RAPORU (PERIOD_COMPARISON.md) TAMAMLANDI —
 BİLGİLENDİRME, kriter/kabul/karar YOK, hiçbir mühürlü eşik etkilenmedi.**
 Yeni araç `tools/period_comparison.py` (+ `tools/period_comparison_report.py`):
