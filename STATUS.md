@@ -1,7 +1,22 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-10T14:10:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-11T12:56:00+03:00 (Europe/Istanbul)
+Şu an: **EOD "Veri:" satırı teşhis edildi (kod hatası YOK) + K1.5 2/2'nin 3. denemesi
+(2026-07-10) VERİ YOK olarak sonuçlandı — G1 launchd BU TURDA KURULMADI (kapı
+geçilemedi).** Kullanıcı 2026-07-10 akşamı EOD'de "Veri:" satırını görmediğini
+bildirdi; kök neden araştırıldı — `build_eod_summary()` tek çağrı yolundan (main.py)
+üretiliyor, terminal+Telegram AYNI string'i paylaşıyor (kablolama sorunu YOK). Gerçek
+neden: **2026-07-10'da hiç `--cycle` koşulmamış** (journal/heartbeat/scheduler_state
+üçü de 07-09'da donuk); günün TEK gerçek cycle'ı (07-09 akşam) zaten fix commit'inden
+(`a3a629b`) 10 dk ÖNCE koşmuştu. K1.5 için bu bir PASS sayılamaz (veri yokluğu) →
+**K1.5 hâlâ 1/2**, launchd görev kuralı gereği kurulmadı; sıradaki fırsat 2026-07-13
+Pazartesi akşamı. `tests/test_scheduler.py`'ye gerçek-notifier-yolu kanıtı eklendi
+(kod davranışı DEĞİŞMEDİ, K1.5 sayacı SIFIRLANMADI). Aktif kuyruk AYNEN: K1.5 2/2 →
+G1 (launchd) → Faz 6 başlangıç kriterleri. Tam süit 574 passed, golden 3/3. Detay:
+"EOD 'Veri:' satırı teşhisi + K1.5 3. deneme SONUCU" bölümü.
+
+--- Önceki kayıt (2026-07-10T14:10, D5-BIST RED onayı — bu turdan ÖNCE tamamlandı) ---
 Şu an: **D5-BIST RED baş danışman kararıyla ONAYLANDI (KALICI KAYIT 25) — BIST
 STRATEJİ ARAŞTIRMASI KAPANDI.** Mühürlü tablo 2/4 (KALICI KAYIT 23+24, `D5_BIST_S1.md`)
 kalıcı hüküm kazandı: kalan iki kriter (CAGR, maxDD) botun varlık sebebiydi. Kampanya
@@ -1113,6 +1128,78 @@ notify-katmanı (`notify/eod_summary.py` + `main.py` çağrı noktası) — uygu
 launchd (G1) bu turda da KURULMADI — bir sonraki temiz koşu (2026-07-10 veya sonrası)
 bekleniyor; önceki turun 2-4. maddeleri (kurulum/doğrulama/STATUS "G1 TAMAM") aynen geçerli.
 
+## EOD "Veri:" satırı teşhisi + K1.5 3. deneme SONUCU: VERİ YOK, launchd (G1) KURULMADI (2026-07-11)
+
+Kullanıcı talimatı: "2026-07-10 akşam koşusunun EOD'sinde 'Veri:' satırını görmedim" +
+K1.5 2/2 teyidi + (kapı geçilirse) launchd kurulumu. Sıra gereği önce teşhis yapıldı;
+teşhis, sonraki kapının (K1.5) SONUCUNU da belirledi.
+
+**1) TEŞHİS — kod hatası DEĞİL, operasyonel sekans boşluğu:**
+- `main.py::PaperScheduler.run_cycle()` içinde `build_eod_summary()` çağrısı **TEK**
+  (main.py:432-440). Üretilen string hem `--cycle` CLI çıktısına (`print(res.eod_summary)`,
+  main.py:650) hem `self.notifier.send(res.eod_summary)` (main.py:443) ile Telegram'a
+  gidiyor — **iki ayrı şablon/yol YOK**; "test-gerçek yol ayrışması" hipotezi
+  YANLIŞLANDI. `notify/telegram_bot.py::TelegramNotifier.send()` de `parse_mode`
+  kullanmıyor (düz metin POST) — markdown-escape kaynaklı sessiz kırpılma da YOK.
+- Ancak ÜÇ bağımsız kaynak aynı şeyi gösteriyor: **2026-07-10'da HİÇ `--cycle`
+  koşulmamış.** `runtime/paper/decision_journal.jsonl`'da 2026-07-10 tarihli SIFIR satır
+  (61 satırın hepsi tarandı); `runtime/paper/heartbeat_status.json` hâlâ
+  `ts=2026-07-09T17:52:36Z`; `runtime/paper/scheduler_state.json::last_cycle_date` hâlâ
+  `"2026-07-09"`. `git log` 2026-07-10'daki TÜM commit'lerin (10:27-13:42 İstanbul, 9 adet)
+  D5-BIST + PERIOD_COMPARISON araştırma turlarına ait olduğunu doğruluyor; o gün hiçbir
+  runtime dosyası değişmemiş (`find runtime -newermt 2026-07-10 ! -newermt 2026-07-11`
+  yalnız d5_bist/period_comparison araç çıktılarını listeliyor, `runtime/paper/*` YOK).
+- Üstelik günün TEK gerçek cycle'ı olan **2026-07-09 akşam koşusu** (17:52:36Z =
+  20:52:36 İstanbul) fix commit'inden (`a3a629b`, 21:02:50 İstanbul) **~10 dakika ÖNCE**
+  koşmuş — o run zaten fix-ÖNCESİ kodla çalıştı (ve ayrıca DATA_DRIFT/provisional
+  nedeniyle zaten "K1.5 2/2 DENEMESİ: FAIL" olarak kayıtlı).
+- **Sonuç: fix (`a3a629b`), commit edildiğinden bu yana hiçbir GERÇEK `--cycle`
+  çağrısı tarafından çalıştırılmadı.** Kullanıcının "gördüm ama satır yoktu" gözlemi en
+  olası iki açıklamadan biri: (a) o akşam `--cycle` bayrağı OLMADAN bir komut (örn. yalnız
+  `--refresh` veya `--test-telegram`) çalıştırıldı — `startup()` HER çağrıda (bayraktan
+  bağımsız) "Paper bot başladı (...)" mesajını gönderir (main.py:227); bu EOD DEĞİLDİR ve
+  "Veri:" satırı hiç içermez, kod gereği (yalnız `build_eod_summary()` bu satırı üretir).
+  (b) 07-09 akşamki (fix-ÖNCESİ) koşunun günüyle karışıklık. **Notify katmanında bir
+  kablolama hatası YOK — mevcut testler (`tests/test_scheduler.py`) zaten gerçek
+  `run_cycle()` yolunu (`res.eod_summary`) test ediyordu.**
+
+**2) FIX/güçlendirme (yalnız test dosyası, bu turda commit `bb644ea`):** Mevcut testler
+üretici fonksiyonun DÖNÜŞ DEĞERİNİ (`res.eod_summary`) doğruluyordu ama notifier'a
+GERÇEKTEN ulaşan metni değil. `test_observe_mode_logs_signal_no_trade` ve
+`test_data_drift_blocks_finalization_and_resync_fixes` artık `sched.notifier.sent[-1]`'i
+(TelegramNotifier.send()'in kendi kaydı — maskeleme SONRASI) de doğruluyor; FINAL ve
+DATA_DRIFT/PROVISIONAL senaryolarının ikisi de (07-09 vakasının emsali). `notify/
+eod_summary.py` ve `main.py`'de kod değişikliği YOK (zaten doğru bağlıydı) — yalnız test
+kapsamı genişledi. **Bu değişiklik K1.5 sayacını SIFIRLAMAZ** (ölçülen boru hattı
+data→sinyal→karar→journal değişmedi).
+
+**3) K1.5 2/2 mekanik teyit — 2026-07-10 denemesi: DEĞERLENDİRİLEMEZ (VERİ YOK).**
+Dört kalemden hiçbiri denetlenebilir değil çünkü denetlenecek bir cycle çalışması YOK
+(yukarı bkz. teşhis). Görev kuralı ("Herhangi biri FAIL → launchd KURMA, raporla, DUR")
+en az bu kadar bağlayıcı bir durum için de geçerli sayıldı: **veri YOKLUĞU PASS
+sayılamaz** (CLAUDE.md Bölüm 0.3 — emin değilsen en konservatif seçeneği uygula).
+**K1.5 hâlâ 1/2** (2026-07-08 kaydı geçerliliğini koruyor, değişmedi). Bugün
+(2026-07-11, Cumartesi) BIST takvimine göre işlem günü DEĞİL — günün TEK cycle denemesi
+(09:35:28Z / 12:35 İstanbul, muhtemelen bu oturumdan önceki bir kontrol) "2026-07-11
+işlem günü değil → döngü atlandı" (CALENDAR skip) ile sonuçlandı; K1.5 için kullanılamaz.
+**Sıradaki fırsat: 2026-07-13 Pazartesi akşamı** — gerçek, DATA_DRIFT'siz +
+provisional=false + TELEGRAM ACTIVE + EOD Rejim/Pozisyon tutarlı bir `--refresh --cycle`
+koşusu.
+
+**4) G1 launchd kurulumu — BU TURDA KURULMADI (kapı geçilemedi).** Madde 3 PASS
+olmadığı (veri yok) için görev talimatının kendi kuralı gereği launchd KURULMADI;
+`deploy/*.plist`, `~/Library/LaunchAgents`, `OPERATOR_GUIDE.md` DOKUNULMADI;
+`launchctl list` bu makinede hâlâ boş (önceden de kurulu değildi). Kullanıcının bu
+tur için verdiği launchd-yasağı istisnası yalnız kapı geçilirse kullanılacak bir
+yetkiydi — kapı geçilmediği için istisna bu turda İŞLETİLMEDİ.
+
+**İzolasyon/değişmezler:** strateji/motor/risk/karar kodu (`strategy/regime_core.py`,
+`risk/`, `execution/`) DOKUNULMADI; `notify/eod_summary.py`/`main.py` DOKUNULMADI (zaten
+doğruydu); yalnız `tests/test_scheduler.py` (2 assertion) + bu STATUS kaydı değişti.
+`mode: paper`, `config/regime_core.yaml` DEĞİŞMEDİ. Tam süit **574 passed**, v7.1-golden
+**3/3** bayt-bayt (ayrıca izole doğrulandı). Faz 6/go_live/real'e adım YOK; iki durma
+noktası kullanıcıda.
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
@@ -1135,13 +1222,17 @@ Faz 6'ya gider.
   **1 kullanıldı**; kapı ailesinin TÜM varyantları (farklı pencere/teyit/haircut) bu
   tarihçede **KAPALI**. D1 paper hattı ve aktif kuyruk bu turdan etkilenmedi.
 
-- **[K1.5] ikinci temiz koşu (2/2) bekleniyor — 2026-07-09 denemesi FAIL oldu**
-  (DATA_DRIFT + provisional, bkz. "K1.5 Mekanik Teyit — 2/2 DENEMESİ: FAIL" bölümü);
-  launchd bu yüzden KURULMADI. Farklı bir güne ait, DATA_DRIFT'siz + provisional=false
-  bir cycle ile tekrar denenecek. **Aktif kuyruğun ilk adımı.**
+- **[K1.5] ikinci temiz koşu (2/2) hâlâ bekleniyor — 2026-07-09 denemesi FAIL,
+  2026-07-10 denemesi VERİ YOK (hiç `--cycle` koşulmamış, bkz. "EOD 'Veri:' satırı
+  teşhisi + K1.5 3. deneme SONUCU" bölümü, 2026-07-11).** launchd bu yüzden KURULMADI.
+  Sıradaki fırsat: **2026-07-13 Pazartesi akşamı**, gerçek DATA_DRIFT'siz +
+  provisional=false + TELEGRAM ACTIVE + EOD tutarlı bir `--refresh --cycle` koşusu
+  (2026-07-11 Cumartesi/2026-07-12 Pazar işlem günü değil). **Aktif kuyruğun ilk adımı.**
 - **[G1, kullanıcı eylemi] launchd servis kurulumu** — K1.5 2/2 tamamlanınca sırada;
   bot + watchdog servislerinin gerçek launchd altında koşması (bkz. `deploy/*.plist`,
-  `OPERATOR_GUIDE.md`). Faz 6 resmi başlangıcı bu + go_live kararına bağlı.
+  `OPERATOR_GUIDE.md`). Faz 6 resmi başlangıcı bu + go_live kararına bağlı. 2026-07-11
+  turunda kullanıcının verdiği launchd-yasağı istisnası kapı geçilmediği için
+  İŞLETİLMEDİ (bkz. yukarı).
 - **[ASKIDA — EXPANSION/US hattı, KALICI KAYIT 22] D4-US KESİN RED (baş danışman
   onayı):** D4US-S1 mühürlü tabloda 1/4 → RED. **US aktif aile araması ASKIDA** — üç
   aile (D1/D2/D4-US) hepsi 1/4 (meta bulgu: DD-kesme PASS, risk-ayarlı getiri edge'i
