@@ -116,6 +116,37 @@ rejim anahtarlaması nadir (yılda ~3-4). Telegram varsa EOD özeti gelir.
 
 ---
 
+## 3a. T+2 takas gecikmesi — SAT sonrası hızlı ALIŞ sinyali gelirse
+
+BIST'te bir SAT'ın (EXIT) nakdi genelde **T+2** (2 işlem günü) sonra hesaba tam
+geçer/kullanılabilir olur. Bot bu gerçeği `config/regime_core.yaml::cash_yield.
+settlement_trading_days` (varsayılan **2**) ile execution katmanında (yalnız muhasebe/
+bilgilendirme — karar/miktar HİÇBİR ZAMAN etkilenmez, strategy/regime_core.py bu
+alandan habersizdir) izler:
+
+- Her SAT günü EOD/Telegram özetine **"Takas: bugünkü SAT'ın nakdi hesaba geçecek
+  tarih T+2 → <tarih>"** satırı eklenir.
+- Eğer rejim çok kısa sürede tekrar AÇILIR ve bir ALIŞ (ENTER/INITIAL_ENTER), en son
+  SAT'ın T+2 penceresi dolmadan yürütülürse, bot ayrı bir **SETTLEMENT WARN** alarmı
+  gönderir ("... nakit TAM SETTLE OLMAMIŞ olabilir; broker hesabınızda kullanılabilir
+  bakiyeyi kontrol edin"). Tarihsel S1b tarihçesinde (2005-2026, 33 EXIT) bu durum HİÇ
+  gerçekleşmedi (confirm_days=3 giriş teyidi doğal bir tampon sağlıyor) — ama teorik
+  olarak mümkün, bu yüzden bot seni uyarır.
+
+**Bu uyarıyı görürsen ne yapmalısın (manuel yürütme — ManualExecutionAdapter tasarımı):**
+1. Broker hesabında **kullanılabilir/serbest bakiye**yi kontrol et (SAT geliri "beklemede"
+   görünüyor olabilir).
+2. Yeterli serbest bakiye varsa (örn. önceki nakitten kalan pay, ya da brokerın
+   T+2-öncesi-yeniden-yatırım izni varsa) ALIŞ'ı normal yürüt.
+3. Yetersizse: ALIŞ'ı **T+2 dolana kadar** ertele (bot bunu senin için otomatik
+   YAPMAZ — bu kasıtlı; miktarı/kararı otomatik geciktirmek strateji koduna dokunmak
+   anlamına gelir, CLAUDE.md Bölüm 0.2). Gecikme kısa (birkaç gün); rejim genelde bu
+   sürede bozulmaz, ama teyit için journal'daki `signal_eval` kaydını izle.
+4. Bu bir kod hatası DEĞİL — gerçek BIST takas mekaniğinin manuel-yürütme akışına
+   doğal bir yansımasıdır.
+
+---
+
 ## 4. FREEZE (yeni ENTER durur) — nasıl temizlenir
 
 FREEZE dosyaları `runtime/paper/freeze/` altında oluşur (drawdown breaker, günlük zarar,
