@@ -47,8 +47,15 @@ CREATE TABLE IF NOT EXISTS runner_state (
 
 # F5-B1: go-live'da mevcut rejimi benimseme (INITIAL_ENTER) bayrağı — geriye
 # uyumlu ALTER (eski DB'lerde kolon yoksa eklenir; varsayılan 0).
+# T+2 takas gecikmesi (execution katmanı, karar/sinyal koduna dokunmadan — bkz.
+# RegimeCoreRunner.settlement_days): varsayılan 999999 = "zaten settle olmuş" —
+# hem taze hesaplar (ilk sermaye satış geliri DEĞİLDİR, takasa tabi değil) hem de
+# bu migration'dan ÖNCE zaten koşan hesaplar (geçmiş SAT'ın tarihi bilinmiyor,
+# muhafazakâr varsayım: davranış DEĞİŞMESİN) için güvenli varsayılan.
 _MIGRATIONS = [
     ("golive_pending", "ALTER TABLE runner_state ADD COLUMN golive_pending INTEGER DEFAULT 0"),
+    ("cash_days_since_exit",
+     "ALTER TABLE runner_state ADD COLUMN cash_days_since_exit INTEGER DEFAULT 999999"),
 ]
 
 
@@ -72,6 +79,11 @@ class DailyDecision:
     breaker_state: str = "OK"
     drawdown: float = 0.0
     peak_equity: float = 0.0
+    # T+2 takas gecikmesi (execution katmanı ekle-si, karar/sinyal koduna dokunmadan):
+    # ENTER/INITIAL_ENTER, en son EXIT'in nakdi henüz (runner'ın settlement_days
+    # eşiğine göre) settle olmamışken gerçekleşirse doldurulur (main.py bunu WARN
+    # alarmına + journal'a taşır). None = uyarı yok (settlement_days=0 veya nakit settle).
+    settlement_note: Optional[str] = None
 
 
 class RegimeCoreRunner:
@@ -80,13 +92,19 @@ class RegimeCoreRunner:
                  breaker: Optional[RegimeCoreBreaker] = None,
                  state_path: Path | str = DEFAULT_RUNNER_STATE,
                  decision_hook: Optional[Callable[[DailyDecision], None]] = None,
-                 ledger=None):
+                 ledger=None, settlement_days: int = 0):
         self.broker = broker
         self.params = params
         self.cash_rate = cash_rate
         self.breaker = breaker
         self.decision_hook = decision_hook
         self.ledger = ledger    # safety.reconciliation.LocalLedger | None (B2)
+        # BIST T+2: SAT sonrası nakit bu kadar İŞLEM GÜNÜ geçmeden "settle" sayılmaz
+        # (yalnız faiz-tahakkuk BAŞLANGICINI ve ENTER-erken uyarısını etkiler; hiçbir
+        # ENTER/EXIT KARARINI engellemez/geciktirmez — karar strategy/regime_core.py'de
+        # DEĞİŞMEDEN kalır). Varsayılan 0 = ÖNCEKİ davranış (mühürlü S1b/P1 ile bit-bit
+        # aynı — run_regime_core_prod bu parametreyi hiç görmez).
+        self.settlement_days = int(settlement_days)
         self.state_path = Path(state_path)
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.state_path))
@@ -110,19 +128,20 @@ class RegimeCoreRunner:
         self._conn.commit()
 
     # ------------------------------------------------------------------ state
-    def _state(self) -> tuple[Optional[pd.Timestamp], float, str, bool, bool]:
+    def _state(self) -> tuple[Optional[pd.Timestamp], float, str, bool, bool, int]:
         r = self._conn.execute(
             "SELECT last_processed_date, peak_equity, prev_breaker_state, alarm_latched, "
-            "golive_pending FROM runner_state WHERE id=1").fetchone()
+            "golive_pending, cash_days_since_exit FROM runner_state WHERE id=1").fetchone()
         last = pd.Timestamp(r[0]) if r[0] else None
-        return last, float(r[1]), r[2], bool(r[3]), bool(r[4])
+        return last, float(r[1]), r[2], bool(r[3]), bool(r[4]), int(r[5])
 
     def _save_state(self, last_date: pd.Timestamp, peak: float, prev_state: str, latched: bool,
-                    golive_pending: bool = False) -> None:
+                    golive_pending: bool = False, cash_days_since_exit: int = 999999) -> None:
         self._conn.execute(
             "UPDATE runner_state SET last_processed_date=?, peak_equity=?, prev_breaker_state=?, "
-            "alarm_latched=?, golive_pending=? WHERE id=1",
-            (last_date.isoformat(), peak, prev_state, int(latched), int(golive_pending)))
+            "alarm_latched=?, golive_pending=?, cash_days_since_exit=? WHERE id=1",
+            (last_date.isoformat(), peak, prev_state, int(latched), int(golive_pending),
+             int(cash_days_since_exit)))
         self._conn.commit()
 
     def initialize_flat(self, as_of_date, adopt_regime_on: bool = False) -> None:
@@ -132,9 +151,11 @@ class RegimeCoreRunner:
         `adopt_regime_on=True` (go-live'da rejim zaten AÇIK): ilk işlenen günde
         üretilen ENTER, mevcut rejimin BENİMSENMESİdir (yeni bir cross-up değil) →
         `INITIAL_ENTER` olarak etiketlenir (F5-B1 madde 3, journal özel etiketi).
-        Offline parite yeniden-koşumu da aynı bayrakla aynı etiketi üretir (B5)."""
+        Offline parite yeniden-koşumu da aynı bayrakla aynı etiketi üretir (B5).
+        Nakit go-live'da mevcut sermayedir (SAT geliri DEĞİL) → takasa tabi değil,
+        cash_days_since_exit "zaten settle" (999999) ile başlar."""
         self._save_state(pd.Timestamp(as_of_date), self.params.initial_equity, "OK", False,
-                         golive_pending=bool(adopt_regime_on))
+                         golive_pending=bool(adopt_regime_on), cash_days_since_exit=999999)
 
     # ------------------------------------------------------------------ ana döngü
     def process_up_to(self, closes: dict[str, pd.Series], today=None) -> list[DailyDecision]:
@@ -151,7 +172,7 @@ class RegimeCoreRunner:
         if today is not None:
             all_dates = all_dates[all_dates <= pd.Timestamp(today)]
 
-        last_processed, peak, prev_state, latched, golive_pending = self._state()
+        last_processed, peak, prev_state, latched, golive_pending, cash_days_since_exit = self._state()
         daily_rate = (self.cash_rate.reindex(all_dates, method="ffill").bfill()
                       if self.cash_rate is not None else None)
 
@@ -171,16 +192,23 @@ class RegimeCoreRunner:
 
             interest = 0.0
             # --- cash accrual (transition ÖNCESİ in_position'a göre) ---
-            if prev_date is not None and not in_position and daily_rate is not None:
-                days = (date - prev_date).days
-                rate = daily_rate.loc[date]
-                if days > 0 and pd.notna(rate):
-                    interest = self.broker.accrue_cash(float(rate), days)
+            # T+2 takas: settlement_days=0 (varsayılan) → ÖNCEKİ davranış (bit-bit aynı,
+            # cash_days_since_exit her zaman >= 0). settlement_days>0 ise SAT'tan sonraki
+            # ilk `settlement_days` işlem gününde nakit HENÜZ tahakkuk ETMEZ (gerçekte
+            # settle olmamış sayılır) — yalnız faiz BAŞLANGICINI geciktirir, tutarı DEĞİŞTİRMEZ.
+            if prev_date is not None and not in_position:
+                cash_days_since_exit = min(cash_days_since_exit + 1, 999999)
+                if daily_rate is not None:
+                    days = (date - prev_date).days
+                    rate = daily_rate.loc[date]
+                    if days > 0 and pd.notna(rate) and cash_days_since_exit >= self.settlement_days:
+                        interest = self.broker.accrue_cash(float(rate), days)
 
             equity_before = self.broker.get_account_state().equity
             action = "HOLD_POSITION" if in_position else "HOLD_CASH"
             planned_qty: dict[str, int] = {}
             order_ids: list[str] = []
+            settlement_note: Optional[str] = None
 
             # --- t+1 transition ---
             if signal_yesterday != in_position:
@@ -197,9 +225,19 @@ class RegimeCoreRunner:
                         # go-live'da mevcut rejimi benimseme → INITIAL_ENTER (madde 3).
                         action = "INITIAL_ENTER" if golive_pending else "ENTER"
                         golive_pending = False
+                        # T+2 uyarısı: en son SAT'ın nakdi henüz settle olmamışken ALIŞ
+                        # yürütülüyor — YALNIZ bilgilendirme (karar/miktar ETKİLENMEZ;
+                        # manuel yürütmede gerçek settlement broker tarafında uygulanır).
+                        if self.settlement_days > 0 and cash_days_since_exit < self.settlement_days:
+                            settlement_note = (
+                                f"T+{self.settlement_days} UYARISI: son SAT'tan bu yana yalnızca "
+                                f"{cash_days_since_exit} işlem günü geçti (gerekli: {self.settlement_days}) "
+                                "— nakit TAM SETTLE OLMAMIŞ olabilir; manuel yürütmede broker "
+                                "hesabınızda kullanılabilir bakiyeyi kontrol edin.")
                 elif not signal_yesterday and in_position:
                     order_ids = self.broker.close_all(order=self.params.symbols)
                     action = "EXIT"
+                    cash_days_since_exit = 0
 
             equity_after = self.broker.get_account_state().equity
             peak = max(peak, equity_after)
@@ -229,11 +267,11 @@ class RegimeCoreRunner:
                 executed_order_ids=order_ids, equity_before=equity_before,
                 equity_after=equity_after, cash_after=self.broker.cash,
                 interest_accrued=interest, breaker_state=breaker_state,
-                drawdown=drawdown, peak_equity=peak)
+                drawdown=drawdown, peak_equity=peak, settlement_note=settlement_note)
             decisions.append(dec)
             if self.decision_hook is not None:
                 self.decision_hook(dec)
-            self._save_state(date, peak, prev_state, latched, golive_pending)
+            self._save_state(date, peak, prev_state, latched, golive_pending, cash_days_since_exit)
             # B2: döngü SONUNDA yerel defteri broker gerçeğine eşitle. Bu yazımdan
             # ÖNCE bir çöküş olursa broker≠yerel → bir sonraki startup_reconcile FREEZE.
             if self.ledger is not None:
