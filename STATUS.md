@@ -1,7 +1,20 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-11T12:56:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-11T13:30:00+03:00 (Europe/Istanbul)
+Şu an: **K1.5 2/2 (2026-07-13) + G1 launchd talimatı TARİH UYUŞMAZLIĞI nedeniyle
+YÜRÜTÜLEMEDİ — sistem saati gerçekte hâlâ 2026-07-11 Cumartesi, 2026-07-13 henüz
+gelmedi.** Talimat 2026-07-13 akşam koşusunu denetlemeyi istedi ama o tarihe ait ne
+journal'da ne gerçekte (piyasa verisi oluşmamış) bir kayıt var — `date`/
+`decision_journal.jsonl`/`scheduler_state.json` ile doğrulandı. Önceki turdaki
+gerekçeyle birebir aynı mantıkla (veri yokluğu PASS sayılamaz): **K1.5 hâlâ 1/2**,
+**G1 launchd BU TURDA DA KURULMADI**, doğrulama adımları/launchd-istisnası
+işletilmedi. Kod/config değişikliği YOK; süit 574 passed/golden 3/3 önceki turdan
+değişmedi. Aktif kuyruk AYNEN: K1.5 2/2 (gerçek fırsat: 2026-07-13 Pazartesi akşamı,
+sistem saati o tarihe ulaştığında) → G1 (launchd) → Faz 6 başlangıç kriterleri.
+Detay: "K1.5 2/2 (2026-07-13) DENEME TALİMATI — TARİH UYUŞMAZLIĞI" bölümü.
+
+--- Önceki kayıt (2026-07-11T12:56, EOD teşhis + K1.5 3. deneme VERİ YOK) ---
 Şu an: **EOD "Veri:" satırı teşhis edildi (kod hatası YOK) + K1.5 2/2'nin 3. denemesi
 (2026-07-10) VERİ YOK olarak sonuçlandı — G1 launchd BU TURDA KURULMADI (kapı
 geçilemedi).** Kullanıcı 2026-07-10 akşamı EOD'de "Veri:" satırını görmediğini
@@ -1199,6 +1212,34 @@ doğruydu); yalnız `tests/test_scheduler.py` (2 assertion) + bu STATUS kaydı d
 `mode: paper`, `config/regime_core.yaml` DEĞİŞMEDİ. Tam süit **574 passed**, v7.1-golden
 **3/3** bayt-bayt (ayrıca izole doğrulandı). Faz 6/go_live/real'e adım YOK; iki durma
 noktası kullanıcıda.
+
+## K1.5 2/2 (2026-07-13) DENEME TALİMATI — TARİH UYUŞMAZLIĞI, YÜRÜTÜLEMEDİ (2026-07-11)
+
+Kullanıcı talimatı 2026-07-13 akşam koşusunun K1.5 dört kalemini denetlemeyi ve
+(PASS ise) G1 launchd kurulumunu istedi. **Görev başlamadan durduruldu: sistem saati
+gerçekte 2026-07-11 Cumartesi 13:26 (Europe/Istanbul)** — `date`/`TZ=Europe/Istanbul
+date` ile doğrulandı. 2026-07-13 Pazartesi henüz GELMEDİ; o güne ait bir "akşam
+koşusu" gerçekte var OLAMAZ (piyasa verisi henüz oluşmamış, yfinance'te 07-13 barı
+yok). Doğrulama: `runtime/paper/decision_journal.jsonl`'da 2026-07-13 tarihli SIFIR
+satır; `scheduler_state.json::last_cycle_date` hâlâ `"2026-07-09"`;
+`heartbeat_status.json` hâlâ `ts=2026-07-09T17:52:36Z`. Bugünün (2026-07-11,
+Cumartesi — işlem günü değil) TEK kayıtları saat 09:35/10:21 UTC'deki CALENDAR-skip
+girdileri; K1.5 için kullanılamaz (önceki turda da not edildi).
+
+**Karar (önceki turdaki gerekçeyle birebir aynı mantık — CLAUDE.md Bölüm 0.3, "emin
+değilsen en konservatif seçeneği uygula"):** K1.5 2/2 DEĞERLENDİRİLEMEDİ (veri yok,
+tarih henüz gelmedi) → **launchd (G1) KURULMADI**, doğrulama adımları (launchctl/
+kickstart/pmset) çalıştırılmadı, `deploy/*.plist`/`~/Library/LaunchAgents`
+DOKUNULMADI. Kullanıcının bu tur için verdiği launchd-yasağı istisnası kapı
+geçilmediği için yine İŞLETİLMEDİ. **K1.5 hâlâ 1/2** (2026-07-08 kaydı geçerli).
+Kod/config/test değişikliği YOK bu turda; süit durumu bir önceki turdan (574 passed,
+golden 3/3) değişmedi.
+
+**Olası açıklama (rapor amaçlı, aksiyon gerektirmiyor):** talimat muhtemelen ileri bir
+tarih için önceden hazırlanmış ve bu oturuma erken/yanlışlıkla iletilmiş olabilir,
+ya da takvim karışıklığı var. **Sıradaki gerçek fırsat değişmedi: 2026-07-13
+Pazartesi akşamı**, sistem saati o tarihe ulaştığında gerçek bir
+`--refresh --cycle` koşusu ile.
 
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
