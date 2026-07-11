@@ -25,7 +25,7 @@ def _seed_store(store: LiveHistoryStore, symbols, series):
         store.upsert_bars(sym, df, source="test")
 
 
-def _cfg(go_live=None, telegram_enabled=False):
+def _cfg(go_live=None, telegram_enabled=False, settlement_trading_days=0):
     return {
         "symbols": ["THYAO", "GARAN"],
         "regime": {"ma_period": 3, "band_pct": 0.0, "confirm_days": 1},
@@ -34,6 +34,7 @@ def _cfg(go_live=None, telegram_enabled=False):
         "safety": {"freeze_dir": None},   # __init__ runtime altına düşer
         "telegram": {"enabled": telegram_enabled},
         "paper": {"go_live_date": go_live},
+        "cash_yield": {"settlement_trading_days": settlement_trading_days},
     }
 
 
@@ -277,6 +278,61 @@ def test_catchup_with_gap_switch_emits_delayed_signal(tmp_path: Path):
     assert events, "GECİKMİŞ SİNYAL alarmı bekleniyordu"
     assert any("EXIT" in r["message"] for r in events)
     assert sched.broker.quantities() == {}            # EXIT yürütüldü, nakitte
+    sched.close()
+
+
+def test_settlement_takas_line_appears_in_eod_on_exit_day(tmp_path: Path):
+    """T+2: EXIT günü EOD'de 'Takas: ... T+2 → <tarih>' satırı GERÇEK yolda (main.py
+    çağrı zinciri, res.eod_summary) görünmeli; settlement_trading_days=0 (eski
+    davranış) verildiğinde satır HİÇ basılmamalı (geriye uyumluluk)."""
+    series = [100.0, 101, 102, 103, 104, 105, 106, 90, 90, 90, 90, 90]  # EXIT@BDAYS[8]
+    store = LiveHistoryStore(tmp_path / "h.sqlite")
+    _seed_store(store, ["THYAO", "GARAN"], series)
+    feed = LiveDataFeed(store, ["THYAO", "GARAN"], fetch_raw_fn=lambda y, s: pd.DataFrame())
+    cfg = _cfg(BDAYS[0].date(), settlement_trading_days=2)
+    cfg["safety"]["freeze_dir"] = str(tmp_path / "freeze")
+    sched = PaperScheduler(cfg, tmp_path / "rt", feed=feed, notifier_sender=[].append)
+    sched.startup()
+    res = sched.run_cycle(BDAYS[8].date())            # tek çağrıda ENTER+EXIT@BDAYS[8]
+    assert res.action == "EXIT"
+    expected = sched._add_trading_days(BDAYS[8].date(), 2)
+    assert f"Takas: bugünkü SAT'ın nakdi hesaba geçecek tarih T+2 → {expected.isoformat()}" \
+        in res.eod_summary
+    assert sched.notifier.sent and "Takas:" in sched.notifier.sent[-1]  # gerçek-yol kanıtı
+    sched.close()
+
+    # settlement_trading_days=0 (varsayılan) → satır HİÇ basılmaz (geriye uyumluluk)
+    store2 = LiveHistoryStore(tmp_path / "h2.sqlite")
+    _seed_store(store2, ["THYAO", "GARAN"], series)
+    feed2 = LiveDataFeed(store2, ["THYAO", "GARAN"], fetch_raw_fn=lambda y, s: pd.DataFrame())
+    cfg2 = _cfg(BDAYS[0].date(), settlement_trading_days=0)
+    cfg2["safety"]["freeze_dir"] = str(tmp_path / "freeze2")
+    sched2 = PaperScheduler(cfg2, tmp_path / "rt2", feed=feed2, notifier_sender=[].append)
+    sched2.startup()
+    res2 = sched2.run_cycle(BDAYS[8].date())
+    assert res2.action == "EXIT"
+    assert "Takas:" not in res2.eod_summary
+    sched2.close()
+
+
+def test_settlement_warn_when_reentry_before_settled(tmp_path: Path):
+    """T+2: EXIT@BDAYS[8], ENTER@BDAYS[9] (yalnızca 1 işlem günü sonra, < 2) →
+    SETTLEMENT WARN journal event + Telegram bildirimi. Karar (ENTER'ın gerçekleşmesi/
+    hangi güne düştüğü) ETKİLENMEZ — yalnız bilgilendirme."""
+    series = [100.0, 101, 102, 103, 104, 105, 106, 90, 140, 140, 140, 140]
+    store = LiveHistoryStore(tmp_path / "h.sqlite")
+    _seed_store(store, ["THYAO", "GARAN"], series)
+    feed = LiveDataFeed(store, ["THYAO", "GARAN"], fetch_raw_fn=lambda y, s: pd.DataFrame())
+    cfg = _cfg(BDAYS[0].date(), settlement_trading_days=2)
+    cfg["safety"]["freeze_dir"] = str(tmp_path / "freeze")
+    sched = PaperScheduler(cfg, tmp_path / "rt", feed=feed, notifier_sender=[].append)
+    sched.startup()
+    sched.run_cycle(BDAYS[9].date())          # tek çağrıda ENTER(3)+EXIT(8)+ENTER(9)
+    events = [r for r in sched.journal.read_all() if r.get("category") == "SETTLEMENT"]
+    assert events, "T+2 SETTLEMENT uyarısı bekleniyordu"
+    assert "T+2" in events[0]["message"] and "SETTLE OLMAMIŞ" in events[0]["message"]
+    assert sched.broker.quantities()          # ENTER yürütüldü (karar etkilenmedi)
+    assert any("SETTLEMENT" in s for s in sched.notifier.sent)
     sched.close()
 
 

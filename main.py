@@ -94,6 +94,11 @@ class PaperScheduler:
         gl = paper.get("go_live_date")
         self.go_live_date = pd.Timestamp(gl, tz="UTC") if gl else None
         self.mode = "active" if self.go_live_date is not None else "observe"
+        # BIST T+2 takas gecikmesi (execution katmanı — karar/sinyal koduna dokunmadan,
+        # bkz. execution/regime_core_runner.py::RegimeCoreRunner.settlement_days).
+        # Yalnız faiz-tahakkuk başlangıcını + erken-ALIŞ uyarısını etkiler, hiçbir
+        # karar/miktarı DEĞİŞTİRMEZ. Varsayılan 0 = eski davranış (config'te yoksa).
+        self.settlement_days = int(cfg.get("cash_yield", {}).get("settlement_trading_days", 0))
 
         # takvim
         self.calendar = BistCalendar(logger=lambda m: self._log("WARN", "CALENDAR", m))
@@ -155,7 +160,8 @@ class PaperScheduler:
         self.runner = RegimeCoreRunner(
             self.broker, self.params, cash_rate=self.cash_rate, breaker=self.breaker,
             state_path=self.runtime / "regime_runner.sqlite",
-            decision_hook=self.journal.record_decision, ledger=self.ledger)
+            decision_hook=self.journal.record_decision, ledger=self.ledger,
+            settlement_days=self.settlement_days)
         self._state_file = self.runtime / "scheduler_state.json"
 
     # ------------------------------------------------------------------ yardımcılar
@@ -225,6 +231,19 @@ class PaperScheduler:
                                 freeze_file=self.runtime / "RECON_MISMATCH", alarm_hook=self._alarm)
         self._log("INFO" if res.matched else "CRITICAL", "RECON", res.summary())
         self.notifier.send(f"Paper bot başladı ({self.mode} mod). {res.summary()}")
+
+    # ------------------------------------------------------------------ T+2 takas
+    def _add_trading_days(self, d: date, n: int) -> date:
+        """`d`den başlayarak n İŞLEM GÜNÜ ileri (BIST takvimi — tatil/hafta sonu atlar).
+        n<=0 ise d'nin kendisini döner (settlement_days=0 → gecikme yok)."""
+        from datetime import timedelta
+        cur = d
+        added = 0
+        while added < n:
+            cur = cur + timedelta(days=1)
+            if self.calendar.is_trading_day(cur):
+                added += 1
+        return cur
 
     # ------------------------------------------------------------------ bar finalliği
     def _is_bar_final(self, as_of: date) -> bool:
@@ -402,6 +421,14 @@ class PaperScheduler:
                                               f"(kaçan gün, exec_today={exec_today.date()})")
                 if catchup:
                     res.notes.append(f"catch-up: {len(catchup)} gecikmiş anahtarlama yürütüldü")
+            # T+2 takas uyarısı (yalnız bilgilendirme — karar/miktar ETKİLENMEZ, bkz.
+            # RegimeCoreRunner.settlement_days): en son SAT'ın nakdi henüz settle
+            # olmamışken bir ALIŞ yürütüldüyse operatör Telegram'dan haberdar edilir.
+            for d in decisions:
+                if d.settlement_note:
+                    self._alarm({"category": "SETTLEMENT", "level": "WARN",
+                                 "message": d.settlement_note})
+                    self.journal.record_event("WARN", "SETTLEMENT", d.settlement_note)
             acct = self.broker.get_account_state()
             res.equity, res.cash = acct.equity, acct.cash
             if decisions:
@@ -429,6 +456,14 @@ class PaperScheduler:
         # pozisyon HER ZAMAN NAKİT'tir (hesap başlatılmadı) ama rejim ON olabilir — eskiden
         # tek satır in_position'dan türetildiği için observe'da rejim ON iken bile "NAKİT
         # (rejim OFF)" basılıyor, üstteki [GÖZLEM] başlığıyla çelişiyordu.
+        # T+2 takas bilgisi: bugün SAT (EXIT) yürütüldüyse nakdin hesaba (settle) geçeceği
+        # tarih EOD'de görünür olsun (operatör manuel yürütmede hızlı bir ALIŞ'ta nakdin
+        # henüz müsait olmayabileceğini bilsin — bkz. OPERATOR_GUIDE T+2 bölümü).
+        settlement_info = None
+        if self.mode == "active" and res.action == "EXIT" and self.settlement_days > 0:
+            settle_on = self._add_trading_days(exec_today.date(), self.settlement_days)
+            settlement_info = (f"Takas: bugünkü SAT'ın nakdi hesaba geçecek tarih "
+                               f"T+{self.settlement_days} → {settle_on.isoformat()}")
         res.eod_summary = build_eod_summary(
             date=as_of, equity=res.equity, cash=res.cash, day_pnl=res.day_pnl,
             in_position=bool(self.broker.quantities()), regime_on=res.regime_on,
@@ -437,7 +472,8 @@ class PaperScheduler:
             modeled_interest_total=res.modeled_interest_total, next_calendar_note=next_note,
             cash_rate_status=res.cash_rate_status or None,
             telegram_status=self.telegram_status,
-            data_final=final, data_final_reason=data_final_reason)
+            data_final=final, data_final_reason=data_final_reason,
+            settlement_info=settlement_info)
         if self.mode == "observe":
             res.eod_summary = "[GÖZLEM — paper hesabı başlatılmadı, işlem yok]\n" + res.eod_summary
         self.notifier.send(res.eod_summary)
@@ -466,7 +502,8 @@ class PaperScheduler:
                                  history_store=self.store)
             runner = RegimeCoreRunner(broker, self.params, cash_rate=self.cash_rate,
                                       breaker=RegimeCoreBreaker(freeze_file=tmp / "BREAKER"),
-                                      state_path=tmp / "r.sqlite")
+                                      state_path=tmp / "r.sqlite",
+                                      settlement_days=self.settlement_days)
             runner.initialize_flat(self.go_live_date, adopt_regime_on=self._adopt_regime_on(closes))
             decs = runner.process_up_to(closes, today=pd.Timestamp(as_of, tz="UTC"))
             replay = [(str(pd.Timestamp(d.date).date()), d.action) for d in decs

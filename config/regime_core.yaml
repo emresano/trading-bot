@@ -71,6 +71,14 @@ cash_yield:
   enabled: true
   aux_snapshot: "data/snapshots/aux/2026-07-07/TRY_ON_RATE.parquet"
   haircut_bps: 200   # bkz. backtest/regime_core.py::CASH_YIELD_HAIRCUT (0.02 olarak sabit kodlanmış, burada yalnızca belge amaçlı)
+  # BIST T+2 takas gecikmesi (execution/regime_core_runner.py::RegimeCoreRunner.settlement_days).
+  # YALNIZ (i) SAT sonrası faiz-tahakkuk BAŞLANGICINI 1 işlem günü daha geciktirir,
+  # (ii) T+2 dolmadan bir ALIŞ yürütülürse EOD/Telegram'a bilgilendirici WARN düşer.
+  # Hiçbir ENTER/EXIT KARARINI/miktarını etkilemez; strategy/regime_core.py bu alandan
+  # HABERSİZDİR (mühürlü backtest/S1b/P1 sonuçları — bu alan yokken üretildi — DEĞİŞMEZ).
+  # Ölçülen etki (settlement_days=2, tam S1b tarihçesi, 2026-07-11 ölçümü): CAGR
+  # -0.077pp, Sharpe -0.0027, maxDD -0.012pp — ihmal edilebilir (bkz. STATUS.md).
+  settlement_trading_days: 2
 
 # ============================================================ FAZ 5 (PAPER) — F5A-4
 # Kill-switch hiyerarşisi (HARDENING B3). Tümü KOD SABİTİ DEĞİL, config'tedir.

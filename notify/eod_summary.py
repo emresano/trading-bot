@@ -19,7 +19,8 @@ def build_eod_summary(*, date, equity: float, cash: float, day_pnl: float,
                       cash_rate_status: Optional[dict] = None,
                       telegram_status: Optional[tuple[str, str]] = None,
                       data_final: Optional[bool] = None,
-                      data_final_reason: Optional[str] = None) -> str:
+                      data_final_reason: Optional[str] = None,
+                      settlement_info: Optional[str] = None) -> str:
     frozen = frozen_switches or []
     # F5-B2a.1 mikro-düzeltme: "rejim" (compute_regime_signal çıktısı) ve "pozisyon"
     # (broker'da sepet tutuluyor mu) BAĞIMSIZ kavramlar — özellikle observe modda
@@ -56,6 +57,8 @@ def build_eod_summary(*, date, equity: float, cash: float, day_pnl: float,
     if telegram_status:  # F5-B2a.1: konfig-niyet ↔ çalışma-durumu uyuşmazlığı hiç sessiz kalmasın
         state, reason = telegram_status
         lines.append(f"TELEGRAM: {state}" if state == "ACTIVE" else f"TELEGRAM: {state} ({reason})")
+    if settlement_info:  # T+2: bugün SAT yürütüldüyse nakdin settle tarihi (execution katmanı)
+        lines.append(settlement_info)
     if next_calendar_note:
         lines.append(f"Yarın: {next_calendar_note}")
     return "\n".join(lines)
