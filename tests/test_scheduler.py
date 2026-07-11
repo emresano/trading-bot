@@ -64,6 +64,12 @@ def test_observe_mode_logs_signal_no_trade(tmp_path: Path):
     assert "Pozisyon: NAKİT (observe — hesap başlatılmadı)" in res.eod_summary
     # F5-B2a.2: temiz koşuda EOD veri-finallik satırı görünür olmalı
     assert "Veri: FINAL ✓" in res.eod_summary
+    # F5-B2a.3 (gerçek-yol kanıtı): `TelegramNotifier.send()`'in KENDİ kaydı (`.sent`,
+    # maskeleme SONRASI, main.py'nin çağırdığı GERÇEK metod — enabled=False'ta bile
+    # doldurulur, log-only yolunun da aynı metni gördüğünün kanıtı) aynı satırı taşımalı.
+    # res.eod_summary'yi test etmek TEK BAŞINA yeterli değildir — bu, üretici fonksiyonun
+    # DEĞİL, notifier'a GERÇEKTEN ulaşanın doğrulanmasıdır.
+    assert sched.notifier.sent and "Veri: FINAL ✓" in sched.notifier.sent[-1]
     # journal'da signal_eval kaydı var
     rows = sched.journal.read_all()
     assert any(r["type"] == "signal_eval" for r in rows)
@@ -306,6 +312,11 @@ def test_data_drift_blocks_finalization_and_resync_fixes(tmp_path: Path):
     assert events
     # F5-B2a.2: kök neden EOD'de AÇIKÇA görünür (operatör artık "temiz" sanamaz)
     assert "Veri: PROVISIONAL ⚠ (DATA_DRIFT — sinyal kesinleşmedi)" in res.eod_summary
+    # F5-B2a.3 (gerçek-yol kanıtı, en kritik senaryo — 2026-07-09 vakasının emsali):
+    # DATA_DRIFT'li bir cycle'da `TelegramNotifier.send()`'in KENDİ kaydı da PROVISIONAL
+    # satırını taşımalı — operatörün gerçekte göreceği metnin ta kendisi.
+    assert sched.notifier.sent and \
+        "Veri: PROVISIONAL ⚠ (DATA_DRIFT — sinyal kesinleşmedi)" in sched.notifier.sent[-1]
 
     # resync: tam tarihçe yeniden yazılır (adjusted değerler); sonra drift YOK
     rep = sched.resync(BDAYS[-1].date())
