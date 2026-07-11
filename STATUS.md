@@ -1,7 +1,22 @@
 # Proje Durumu
 > Tarihsel tur detayları: **STATUS_ARCHIVE.md** (tamamlanmış turların tam blokları + çözülmüş sorun/blok maddeleri).
 
-Son güncelleme: 2026-07-11T13:30:00+03:00 (Europe/Istanbul)
+Son güncelleme: 2026-07-11T14:35:00+03:00 (Europe/Istanbul)
+Şu an: **T+2 TAKAS GECİKMESİ teşhis + düzeltme TAMAMLANDI (execution/muhasebe katmanı
+— karar/sinyal/risk motoruna DOKUNULMADI).** SAT sonrası nakit gerçekte T+2'de settle
+olur; bot bunu (hem PaperBroker hem regime_core_runner'da) 1 gün erken kabul
+ediyordu. Ölçülen etki İHMAL EDİLEBİLİR (ΔCAGR -0.077pp, tam S1b tarihçesi, ayrı
+ölçüm — `strategy/regime_core.py` dokunulmadan) → **mühürlü D1/S1b/P1 sonuçlarına
+DOKUNULMADI**; yalnız execution katmanına opt-in `settlement_days` (üretimde 2, config
+ile etkin) + EOD/Telegram "Takas: ... T+2 → tarih" satırı + T+2-öncesi-ALIŞ SETTLEMENT
+WARN alarmı + OPERATOR_GUIDE §3a eklendi. 3 ayrı commit (`22f0df0`, `1ed1613`,
+`2ef079c`), 8 yeni test. Tam süit **582 passed**, v7.1-golden 3/3 + P1 kriter A/B/D
+14/14 ayrı doğrulandı. Faz 6/go_live/launchd/real'e adım YOK; iki durma noktası
+kullanıcıda. Aktif kuyruk DEĞİŞMEDİ: K1.5 2/2 (gerçek fırsat 2026-07-13 Pazartesi
+akşamı) → G1 (launchd) → Faz 6 başlangıç kriterleri. Detay: "T+2 TAKAS GECİKMESİ —
+teşhis + etki analizi + karar" bölümü.
+
+--- Önceki kayıt (2026-07-11T13:30, K1.5 2/2 (2026-07-13) talimatı — TARİH UYUŞMAZLIĞI) ---
 Şu an: **K1.5 2/2 (2026-07-13) + G1 launchd talimatı TARİH UYUŞMAZLIĞI nedeniyle
 YÜRÜTÜLEMEDİ — sistem saati gerçekte hâlâ 2026-07-11 Cumartesi, 2026-07-13 henüz
 gelmedi.** Talimat 2026-07-13 akşam koşusunu denetlemeyi istedi ama o tarihe ait ne
@@ -1241,6 +1256,63 @@ ya da takvim karışıklığı var. **Sıradaki gerçek fırsat değişmedi: 202
 Pazartesi akşamı**, sistem saati o tarihe ulaştığında gerçek bir
 `--refresh --cycle` koşusu ile.
 
+## T+2 TAKAS GECİKMESİ — teşhis + etki analizi + karar (2026-07-11)
+
+Kapsam: yalnız execution/muhasebe katmanı — `strategy/regime_core.py` (karar/sinyal/
+risk motoru) DOKUNULMADI, mühürlü backtest/S1b/P1 sonuçları DEĞİŞMEDİ.
+
+**1) Teşhis:** SAT (EXIT) sonrası nakit hem `execution/paper_broker.py` (satış anında,
+aynı gün kredilenir) hem `execution/regime_core_runner.py`/`strategy/regime_core.py::
+run_regime_core_prod` (nakit-getiri tahakkuku EXIT'ten **ertesi işlem günü** — t+1 —
+başlar) tarafında **BIST T+2 (2 işlem günü) takas kuralından 1 gün erken** kabul
+ediliyordu. Karar (ENTER/EXIT tarihleri) bundan hiç etkilenmiyordu — yalnızca nakdin
+"kullanılabilir/faiz işleyen" sayıldığı AN gerçek settlement'tan erkendi.
+
+**2) Etki analizi (madde 2a — sayısal):** Yeni `RegimeCoreRunner.settlement_days`
+parametresiyle (execution katmanı, `strategy/regime_core.py`'ye HİÇ dokunmadan) tam
+S1b tarihçesi (2005-2026, 12 sembol, 33 EXIT) üzerinde `settlement_days=0` (ÖNCEKİ/
+mühürlü davranış — ölçüm CAGR 28.211%/Sharpe 1.2153/maxDD -28.428%, sealed S1b
+raporuyla (KALICI KAYIT 5: Sharpe 1.215, maxDD -28.43%) tutarlı, ölçüm yöntemi kendini
+doğruladı) vs `settlement_days=2` (T+2 gerçekçiliği) empirik olarak koşuldu:
+**ΔCAGR = -0.077pp, ΔSharpe = -0.0027, ΔmaxDD = -0.012pp, Δfinal equity ≈ -%1.29
+(21 yılda)** — **İHMAL EDİLEBİLİR**, beklendiği gibi. Tarihsel S1b tarihçesinde
+`settlement_days=2` ile hiçbir ENTER, en son EXIT'in T+2 penceresi dolmadan
+gerçekleşmedi (`n_settlement_warn=0`) — confirm_days=3 giriş teyidi doğal bir tampon
+sağlıyor. Madde 2b (ManualExecutionAdapter gerçek-para akışı, GEÇİŞ günü senaryosu):
+tarihsel olarak hiç YAŞANMADI ama teorik olarak mümkün — bkz. madde 3.
+
+**3) Karar:** Etki backtest sonuçlarını anlamlı değiştirmediği için **mühürlü D1
+sonuçlarına (`REGIME_CORE_S1B.md`, KALICI KAYIT 5/6/8, P1 kriter A/B/D testleri)
+DOKUNULMADI** — hepsi bit-bit aynı kalıyor (`settlement_days` varsayılanı 0, yalnız
+opt-in). Eklenenler (yalnız execution/notify katmanı, 3 ayrı commit):
+- **(a)** `execution/regime_core_runner.py::RegimeCoreRunner.settlement_days`
+  (commit `22f0df0`) — nakit-kullanılabilirlik/faiz-başlangıcı mantığına T+2 eklendi;
+  `config/regime_core.yaml::cash_yield.settlement_trading_days: 2` ile ÜRETİMDE
+  ETKİN. SQLite state'te restart-güvenli persist (`cash_days_since_exit`, migration
+  varsayılanı 999999 = "zaten settle" — hem taze hem mevcut çalışan hesaplar
+  davranış-nötr). 6 yeni test.
+- **(b)** `main.py` + `notify/eod_summary.py` (commit `1ed1613`) — SAT günü EOD/
+  Telegram'a **"Takas: bugünkü SAT'ın nakdi hesaba geçecek tarih T+2 → <tarih>"**
+  satırı; T+2 dolmadan bir ALIŞ yürütülürse **SETTLEMENT WARN** alarmı + journal
+  event (DELAYED_SIGNAL ile aynı desen). `settlement_trading_days=0` → yeni satır/
+  alarm HİÇ üretilmez (geriye uyumlu). 2 yeni test.
+- **(c)** `OPERATOR_GUIDE.md` §3a (commit `2ef079c`) — T+2 uyarısı geldiğinde operatör
+  ne yapmalı (broker'da serbest bakiye kontrolü → yeterliyse yürüt, değilse T+2
+  dolana kadar ertele; bot bunu OTOMATİK YAPMAZ, kasıtlı — karar koduna dokunmamak
+  için).
+
+**Yeni bilinen-sınır maddesi (mühür ETKİLENMEDİ):** Bkz. aşağı "Bilinen sorun/blok"
+listesi, yeni madde 19 — T+2 takas gecikmesi artık execution katmanında modellenir
+(üretimde etkin, settlement_days=2); mühürlü backtest sonuçları bundan bağımsız kalır
+(varsayılan 0, opt-in tasarım).
+
+**İzolasyon/değişmezler:** `strategy/regime_core.py`, `backtest/regime_core.py`,
+`risk/`, mühürlü .md raporları (REGIME_CORE_S1B.md vb.) DOKUNULMADI; `mode: paper`
+DEĞİŞMEDİ. Tam süit **582 passed** (574 + 8 yeni: 6 test_settlement.py + 2
+test_scheduler.py), v7.1-golden **3/3** bayt-bayt + P1 kriter A/B/D testleri
+(14/14) ayrı ayrı doğrulandı. Faz
+6/go_live/launchd/real'e adım YOK; iki durma noktası kullanıcıda.
+
 ## Son tur (P1) — kısa özet
 - Üretim modülü + family registry + sürücü + breaker + 14 test (kriter A/B/D +
   breaker kuru-test + tam-lot boyutlama + family registry), her commit golden-kanıtlı.
@@ -1396,6 +1468,17 @@ engine-seviyesi SHORT execution (short-gate sonrası).
     engine-seviyesi SHORT execution + short-gate seti tasarımı (Bölüm 17 #10, FX
     aktivasyonu öncesi — kısa mekaniği risk/direction.py'de zaten test edilerek kurulu,
     ayna simetrisi/quote-ccy/marjin). Bu turda BAŞLATILMADI; yalnız kuyruğa kayıt.
+23. **[KAPANDI — T+2 takas] BIST T+2 gecikmesi artık execution katmanında modellenir**
+    (2026-07-11, `execution/regime_core_runner.py::RegimeCoreRunner.settlement_days`,
+    üretimde `config/regime_core.yaml::cash_yield.settlement_trading_days: 2` ile
+    ETKİN). Önceden nakit SAT sonrası aynı gün "settle" sayılıyordu (t+1'de faiz
+    başlıyordu) — gerçekte 1 gün erken. Ölçülen etki İHMAL EDİLEBİLİR (ΔCAGR -0.077pp,
+    ΔSharpe -0.0027, ΔmaxDD -0.012pp, tam S1b tarihçesi) → **mühürlü backtest/S1b/P1
+    sonuçlarına DOKUNULMADI** (`settlement_days` varsayılanı 0, opt-in — yalnız
+    execution/notify katmanı etkin). EOD/Telegram artık SAT günü "Takas: ... T+2 →
+    tarih" satırı gösteriyor; T+2 dolmadan bir ALIŞ yürütülürse SETTLEMENT WARN
+    alarmı. `OPERATOR_GUIDE.md` §3a operatör aksiyonunu tarifliyor. Detay: STATUS
+    "T+2 TAKAS GECİKMESİ" bölümü.
 
 ## Önceki fazlardan taşınan varsayımlar
 pandas-ta yerine pandas-ta-classic + numpy 2.2 (e31e401); BIST seans saatleri
